@@ -1,0 +1,29 @@
+# Android / Gradle Build Files
+*.apk
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+.pytest_cache/
+debug_frames/
+
+# OS Specific
+.DS_Store
+Thumbs.db

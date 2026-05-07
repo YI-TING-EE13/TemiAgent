@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Camera preview (background, full-screen) -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/viewFinder"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Status bar (top-left overlay) -->
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Status: Initializing..."
+        android:textColor="#00FF00"
+        android:textSize="16sp"
+        android:padding="12dp"
+        android:background="#80000000"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_margin="8dp" />
+
+    <!-- Agent state indicator (top-right overlay) -->
+    <TextView
+        android:id="@+id/agentStateText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Agent: IDLE"
+        android:textColor="#FFFF00"
+        android:textSize="16sp"
+        android:padding="12dp"
+        android:background="#80000000"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_margin="8dp" />
+
+    <!-- MQTT connection status (bottom-left overlay) -->
+    <TextView
+        android:id="@+id/mqttStatusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="MQTT: Disconnected"
+        android:textColor="#FF6666"
+        android:textSize="14sp"
+        android:padding="8dp"
+        android:background="#80000000"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_margin="8dp" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
