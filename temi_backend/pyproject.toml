@@ -1,7 +1,7 @@
 [project]
 name = "temi-backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "Portable Python backend and verification suite for TemiAgent."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -12,3 +12,19 @@ dependencies = [
     "paho-mqtt>=2.1.0",
     "websockets>=16.0",
 ]
+
+[project.scripts]
+temi-backend = "temi_backend.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

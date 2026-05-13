@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "event_id": "evt_20260511_000001",
+  "robot_id": "temi-01",
+  "confidence": 0.86,
+  "reasoning_summary": "User asks the robot to identify objects on the table. Speaking is sufficient.",
+  "actions": [
+    {
+      "action_id": "act_001",
+      "type": "speak",
+      "text": "我看到桌上可能有一個杯子和一台筆電。",
+      "language": "zh-TW"
+    }
+  ]
+}

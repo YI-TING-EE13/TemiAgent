@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TemiRobotActionOutput",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "robot_id",
+    "confidence",
+    "reasoning_summary",
+    "actions"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "robot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "reasoning_summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/speakAction"
+          },
+          {
+            "$ref": "#/$defs/askClarificationAction"
+          },
+          {
+            "$ref": "#/$defs/turnAction"
+          },
+          {
+            "$ref": "#/$defs/navigateAction"
+          },
+          {
+            "$ref": "#/$defs/stopAction"
+          },
+          {
+            "$ref": "#/$defs/noopAction"
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "speakAction": {
+      "type": "object",
+      "required": ["action_id", "type", "text"],
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "speak"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "language": {
+          "type": "string",
+          "default": "zh-TW"
+        }
+      },
+      "additionalProperties": false
+    },
+    "askClarificationAction": {
+      "type": "object",
+      "required": ["action_id", "type", "text"],
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "ask_clarification"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "language": {
+          "type": "string",
+          "default": "zh-TW"
+        }
+      },
+      "additionalProperties": false
+    },
+    "turnAction": {
+      "type": "object",
+      "required": ["action_id", "type", "direction", "degrees"],
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "turn"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["left", "right"]
+        },
+        "degrees": {
+          "type": "integer",
+          "enum": [15, 30, 45, 60, 90]
+        }
+      },
+      "additionalProperties": false
+    },
+    "navigateAction": {
+      "type": "object",
+      "required": ["action_id", "type", "target"],
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "navigate"
+        },
+        "target": {
+          "type": "string",
+          "enum": ["home_base", "kitchen", "living_room", "meeting_room"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "stopAction": {
+      "type": "object",
+      "required": ["action_id", "type"],
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "stop"
+        }
+      },
+      "additionalProperties": false
+    },
+    "noopAction": {
+      "type": "object",
+      "required": ["action_id", "type", "reason"],
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "noop"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

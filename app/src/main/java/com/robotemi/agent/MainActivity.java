@@ -19,6 +19,7 @@ import com.robotemi.agent.camera.CameraManager;
 import com.robotemi.agent.mqtt.MqttManager;
 import com.robotemi.agent.mqtt.MqttTopics;
 import com.robotemi.agent.network.WebSocketClient;
+import com.robotemi.sdk.NlpResult;
 import com.robotemi.sdk.Robot;
 import com.robotemi.sdk.SttLanguage;
 import com.robotemi.sdk.TtsRequest;
@@ -29,6 +30,10 @@ import org.json.JSONObject;
 
 import com.robotemi.agent.agent.AgentStateMachine;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * TemiAgent Main Controller & Embodied AI Orchestrator.
  *
@@ -38,12 +43,16 @@ import com.robotemi.agent.agent.AgentStateMachine;
  * <p>It initializes the {@link AgentStateMachine} to manage the dialogue lifecycle
  * safely, ensuring that physical hardware interrupts (touch) and VLM timeouts
  * are handled deterministically without blocking the UI thread.</p>
+ * 
+ * <p>Multicast Edition: Supports broadcasting telemetry (Vision/ASR) to multiple
+ * PC backends simultaneously (e.g. Original Backend + Hermes Agent).</p>
  */
 public class MainActivity extends AppCompatActivity
         implements OnRobotReadyListener, MqttManager.OnMqttMessageListener,
                    MqttManager.OnMqttConnectionListener,
                    Robot.AsrListener, Robot.WakeupWordListener,
-                   Robot.TtsListener, AgentStateMachine.StateChangeListener {
+                   Robot.TtsListener, Robot.NlpListener,
+                   AgentStateMachine.StateChangeListener {
 
     private static final String TAG = "MainActivity";
     private static final int PERMISSION_REQUEST_CODE = 1001;
@@ -51,8 +60,8 @@ public class MainActivity extends AppCompatActivity
     // ─── Components ───────────────────────────────────────────────────
     private Robot robot;
     private CameraManager cameraManager;
-    private WebSocketClient webSocketClient;
-    private MqttManager mqttManager;
+    private List<WebSocketClient> webSocketClients = new ArrayList<>();
+    private List<MqttManager> mqttManagers = new ArrayList<>();
     private AgentStateMachine stateMachine;
     private boolean shouldContinueListening = false;
 
@@ -91,20 +100,35 @@ public class MainActivity extends AppCompatActivity
         // Initialize Robot SDK
         robot = Robot.getInstance();
 
-        // Initialize WebSocket client (video streaming)
-        webSocketClient = new WebSocketClient(BuildConfig.WS_SERVER_URL);
+        // Initialize WebSocket clients (Multicast)
+        String[] wsUrls = BuildConfig.WS_SERVER_URLS.split(",");
+        for (String url : wsUrls) {
+            String cleanUrl = url.trim();
+            if (!cleanUrl.isEmpty()) {
+                webSocketClients.add(new WebSocketClient(cleanUrl));
+            }
+        }
 
-        // Initialize Camera with callback → WebSocket
+        // Initialize Camera with multicast callback → WebSockets
         cameraManager = new CameraManager(videoData -> {
-            if (webSocketClient != null && webSocketClient.isConnected()) {
-                webSocketClient.sendVideoPacket(videoData);
+            for (WebSocketClient client : webSocketClients) {
+                if (client != null && client.isConnected()) {
+                    client.sendVideoPacket(videoData);
+                }
             }
         });
 
-        // Initialize MQTT client
-        mqttManager = new MqttManager(BuildConfig.MQTT_BROKER_URL, BuildConfig.MQTT_CLIENT_ID);
-        mqttManager.setMessageListener(this);
-        mqttManager.setConnectionListener(this);
+        // Initialize MQTT clients (Multicast)
+        String[] mqttUrls = BuildConfig.MQTT_BROKER_URLS.split(",");
+        for (int i = 0; i < mqttUrls.length; i++) {
+            String cleanUrl = mqttUrls[i].trim();
+            if (!cleanUrl.isEmpty()) {
+                MqttManager mm = new MqttManager(cleanUrl, BuildConfig.MQTT_CLIENT_ID + "-" + i);
+                mm.setMessageListener(this);
+                mm.setConnectionListener(this);
+                mqttManagers.add(mm);
+            }
+        }
 
         updateStatus("Initialized. Waiting for Robot...");
     }
@@ -114,6 +138,7 @@ public class MainActivity extends AppCompatActivity
         super.onStart();
         robot.addOnRobotReadyListener(this);
         robot.addAsrListener(this);
+        robot.addNlpListener(this);
         robot.addWakeupWordListener(this);
         robot.addTtsListener(this);
         ActivityInfo activityInfo = getActivityInfo();
@@ -127,11 +152,18 @@ public class MainActivity extends AppCompatActivity
         super.onStop();
         robot.removeOnRobotReadyListener(this);
         robot.removeAsrListener(this);
+        robot.removeNlpListener(this);
         robot.removeWakeupWordListener(this);
         robot.removeTtsListener(this);
-        if (webSocketClient != null) webSocketClient.disconnect();
+        
+        for (WebSocketClient wsc : webSocketClients) {
+            if (wsc != null) wsc.disconnect();
+        }
         if (cameraManager != null) cameraManager.shutdown();
-        if (mqttManager != null) mqttManager.disconnect();
+        
+        for (MqttManager mm : mqttManagers) {
+            if (mm != null) mm.disconnect();
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -158,20 +190,13 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onConnected() {
-        Log.i(TAG, "MQTT connected.");
-        runOnUiThread(() -> {
-            mqttStatusText.setText("MQTT: Connected ✓");
-            mqttStatusText.setTextColor(0xFF00FF00);
-        });
+        Log.i(TAG, "MQTT connected to one of the brokers.");
+        // UI updates are handled in delayed status check
     }
 
     @Override
     public void onDisconnected(String reason) {
         Log.w(TAG, "MQTT disconnected: " + reason);
-        runOnUiThread(() -> {
-            mqttStatusText.setText("MQTT: Disconnected");
-            mqttStatusText.setTextColor(0xFFFF6666);
-        });
     }
 
     @Override
@@ -208,7 +233,7 @@ public class MainActivity extends AppCompatActivity
         if (newState == AgentStateMachine.State.THINKING) {
             // Non-blocking transition feedback
             TtsRequest.Language ttsLang = mapTtsLanguage("ZH_TW");
-            robot.speak(TtsRequest.create("讓我看一下", true, ttsLang));
+            speakWithoutConversationLayer("讓我看一下", ttsLang);
             
             // Immediately transition to WAITING to start the Watchdog
             stateMachine.transitionTo(AgentStateMachine.State.WAITING);
@@ -226,7 +251,7 @@ public class MainActivity extends AppCompatActivity
     public void onTimeout() {
         Log.w(TAG, "Watchdog timeout! Returning to IDLE.");
         TtsRequest.Language ttsLang = mapTtsLanguage("ZH_TW");
-        robot.speak(TtsRequest.create("連線逾時，請稍後再試", true, ttsLang));
+        speakWithoutConversationLayer("連線逾時，請稍後再試", ttsLang);
     }
 
     @Override
@@ -236,7 +261,7 @@ public class MainActivity extends AppCompatActivity
                 ttsRequest.getStatus() == TtsRequest.Status.ERROR) {
                 if (shouldContinueListening) {
                     stateMachine.transitionTo(AgentStateMachine.State.IDLE);
-                    robot.wakeup(java.util.Collections.singletonList(SttLanguage.ZH_TW));
+                    wakeupWithoutBuiltInResponse();
                 } else {
                     stateMachine.transitionTo(AgentStateMachine.State.IDLE);
                 }
@@ -245,7 +270,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  Action Handlers (Phase 2 will expand these)
+    //  Action Handlers
     // ═══════════════════════════════════════════════════════════════════
 
     private void handleSpeakAction(JSONObject json) throws JSONException {
@@ -259,7 +284,8 @@ public class MainActivity extends AppCompatActivity
                 + ", continue=" + shouldContinueListening + ")");
 
         TtsRequest.Language ttsLang = mapTtsLanguage(language);
-        robot.speak(TtsRequest.create(text, true, ttsLang));
+        suppressLauncherConversation();
+        speakWithoutConversationLayer(text, ttsLang);
     }
 
     private void handleNavigateAction(JSONObject json) throws JSONException {
@@ -270,25 +296,22 @@ public class MainActivity extends AppCompatActivity
         robot.goTo(target);
         
         // Navigation doesn't trigger TTS completion usually, so we manually go to IDLE
-        // after issuing the command, or we could listen for OnGoToLocationStatusChangedListener.
-        // For simplicity right now, transition back to IDLE.
         stateMachine.transitionTo(AgentStateMachine.State.IDLE);
     }
 
     private void handleWakeupAction(JSONObject json) {
         Log.i(TAG, "ACTION_WAKEUP");
-        robot.wakeup(java.util.Collections.singletonList(SttLanguage.ZH_TW));
+        wakeupWithoutBuiltInResponse();
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  Voice & ASR Callbacks (Phase 2b)
+    //  Voice & ASR Callbacks
     // ═══════════════════════════════════════════════════════════════════
 
     @Override
     public void onWakeupWord(@NonNull String wakeupWord, int direction) {
         stateMachine.transitionTo(AgentStateMachine.State.WAKEUP_TRIGGERED);
         
-        // Record timestamp for Frame Lock
         long wakeupTimeMs = System.currentTimeMillis();
         Log.i(TAG, "onWakeupWord: " + wakeupWord + " dir=" + direction + " time=" + wakeupTimeMs);
         
@@ -305,19 +328,32 @@ public class MainActivity extends AppCompatActivity
             return;
         }
 
+        suppressLauncherConversation();
+
         try {
             JSONObject json = new JSONObject();
             json.put("text", text);
             json.put("language", sttLanguage.name());
             json.put("timestamp_ms", asrCompleteTimeMs);
-            mqttManager.publish(MqttTopics.EVENT_ASR, json.toString());
             
-            // Transition to THINKING. This will trigger TTS and WAITING in onStateChanged.
+            // Multicast: Publish ASR to ALL connected MQTT brokers
+            for (MqttManager mm : mqttManagers) {
+                if (mm != null && mm.isConnected()) {
+                    mm.publish(MqttTopics.EVENT_ASR, json.toString());
+                }
+            }
+            
             stateMachine.transitionTo(AgentStateMachine.State.THINKING);
         } catch (JSONException e) {
             Log.e(TAG, "Failed to create ASR JSON", e);
             stateMachine.transitionTo(AgentStateMachine.State.IDLE);
         }
+    }
+
+    @Override
+    public void onNlpCompleted(@NonNull NlpResult nlpResult) {
+        Log.i(TAG, "Ignoring Temi default NLU result: " + nlpResult);
+        robot.finishConversation();
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -327,23 +363,44 @@ public class MainActivity extends AppCompatActivity
     private void startAllServices() {
         updateStatus("Starting services...");
 
-        // 1. Start MQTT
-        mqttManager.connect();
+        // 1. Start all MQTT clients
+        for (MqttManager mm : mqttManagers) {
+            mm.connect();
+        }
 
-        // 2. Start WebSocket + Camera
-        webSocketClient.connect();
+        // 2. Start all WebSocket clients + Camera
+        for (WebSocketClient wsc : webSocketClients) {
+            wsc.connect();
+        }
         cameraManager.startCamera(this, this, viewFinder);
 
         // 3. Delayed status check
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-            StringBuilder sb = new StringBuilder("Status: ");
-            sb.append(webSocketClient.isConnected() ? "WS✓ " : "WS✗ ");
-            sb.append(mqttManager.isConnected() ? "MQTT✓" : "MQTT✗");
-            updateStatus(sb.toString());
+            int wsConnected = 0;
+            for (WebSocketClient wsc : webSocketClients) {
+                if (wsc != null && wsc.isConnected()) wsConnected++;
+            }
+            
+            int mqttConnected = 0;
+            for (MqttManager mm : mqttManagers) {
+                if (mm != null && mm.isConnected()) mqttConnected++;
+            }
+            
+            String wsStatus = "WS: " + wsConnected + "/" + webSocketClients.size();
+            String mqttStatus = "MQTT: " + mqttConnected + "/" + mqttManagers.size();
+            
+            updateStatus(wsStatus + " | " + mqttStatus);
+            
+            final int finalMqttConnected = mqttConnected;
+            runOnUiThread(() -> {
+                mqttStatusText.setText(mqttStatus);
+                mqttStatusText.setTextColor(finalMqttConnected > 0 ? 0xFF00FF00 : 0xFFFF6666);
+            });
+            
             stateMachine.transitionTo(AgentStateMachine.State.IDLE);
         }, 3000);
 
-        robot.speak(TtsRequest.create("系統就緒", true, TtsRequest.Language.ZH_TW));
+        speakWithoutConversationLayer("系統就緒", TtsRequest.Language.ZH_TW);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -397,6 +454,19 @@ public class MainActivity extends AppCompatActivity
             case "JA_JP": return TtsRequest.Language.JA_JP;
             default: return TtsRequest.Language.ZH_TW;
         }
+    }
+
+    private void suppressLauncherConversation() {
+        robot.finishConversation();
+        robot.cancelAllTtsRequests();
+    }
+
+    private void wakeupWithoutBuiltInResponse() {
+        robot.wakeup(Collections.singletonList(SttLanguage.ZH_TW));
+    }
+
+    private void speakWithoutConversationLayer(String text, TtsRequest.Language language) {
+        robot.speak(TtsRequest.create(text, false, language));
     }
 
     private void updateStatus(String text) {

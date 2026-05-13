@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "event_id": "evt_missing_image",
+  "robot_id": "temi-01",
+  "conversation_id": "conv_20260511_a",
+  "type": "asr.final",
+  "timestamp_ms": 1778499000200,
+  "speech_end_ts_ms": 1778499000123,
+  "language": "zh-TW",
+  "asr": {
+    "text": "幫我看看桌上的東西是什麼",
+    "confidence": 0.92
+  },
+  "vision": {
+    "sampling_policy": "T-1000,T-500,T",
+    "frames": [
+      {
+        "name": "t_minus_1000",
+        "ts_ms": 1778498999123,
+        "path": "/var/lib/temi_shared/events/temi-01/evt_missing_image/frame_t_minus_1000.jpg",
+        "mime_type": "image/jpeg"
+      },
+      {
+        "name": "t_minus_500",
+        "ts_ms": 1778498999623,
+        "path": "/var/lib/temi_shared/events/temi-01/evt_missing_image/frame_t_minus_500.jpg",
+        "mime_type": "image/jpeg"
+      },
+      {
+        "name": "t",
+        "ts_ms": 1778499000123,
+        "path": "/var/lib/temi_shared/events/temi-01/evt_missing_image/frame_t.jpg",
+        "mime_type": "image/jpeg"
+      }
+    ]
+  }
+}

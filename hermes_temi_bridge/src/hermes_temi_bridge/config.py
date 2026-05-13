@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+import os
+from pathlib import Path
+
+
+def _read_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not path.exists():
+        return values
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def _get_int(values: dict[str, str], name: str, default: int) -> int:
+    raw = os.getenv(name, values.get(name, str(default)))
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from exc
+
+
+def _get_csv(values: dict[str, str], name: str, default: list[str]) -> list[str]:
+    raw = os.getenv(name, values.get(name, ""))
+    if not raw:
+        return default
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+@dataclass(frozen=True)
+class BridgeConfig:
+    mqtt_broker_host: str = "localhost"
+    mqtt_broker_port: int = 1883
+    mqtt_username: str | None = None
+    mqtt_password: str | None = None
+    robot_id_allowlist: tuple[str, ...] = ("temi-01",)
+    temi_shared_bridge_path: str = "/var/lib/temi_shared"
+    temi_shared_hermes_path: str = "/shared/temi"
+    hermes_invoke_mode: str = "cli"
+    hermes_cli_command: str = "hermes"
+    hermes_timeout_seconds: int = 60
+    max_actions_per_event: int = 5
+    max_image_size_mb: int = 8
+    event_dedup_ttl_seconds: int = 600
+    log_level: str = "INFO"
+    log_dir: str = "logs/events"
+
+    @classmethod
+    def from_env(cls, env_file: str | Path = ".env") -> "BridgeConfig":
+        values = _read_env_file(Path(env_file))
+        username = os.getenv("MQTT_USERNAME", values.get("MQTT_USERNAME", "")) or None
+        password = os.getenv("MQTT_PASSWORD", values.get("MQTT_PASSWORD", "")) or None
+        return cls(
+            mqtt_broker_host=os.getenv(
+                "MQTT_BROKER_HOST", values.get("MQTT_BROKER_HOST", cls.mqtt_broker_host)
+            ),
+            mqtt_broker_port=_get_int(values, "MQTT_BROKER_PORT", cls.mqtt_broker_port),
+            mqtt_username=username,
+            mqtt_password=password,
+            robot_id_allowlist=tuple(
+                _get_csv(values, "ROBOT_ID_ALLOWLIST", list(cls.robot_id_allowlist))
+            ),
+            temi_shared_bridge_path=os.getenv(
+                "TEMI_SHARED_BRIDGE_PATH",
+                values.get("TEMI_SHARED_BRIDGE_PATH", cls.temi_shared_bridge_path),
+            ),
+            temi_shared_hermes_path=os.getenv(
+                "TEMI_SHARED_HERMES_PATH",
+                values.get("TEMI_SHARED_HERMES_PATH", cls.temi_shared_hermes_path),
+            ),
+            hermes_invoke_mode=os.getenv(
+                "HERMES_INVOKE_MODE", values.get("HERMES_INVOKE_MODE", cls.hermes_invoke_mode)
+            ),
+            hermes_cli_command=os.getenv(
+                "HERMES_CLI_COMMAND", values.get("HERMES_CLI_COMMAND", cls.hermes_cli_command)
+            ),
+            hermes_timeout_seconds=_get_int(
+                values, "HERMES_TIMEOUT_SECONDS", cls.hermes_timeout_seconds
+            ),
+            max_actions_per_event=_get_int(
+                values, "MAX_ACTIONS_PER_EVENT", cls.max_actions_per_event
+            ),
+            max_image_size_mb=_get_int(values, "MAX_IMAGE_SIZE_MB", cls.max_image_size_mb),
+            event_dedup_ttl_seconds=_get_int(
+                values, "EVENT_DEDUP_TTL_SECONDS", cls.event_dedup_ttl_seconds
+            ),
+            log_level=os.getenv("LOG_LEVEL", values.get("LOG_LEVEL", cls.log_level)),
+            log_dir=os.getenv("LOG_DIR", values.get("LOG_DIR", cls.log_dir)),
+        )

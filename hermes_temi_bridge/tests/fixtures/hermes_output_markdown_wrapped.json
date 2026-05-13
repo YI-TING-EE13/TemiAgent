@@ -1,0 +1,19 @@
+Here is the result:
+
+```json
+{
+  "schema_version": "1.0",
+  "event_id": "evt_20260511_000001",
+  "robot_id": "temi-01",
+  "confidence": 0.86,
+  "reasoning_summary": "The user asks a visual question and a spoken answer is enough.",
+  "actions": [
+    {
+      "action_id": "act_001",
+      "type": "speak",
+      "text": "我看到桌上可能有一個杯子。",
+      "language": "zh-TW"
+    }
+  ]
+}
+```

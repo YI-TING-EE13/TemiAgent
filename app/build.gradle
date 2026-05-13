@@ -25,10 +25,10 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Inject config from local.properties into BuildConfig
-        buildConfigField "String", "WS_SERVER_URL",
-                "\"${localProps.getProperty('ws.server.url', 'ws://YOUR_SERVER_IP:8080')}\""
-        buildConfigField "String", "MQTT_BROKER_URL",
-                "\"${localProps.getProperty('mqtt.broker.url', 'tcp://YOUR_BROKER_IP:1883')}\""
+        buildConfigField "String", "WS_SERVER_URLS",
+                "\"${localProps.getProperty('ws.server.urls', 'ws://192.168.50.233:8080')}\""
+        buildConfigField "String", "MQTT_BROKER_URLS",
+                "\"${localProps.getProperty('mqtt.broker.urls', 'tcp://192.168.50.233:1883')}\""
         buildConfigField "String", "MQTT_CLIENT_ID",
                 "\"${localProps.getProperty('mqtt.client.id', 'temi-agent')}\""
     }

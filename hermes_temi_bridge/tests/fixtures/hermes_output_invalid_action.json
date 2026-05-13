@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "event_id": "evt_20260511_000001",
+  "robot_id": "temi-01",
+  "confidence": 0.7,
+  "reasoning_summary": "The user asked for an unsupported robot behavior.",
+  "actions": [
+    {
+      "action_id": "act_001",
+      "type": "dance"
+    }
+  ]
+}
