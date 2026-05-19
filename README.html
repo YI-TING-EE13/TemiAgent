@@ -1,0 +1,1260 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TemiAgent Integration Workspace</title>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --ink: #17202a;
+      --muted: #5d6b7a;
+      --line: #d9e0e7;
+      --code-bg: #101820;
+      --code-ink: #eef5f8;
+      --brand: #116466;
+      --brand-ink: #0a3d3f;
+      --ok: #1f7a4d;
+      --warn: #a15c00;
+      --risk: #a23b3b;
+      --info: #2f5f9f;
+      --chip: #e8f1f1;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.62 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    main {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .hero {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 34px 20px 28px;
+    }
+
+    .eyebrow {
+      color: var(--brand);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: 0.78rem;
+    }
+
+    h1, h2, h3, h4 {
+      line-height: 1.22;
+      margin: 0;
+      color: var(--ink);
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.4rem);
+      margin-top: 8px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      font-size: 1.65rem;
+      margin-top: 42px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h3 {
+      font-size: 1.18rem;
+      margin-top: 28px;
+    }
+
+    h4 {
+      font-size: 1rem;
+      margin-top: 20px;
+    }
+
+    p {
+      margin: 10px 0 0;
+    }
+
+    a {
+      color: var(--brand-ink);
+      font-weight: 650;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    nav {
+      margin-top: 22px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    nav a, .chip {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--chip);
+      padding: 6px 11px;
+      color: var(--brand-ink);
+      font-size: 0.92rem;
+      font-weight: 650;
+    }
+
+    section {
+      margin-top: 28px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .card h3, .card h4 {
+      margin-top: 0;
+    }
+
+    .status {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 0.82rem;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .done {
+      color: #ffffff;
+      background: var(--ok);
+    }
+
+    .partial {
+      color: #ffffff;
+      background: var(--warn);
+    }
+
+    .blocked {
+      color: #ffffff;
+      background: var(--risk);
+    }
+
+    .info {
+      color: #ffffff;
+      background: var(--info);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 14px;
+    }
+
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+    }
+
+    th {
+      background: #edf2f5;
+      font-size: 0.9rem;
+      color: #304150;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+      background: #eef2f4;
+      color: #10202f;
+      border-radius: 4px;
+      padding: 1px 4px;
+    }
+
+    pre {
+      background: var(--code-bg);
+      color: var(--code-ink);
+      border-radius: 8px;
+      overflow-x: auto;
+      padding: 14px 16px;
+      margin: 12px 0 0;
+      border: 1px solid #20303a;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      font-size: 0.9rem;
+    }
+
+    ul, ol {
+      margin: 10px 0 0 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    .note {
+      border-left: 4px solid var(--info);
+      background: #eef5fb;
+      padding: 12px 14px;
+      border-radius: 0 8px 8px 0;
+      margin-top: 14px;
+    }
+
+    .warning {
+      border-left: 4px solid var(--warn);
+      background: #fff5e8;
+      padding: 12px 14px;
+      border-radius: 0 8px 8px 0;
+      margin-top: 14px;
+    }
+
+    .danger {
+      border-left: 4px solid var(--risk);
+      background: #fff0f0;
+      padding: 12px 14px;
+      border-radius: 0 8px 8px 0;
+      margin-top: 14px;
+    }
+
+    .small {
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .diagram {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 14px;
+      overflow-x: auto;
+    }
+
+    .diagram svg {
+      min-width: 900px;
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .box {
+      fill: #ffffff;
+      stroke: #86a7a9;
+      stroke-width: 1.5;
+      rx: 8;
+    }
+
+    .box-accent {
+      fill: #e8f4f4;
+      stroke: #116466;
+      stroke-width: 1.8;
+      rx: 8;
+    }
+
+    .arrow {
+      stroke: #335;
+      stroke-width: 1.8;
+      marker-end: url(#arrowhead);
+    }
+
+    .label {
+      fill: #17202a;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .sub {
+      fill: #5d6b7a;
+      font-size: 12px;
+    }
+
+    footer {
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      margin-top: 48px;
+      padding-top: 18px;
+      font-size: 0.92rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="hero">
+      <div class="eyebrow">TemiAgent Integration Workspace</div>
+      <h1>Temi + Hermes embodied AI integration guide</h1>
+      <p>
+        This repository connects the Temi Android robot app, MQTT, WebSocket video streaming,
+        synchronized image snapshots, HermesTemiBridge, Hermes Agent, and the
+        <code>temi-robot-control</code> skill into an embodied AI experiment stack.
+      </p>
+      <p class="small">
+        Last updated: 2026-05-13. Primary machine: <code>/TemiAgent</code>,
+        PC IP <code>192.168.50.236</code>, Temi IP <code>192.168.50.205</code>.
+      </p>
+      <nav aria-label="Table of contents">
+        <a href="#current-status">Current Status</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#quick-start">Quick Start</a>
+        <a href="#experiment-modes">Experiment Modes</a>
+        <a href="#commands">Command Reference</a>
+        <a href="#testing">Testing</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+        <a href="#roadmap">Next Work</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section id="current-status">
+      <h2>Current Status</h2>
+      <p>
+        The system has been verified in three working paths. The legacy path is useful
+        for demonstrations. The Overview path matches the layered architecture in
+        <code>Overview.md</code> and is functionally complete. Real Hermes is available in
+        both CLI mode and resident HTTP mode; resident mode removes most Hermes cold-start cost.
+      </p>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Hardware and network</h3>
+          <p><span class="status done">Verified</span></p>
+          <ul>
+            <li>ADB reaches Temi at <code>192.168.50.205:5555</code>.</li>
+            <li>PC listens on MQTT <code>0.0.0.0:1883</code>.</li>
+            <li>PC listens for video on <code>0.0.0.0:8080</code>.</li>
+            <li>Temi app package is <code>com.robotemi.agent</code>.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>Legacy live route</h3>
+          <p><span class="status done">Verified</span></p>
+          <ul>
+            <li>Temi publishes ASR to <code>temi/event/asr</code>.</li>
+            <li>Temi streams H.264 frames over WebSocket.</li>
+            <li><code>temi_backend</code> samples three aligned frames.</li>
+            <li>LMStudio/VLM returns a speak action.</li>
+            <li>Temi executes <code>temi/action/speak</code>.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>Overview contract route</h3>
+          <p><span class="status partial">Functional with caveat</span></p>
+          <ul>
+            <li>Adapter converts legacy topics into <code>temi/temi-01/asr/final</code>.</li>
+            <li>HermesTemiBridge validates events, images, and actions.</li>
+            <li>Mock Hermes path is fast and stable.</li>
+            <li>Real Hermes CLI mode works but has high latency.</li>
+            <li>Real Hermes resident HTTP mode is validated and much faster after warmup.</li>
+          </ul>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Capability</th>
+            <th>Status</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ADB deployment/control</td>
+            <td><span class="status done">Passed</span></td>
+            <td><code>192.168.50.205:5555 device product:rk3288</code></td>
+          </tr>
+          <tr>
+            <td>Temi app startup</td>
+            <td><span class="status done">Passed</span></td>
+            <td><code>adb shell am start -n com.robotemi.agent/.MainActivity</code></td>
+          </tr>
+          <tr>
+            <td>MQTT Temi -> PC</td>
+            <td><span class="status done">Passed</span></td>
+            <td><code>MqttManager: Connected successfully.</code></td>
+          </tr>
+          <tr>
+            <td>MQTT PC -> Temi command</td>
+            <td><span class="status done">Passed</span></td>
+            <td><code>ACTION_SPEAK</code> received for direct and bridged commands.</td>
+          </tr>
+          <tr>
+            <td>Video stream</td>
+            <td><span class="status done">Passed</span></td>
+            <td><code>WebSocket connected</code> and <code>Video packets sent</code>.</td>
+          </tr>
+          <tr>
+            <td>Three-frame snapshot export</td>
+            <td><span class="status done">Passed</span></td>
+            <td>JPEG files written under <code>/TemiAgent/temi_shared/events/temi-01/&lt;event_id&gt;/</code>.</td>
+          </tr>
+          <tr>
+            <td>Overview mock Bridge E2E</td>
+            <td><span class="status done">Passed</span></td>
+            <td>ASR final -> command request -> legacy speak -> command result.</td>
+          </tr>
+          <tr>
+            <td>Overview real Hermes E2E</td>
+            <td><span class="status partial">Passed, slow</span></td>
+            <td>CLI mode measured about <code>96,940 ms</code>.</td>
+          </tr>
+          <tr>
+            <td>Overview resident Hermes E2E</td>
+            <td><span class="status done">Passed</span></td>
+            <td>Resident HTTP mode validated at about <code>8,384 ms</code> through the Bridge.</td>
+          </tr>
+          <tr>
+            <td>Android source rebuild on this PC</td>
+            <td><span class="status blocked">Not available</span></td>
+            <td>The Android Gradle project is not present in this workspace.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="warning">
+        <strong>Important latency note.</strong>
+        Real Hermes CLI mode returns correct JSON but is slower than the Android app's
+        15-second <code>WAITING</code> watchdog. Resident HTTP mode is the preferred real-Hermes
+        experiment path and has measured under 10 seconds after warmup on this machine.
+      </div>
+    </section>
+
+    <section id="architecture">
+      <h2>Architecture</h2>
+      <p>
+        The final target architecture is the one described in <code>Overview.md</code>: Temi provides
+        speech and camera context, MQTT carries lightweight events and commands, shared files carry
+        image snapshots, and HermesTemiBridge is the only service allowed to validate and dispatch
+        robot actions returned by Hermes.
+      </p>
+
+      <div class="diagram" aria-label="Overview architecture diagram">
+        <svg viewBox="0 0 1040 420" role="img">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#335"></polygon>
+            </marker>
+          </defs>
+
+          <rect class="box-accent" x="24" y="34" width="170" height="72"></rect>
+          <text class="label" x="44" y="66">Temi Android App</text>
+          <text class="sub" x="44" y="88">ASR, camera, TTS, nav</text>
+
+          <rect class="box" x="244" y="34" width="170" height="72"></rect>
+          <text class="label" x="264" y="66">MQTT Broker</text>
+          <text class="sub" x="264" y="88">1883 event bus</text>
+
+          <rect class="box" x="464" y="34" width="190" height="72"></rect>
+          <text class="label" x="484" y="66">Overview Adapter</text>
+          <text class="sub" x="484" y="88">legacy topics + images</text>
+
+          <rect class="box-accent" x="704" y="34" width="210" height="72"></rect>
+          <text class="label" x="724" y="66">HermesTemiBridge</text>
+          <text class="sub" x="724" y="88">validate, invoke, dispatch</text>
+
+          <rect class="box" x="704" y="174" width="210" height="72"></rect>
+          <text class="label" x="724" y="206">Hermes Agent</text>
+          <text class="sub" x="724" y="228">temi-robot-control skill</text>
+
+          <rect class="box" x="464" y="174" width="190" height="72"></rect>
+          <text class="label" x="484" y="206">Shared Image Store</text>
+          <text class="sub" x="484" y="228">temi_shared/events/...</text>
+
+          <rect class="box" x="244" y="314" width="170" height="72"></rect>
+          <text class="label" x="264" y="346">Legacy Backend</text>
+          <text class="sub" x="264" y="368">fast LMStudio route</text>
+
+          <line class="arrow" x1="194" y1="70" x2="244" y2="70"></line>
+          <line class="arrow" x1="414" y1="70" x2="464" y2="70"></line>
+          <line class="arrow" x1="654" y1="70" x2="704" y2="70"></line>
+          <line class="arrow" x1="809" y1="106" x2="809" y2="174"></line>
+          <line class="arrow" x1="704" y1="210" x2="654" y2="210"></line>
+          <line class="arrow" x1="559" y1="174" x2="559" y2="106"></line>
+          <line class="arrow" x1="704" y1="92" x2="414" y2="334"></line>
+          <line class="arrow" x1="244" y1="350" x2="194" y2="106"></line>
+
+          <text class="sub" x="207" y="52">legacy MQTT</text>
+          <text class="sub" x="425" y="52">topic adapter</text>
+          <text class="sub" x="665" y="52">asr/final</text>
+          <text class="sub" x="820" y="146">prompt</text>
+          <text class="sub" x="584" y="148">JPEG paths</text>
+          <text class="sub" x="420" y="318">alternative fast path</text>
+        </svg>
+      </div>
+
+      <h3>Runtime roles</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Component</th>
+            <th>Path or endpoint</th>
+            <th>Responsibility</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Temi Android app</td>
+            <td><code>com.robotemi.agent</code></td>
+            <td>Captures ASR and camera frames; executes speak/navigation commands.</td>
+          </tr>
+          <tr>
+            <td>Mosquitto</td>
+            <td><code>tcp://192.168.50.236:1883</code></td>
+            <td>Local event bus for both legacy and Overview topics.</td>
+          </tr>
+          <tr>
+            <td>Overview adapter</td>
+            <td><code>tools/temi_overview_adapter.py</code></td>
+            <td>Bridges the existing Android app topics to the Overview MQTT contract.</td>
+          </tr>
+          <tr>
+            <td>HermesTemiBridge</td>
+            <td><code>hermes_temi_bridge/</code></td>
+            <td>Validates ASR event payloads, validates image files, invokes Hermes, validates actions, publishes command requests.</td>
+          </tr>
+          <tr>
+            <td>Hermes Agent</td>
+            <td><code>hermes -z {prompt}</code></td>
+            <td>Uses the <code>temi-robot-control</code> skill and returns JSON-only robot actions.</td>
+          </tr>
+          <tr>
+            <td>Legacy backend</td>
+            <td><code>temi_backend/</code></td>
+            <td>Fast direct route for Temi ASR + video -> LMStudio/VLM -> legacy MQTT command.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Topic mapping</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Direction</th>
+            <th>Current Android app topic</th>
+            <th>Overview topic</th>
+            <th>Adapter behavior</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ASR event</td>
+            <td><code>temi/event/asr</code></td>
+            <td><code>temi/temi-01/asr/final</code></td>
+            <td>Creates event id, saves three JPEG snapshots, publishes full ASR final payload.</td>
+          </tr>
+          <tr>
+            <td>Speak command</td>
+            <td><code>temi/action/speak</code></td>
+            <td><code>temi/temi-01/cmd/request</code></td>
+            <td>Translates Overview <code>speak</code> and <code>ask_clarification</code> actions to legacy speak payloads.</td>
+          </tr>
+          <tr>
+            <td>Navigation command</td>
+            <td><code>temi/action/navigate</code></td>
+            <td><code>temi/temi-01/cmd/request</code></td>
+            <td>Translates Overview <code>navigate</code> actions to legacy navigation payloads.</td>
+          </tr>
+          <tr>
+            <td>Command result</td>
+            <td>Not emitted by current app</td>
+            <td><code>temi/temi-01/cmd/result</code></td>
+            <td>Adapter publishes a compatibility result after forwarding the legacy command.</td>
+          </tr>
+          <tr>
+            <td>Wakeup</td>
+            <td><code>temi/action/wakeup</code></td>
+            <td>Optional debug/control topic</td>
+            <td>Used in experiments to trigger <code>ASR_LISTENING</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="repository-map">
+      <h2>Repository Map</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Path</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Overview.md</code></td>
+            <td>Original system architecture and acceptance criteria.</td>
+          </tr>
+          <tr>
+            <td><code>temi_backend/</code></td>
+            <td>Legacy Python backend, vision server, LMStudio/VLM route, and hardware smoke-test scripts.</td>
+          </tr>
+          <tr>
+            <td><code>hermes_temi_bridge/</code></td>
+            <td>Bridge service that implements the Overview contract and validates Hermes output.</td>
+          </tr>
+          <tr>
+            <td><code>hermes-agent/</code></td>
+            <td>Hermes Agent codebase and installed skill tree.</td>
+          </tr>
+          <tr>
+            <td><code>hermes-agent/skills/temi-robot-control/</code></td>
+            <td>Primary Hermes skill for robot action policy and JSON output rules.</td>
+          </tr>
+          <tr>
+            <td><code>hermes-skills/temi-robot-control/</code></td>
+            <td>Root-level mirror of the skill for packaging and reference.</td>
+          </tr>
+          <tr>
+            <td><code>tools/temi_overview_adapter.py</code></td>
+            <td>Compatibility adapter between the current Android app and the Overview MQTT contract.</td>
+          </tr>
+          <tr>
+            <td><code>tools/e2e_test_runner.py</code></td>
+            <td>Hardware-free local E2E test for HermesTemiBridge with mock Hermes.</td>
+          </tr>
+          <tr>
+            <td><code>docs/temi_streaming_local_runbook.md</code></td>
+            <td>Chronological local runbook with machine-specific test findings.</td>
+          </tr>
+          <tr>
+            <td><code>docs/schemas/</code></td>
+            <td>Documentation copies of the MQTT and Hermes JSON schemas.</td>
+          </tr>
+          <tr>
+            <td><code>temi_shared/</code></td>
+            <td>Generated event directories and synchronized image snapshots.</td>
+          </tr>
+          <tr>
+            <td><code>logs/</code></td>
+            <td>Bridge and backend logs from integration experiments.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="quick-start">
+      <h2>Quick Start From Zero</h2>
+      <p>
+        Use this section when the PC and Temi are freshly restarted. Commands are written for this
+        machine and this lab network.
+      </p>
+
+      <h3>0. Confirm prerequisites</h3>
+      <pre><code class="language-bash">cd /TemiAgent
+which adb mosquitto mosquitto_pub mosquitto_sub uv hermes
+ip -br addr
+</code></pre>
+
+      <p>If system tools are missing on a fresh Ubuntu machine:</p>
+      <pre><code class="language-bash">apt-get update
+apt-get install -y android-tools-adb iproute2 netcat-openbsd nmap mosquitto-clients mosquitto
+</code></pre>
+
+      <h3>1. Start or verify MQTT</h3>
+      <pre><code class="language-bash">cd /TemiAgent
+ss -ltnp | grep ':1883' || mosquitto -c /TemiAgent/mqtt/mosquitto.conf -d
+nc -vz -w 3 192.168.50.236 1883
+</code></pre>
+
+      <h3>2. Connect ADB</h3>
+      <pre><code class="language-bash">adb disconnect 192.168.50.205:5555 || true
+adb kill-server
+adb start-server
+adb connect 192.168.50.205:5555
+adb devices -l
+</code></pre>
+
+      <p>Healthy output:</p>
+      <pre><code>192.168.50.205:5555    device product:rk3288 model:rk3288 device:rk3288</code></pre>
+
+      <h3>3. Start the Overview adapter</h3>
+      <p>
+        This service owns port <code>8080</code> for live video and converts the current Android app
+        topics to the Overview contract.
+      </p>
+      <pre><code class="language-bash">cd /TemiAgent/temi_backend
+uv run python /TemiAgent/tools/temi_overview_adapter.py \
+  --broker 192.168.50.236 \
+  --port 1883 \
+  --vision-port 8080 \
+  --shared-root /TemiAgent/temi_shared \
+  --bridge-root /TemiAgent/temi_shared
+</code></pre>
+
+      <h3>4. Start HermesTemiBridge in mock mode</h3>
+      <p>Use mock mode first after every reboot. It verifies the whole Overview path without waiting on Hermes.</p>
+      <pre><code class="language-bash">cd /TemiAgent/hermes_temi_bridge
+MQTT_BROKER_HOST=192.168.50.236 \
+MQTT_BROKER_PORT=1883 \
+HERMES_INVOKE_MODE=mock \
+HERMES_MOCK_RESPONSE_TEXT='Overview quick test passed.' \
+TEMI_SHARED_BRIDGE_PATH=/TemiAgent/temi_shared \
+TEMI_SHARED_HERMES_PATH=/TemiAgent/temi_shared \
+LOG_DIR=/TemiAgent/logs/overview_bridge_mock \
+uv run --extra mqtt hermes-temi-bridge --env-file /TemiAgent/hermes_temi_bridge/.env.example
+</code></pre>
+
+      <h3>5. Start the Temi app</h3>
+      <pre><code class="language-bash">adb shell am force-stop com.robotemi.agent
+sleep 1
+adb shell am start -n com.robotemi.agent/.MainActivity
+</code></pre>
+
+      <h3>6. Watch logs</h3>
+      <p>Use two extra terminals while experimenting.</p>
+      <pre><code class="language-bash">mosquitto_sub -h 192.168.50.236 -p 1883 -t '#' -v
+</code></pre>
+      <pre><code class="language-bash">adb logcat '*:I' | grep -E 'MainActivity|WebSocketClient|MqttManager|CameraManager|AgentStateMachine'
+</code></pre>
+
+      <h3>7. Trigger a mock Overview E2E test</h3>
+      <p>This does not require speaking to Temi; it injects a legacy ASR message into the adapter.</p>
+      <pre><code class="language-bash">python3 - &lt;&lt;'PY' | mosquitto_pub -h 192.168.50.236 -p 1883 -t 'temi/event/asr' -l
+import json, time
+print(json.dumps({
+    "text": "Overview injected test",
+    "language": "zh-TW",
+    "timestamp_ms": int(time.time() * 1000)
+}, ensure_ascii=False))
+PY
+</code></pre>
+
+      <p>Expected MQTT sequence:</p>
+      <pre><code>temi/event/asr
+temi/temi-01/asr/final
+temi/temi-01/cmd/request
+temi/action/speak
+temi/temi-01/cmd/result</code></pre>
+
+      <h3>8. Switch to real Hermes</h3>
+      <p>Stop the mock Bridge with <code>Ctrl+C</code>, keep the adapter running, then start real Hermes mode:</p>
+      <pre><code class="language-bash">cd /TemiAgent/hermes_temi_bridge
+MQTT_BROKER_HOST=192.168.50.236 \
+MQTT_BROKER_PORT=1883 \
+HERMES_INVOKE_MODE=cli \
+HERMES_CLI_COMMAND='hermes -z {prompt}' \
+TEMI_SHARED_BRIDGE_PATH=/TemiAgent/temi_shared \
+TEMI_SHARED_HERMES_PATH=/TemiAgent/temi_shared \
+HERMES_TIMEOUT_SECONDS=120 \
+LOG_DIR=/TemiAgent/logs/overview_bridge_real \
+uv run --extra mqtt hermes-temi-bridge --env-file /TemiAgent/hermes_temi_bridge/.env.example
+</code></pre>
+
+      <p>For a real voice test:</p>
+      <pre><code class="language-bash">mosquitto_pub -h 192.168.50.236 -p 1883 -t 'temi/action/wakeup' -m '{"source":"overview_real_hermes"}'</code></pre>
+      <p>
+        Speak one short sentence only, then wait. Real Hermes may take 30 to 100 seconds on the
+        current local model/provider setup.
+      </p>
+
+      <h3>9. Switch to resident Hermes HTTP mode</h3>
+      <p>
+        To reduce Hermes cold-start latency, keep a Hermes <code>AIAgent</code> instance loaded in a
+        local HTTP worker, then point the Bridge at that worker instead of launching
+        <code>hermes -z</code> for every ASR event.
+      </p>
+      <pre><code class="language-bash">cd /TemiAgent
+python3 tools/hermes_resident_server.py \
+  --host 127.0.0.1 \
+  --port 8765 \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md
+</code></pre>
+      <pre><code class="language-bash">curl -s http://127.0.0.1:8765/health</code></pre>
+      <pre><code class="language-bash">cd /TemiAgent/hermes_temi_bridge
+MQTT_BROKER_HOST=192.168.50.236 \
+MQTT_BROKER_PORT=1883 \
+HERMES_INVOKE_MODE=http \
+HERMES_HTTP_URL=http://127.0.0.1:8765/invoke \
+TEMI_SHARED_BRIDGE_PATH=/TemiAgent/temi_shared \
+TEMI_SHARED_HERMES_PATH=/TemiAgent/temi_shared \
+HERMES_TIMEOUT_SECONDS=180 \
+LOG_DIR=/TemiAgent/logs/overview_bridge_resident \
+uv run --extra mqtt hermes-temi-bridge --env-file /TemiAgent/hermes_temi_bridge/.env.example
+</code></pre>
+      <p>
+        Compare <code>hermes_latency_ms</code> in
+        <code>/TemiAgent/logs/overview_bridge_resident/*.jsonl</code> with the earlier CLI result.
+      </p>
+    </section>
+
+    <section id="experiment-modes">
+      <h2>Experiment Modes</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Mode</th>
+            <th>Use when</th>
+            <th>Services</th>
+            <th>Expected latency</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Legacy LMStudio/VLM route</td>
+            <td>You need a responsive live robot demo.</td>
+            <td><code>mosquitto</code> + <code>temi-backend</code></td>
+            <td>Usually fast enough for the current app watchdog.</td>
+          </tr>
+          <tr>
+            <td>Overview mock Bridge</td>
+            <td>You are validating MQTT, image paths, Bridge validation, and command dispatch.</td>
+            <td><code>mosquitto</code> + adapter + Bridge mock mode</td>
+            <td>Sub-second after ASR.</td>
+          </tr>
+          <tr>
+            <td>Overview real Hermes</td>
+            <td>You are validating the final architecture and skill-governed JSON actions.</td>
+            <td><code>mosquitto</code> + adapter + Bridge real Hermes mode</td>
+            <td>Measured around 19 to 104 seconds; latest after restart about 97 seconds.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Legacy route commands</h3>
+      <pre><code class="language-bash">cd /TemiAgent
+./tools/start_temi_pc_services_background.sh
+adb shell am start -n com.robotemi.agent/.MainActivity
+</code></pre>
+
+      <p>Send a direct speak command to Temi:</p>
+      <pre><code class="language-bash">cd /TemiAgent/temi_backend
+uv run python scripts/manual_tts.py \
+  --broker 192.168.50.236 \
+  --port 1883 \
+  --text 'This is a Temi MQTT test.' \
+  --language ZH_TW
+</code></pre>
+
+      <h3>Stop all experiment services except MQTT</h3>
+      <pre><code class="language-bash">pkill -f 'temi_overview_adapter.py' || true
+pkill -f 'hermes-temi-bridge' || true
+pkill -f 'uv run temi-backend' || true
+pkill -f '/TemiAgent/temi_backend/.venv/bin/temi-backend' || true
+ss -ltnp | grep -E ':1883|:8080|:5037' || true
+</code></pre>
+
+      <h3>Stop MQTT too</h3>
+      <pre><code class="language-bash">pkill -f 'mosquitto -c /TemiAgent/mqtt/mosquitto.conf' || true</code></pre>
+    </section>
+
+    <section id="commands">
+      <h2>Command Reference</h2>
+
+      <h3>Connectivity</h3>
+      <pre><code class="language-bash">cd /TemiAgent
+./tools/check_temi_connection.sh
+</code></pre>
+
+      <pre><code class="language-bash">nc -vz -w 3 192.168.50.205 5555
+nc -vz -w 3 192.168.50.236 1883
+nc -vz -w 3 192.168.50.236 8080
+</code></pre>
+
+      <h3>ADB recovery</h3>
+      <pre><code class="language-bash">adb disconnect 192.168.50.205:5555 || true
+adb kill-server
+adb start-server
+adb connect 192.168.50.205:5555
+adb devices -l
+</code></pre>
+
+      <h3>App control</h3>
+      <pre><code class="language-bash">adb shell am start -n com.robotemi.agent/.MainActivity
+adb shell am force-stop com.robotemi.agent
+adb shell pidof com.robotemi.agent
+</code></pre>
+
+      <h3>Logcat filters</h3>
+      <pre><code class="language-bash">adb logcat '*:I' | grep -E 'MainActivity|WebSocketClient|MqttManager|CameraManager|AgentStateMachine'
+</code></pre>
+
+      <h3>MQTT monitoring</h3>
+      <pre><code class="language-bash">mosquitto_sub -h 192.168.50.236 -p 1883 -t '#' -v
+mosquitto_sub -h 192.168.50.236 -p 1883 -t 'temi/#' -v
+</code></pre>
+
+      <h3>Wakeup and direct speak</h3>
+      <pre><code class="language-bash">mosquitto_pub -h 192.168.50.236 -p 1883 \
+  -t 'temi/action/wakeup' \
+  -m '{"source":"manual_test"}'
+</code></pre>
+
+      <pre><code class="language-bash">mosquitto_pub -h 192.168.50.236 -p 1883 \
+  -t 'temi/action/speak' \
+  -m '{"text":"Manual MQTT speak test.","language":"ZH_TW","continue_listening":false}'
+</code></pre>
+
+      <h3>Hermes smoke test</h3>
+      <pre><code class="language-bash">hermes --help
+hermes -z 'Please reply with JSON only: {"ok": true}'
+</code></pre>
+
+      <h3>Inspect generated event artifacts</h3>
+      <pre><code class="language-bash">find /TemiAgent/temi_shared/events/temi-01 -maxdepth 2 -type f \
+  -printf '%TY-%Tm-%Td %TH:%TM:%TS %s %p\n' | sort | tail -n 40
+
+cat /TemiAgent/temi_shared/events/temi-01/&lt;event_id&gt;/metadata.json
+cat /TemiAgent/logs/overview_bridge_real/&lt;event_id&gt;.jsonl
+</code></pre>
+    </section>
+
+    <section id="testing">
+      <h2>Testing and Verification</h2>
+
+      <h3>Automated tests</h3>
+      <pre><code class="language-bash">cd /TemiAgent/hermes_temi_bridge
+uv run python -m unittest discover -s tests
+
+cd /TemiAgent/temi_backend
+uv run pytest
+
+cd /TemiAgent
+python3 tools/e2e_test_runner.py
+</code></pre>
+
+      <h3>Most recent automated results</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Suite</th>
+            <th>Expected result</th>
+            <th>Coverage</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>hermes_temi_bridge</code></td>
+            <td><code>25 tests OK</code></td>
+            <td>Event validation, image path translation, Hermes JSON parsing, action validation, mock mode, MQTT callback compatibility.</td>
+          </tr>
+          <tr>
+            <td><code>temi_backend</code></td>
+            <td><code>14 passed</code></td>
+            <td>MQTT bridge, skill router, agent core, vision buffer.</td>
+          </tr>
+          <tr>
+            <td><code>tools/e2e_test_runner.py</code></td>
+            <td><code>{"status": "ok"}</code></td>
+            <td>Hardware-free Bridge E2E with mock Hermes and duplicate event protection.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Manual acceptance checklist</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Check</th>
+            <th>Command or evidence</th>
+            <th>Pass condition</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Temi reachable by ADB</td>
+            <td><code>adb devices -l</code></td>
+            <td>Device state is <code>device</code>, not <code>offline</code>.</td>
+          </tr>
+          <tr>
+            <td>Temi connected to MQTT</td>
+            <td>Logcat <code>MqttManager</code></td>
+            <td><code>Connected successfully</code> and subscribed to action topics.</td>
+          </tr>
+          <tr>
+            <td>Video stream connected</td>
+            <td>Logcat <code>WebSocketClient</code></td>
+            <td><code>WebSocket connected</code> and <code>Video packets sent</code>.</td>
+          </tr>
+          <tr>
+            <td>Overview ASR final emitted</td>
+            <td><code>mosquitto_sub -t '#'</code></td>
+            <td><code>temi/temi-01/asr/final</code> appears after ASR.</td>
+          </tr>
+          <tr>
+            <td>Bridge command emitted</td>
+            <td><code>mosquitto_sub -t '#'</code></td>
+            <td><code>temi/temi-01/cmd/request</code> contains valid actions.</td>
+          </tr>
+          <tr>
+            <td>Temi executes command</td>
+            <td>Logcat <code>MainActivity</code></td>
+            <td><code>ACTION_SPEAK</code> is logged and robot speaks.</td>
+          </tr>
+          <tr>
+            <td>Command result published</td>
+            <td><code>mosquitto_sub -t '#'</code></td>
+            <td><code>temi/temi-01/cmd/result</code> appears.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="known-results">
+      <h2>Known Results and Evidence</h2>
+
+      <h3>Successful legacy ASR + vision + VLM examples</h3>
+      <pre><code>temi/event/asr {"text":"你聽得到我講話","language":"SYSTEM","timestamp_ms":1778574627720}
+temi/action/speak {"text":"是的，我聽得到您說話。", ...}
+
+temi/event/asr {"text":"我在做手勢","language":"SYSTEM","timestamp_ms":1778574674637}
+temi/action/speak {"text":"我看到了，你在比耶！", ...}</code></pre>
+
+      <h3>Successful Overview mock path after restart</h3>
+      <pre><code>temi/event/asr
+temi/temi-01/asr/final
+temi/temi-01/cmd/request
+temi/action/speak
+temi/temi-01/cmd/result</code></pre>
+
+      <h3>Successful Overview real Hermes path after restart</h3>
+      <pre><code>ASR text: 你現在可以聽到我嗎
+Hermes latency: 96940 ms
+Hermes action: speak
+Temi spoke: 可以，我能聽到您說話。</code></pre>
+
+      <h3>Latest real Hermes log shape</h3>
+      <pre><code>{"type":"asr_event_received", "event_id":"evt_temi_1778577897238", ...}
+{"type":"hermes_invocation_start"}
+{"type":"hermes_invocation_end", "hermes_latency_ms":96940, "raw_hermes_output":"{...}"}
+{"type":"command_published", "validated_actions":[...]}
+{"type":"command_result", "command_result":{"status":"success", ...}}</code></pre>
+    </section>
+
+    <section id="troubleshooting">
+      <h2>Troubleshooting</h2>
+
+      <h3>ADB shows offline</h3>
+      <p>Symptoms:</p>
+      <pre><code>192.168.50.205:5555    offline</code></pre>
+      <p>Fix:</p>
+      <pre><code class="language-bash">adb disconnect 192.168.50.205:5555 || true
+adb kill-server
+adb start-server
+adb connect 192.168.50.205:5555
+adb devices -l
+</code></pre>
+      <p>
+        If it remains offline, unlock Temi and accept the debugging prompt. If no prompt appears,
+        toggle wireless/USB debugging on the robot or reboot Temi.
+      </p>
+
+      <h3>8080 is refused</h3>
+      <p>Symptoms:</p>
+      <pre><code>nc: connect to 192.168.50.236 port 8080 failed: Connection refused</code></pre>
+      <p>Fix: start exactly one service that owns port 8080.</p>
+      <pre><code class="language-bash">pkill -f 'temi_overview_adapter.py' || true
+pkill -f 'uv run temi-backend' || true
+pkill -f '/TemiAgent/temi_backend/.venv/bin/temi-backend' || true
+
+cd /TemiAgent/temi_backend
+uv run python /TemiAgent/tools/temi_overview_adapter.py \
+  --broker 192.168.50.236 \
+  --port 1883 \
+  --vision-port 8080 \
+  --shared-root /TemiAgent/temi_shared \
+  --bridge-root /TemiAgent/temi_shared
+</code></pre>
+
+      <h3>Temi keeps trying 192.168.50.233</h3>
+      <p>
+        This is expected with the current Android build. It has multicast configuration for both
+        <code>192.168.50.233</code> and <code>192.168.50.236</code>. The repeated failed logs for
+        <code>192.168.50.233:8080</code> do not block this PC as long as <code>192.168.50.236:8080</code>
+        connects and video packets continue.
+      </p>
+
+      <h3>Temi app feels slow or switches to knowledge skill</h3>
+      <p>
+        This usually happens when real Hermes takes longer than the Android app's 15-second
+        <code>WAITING</code> watchdog. The app may time out, return to idle, or Temi's native skill
+        UI may take focus.
+      </p>
+      <p>Recommended mitigations:</p>
+      <ul>
+        <li>Use mock Bridge for fast Overview demos.</li>
+        <li>Use legacy <code>temi_backend</code> for fast LMStudio/VLM demos.</li>
+        <li>Increase Android watchdog timeout if editing the Android app.</li>
+        <li>Use a faster Hermes model/provider or reduce prompt/tool overhead.</li>
+        <li>Avoid speaking a second sentence while Hermes is still processing the first event.</li>
+      </ul>
+
+      <h3>Bridge publishes fallback instead of Hermes action</h3>
+      <p>Inspect the event log:</p>
+      <pre><code class="language-bash">cat /TemiAgent/logs/overview_bridge_real/&lt;event_id&gt;.jsonl</code></pre>
+      <p>Common reasons:</p>
+      <ul>
+        <li><code>invalid_hermes_json</code>: Hermes output had prose, terminal UI, or malformed JSON.</li>
+        <li><code>missing_image</code>: adapter did not save readable image files.</li>
+        <li><code>navigation_target_not_allowed</code>: Hermes chose a target outside the allowlist.</li>
+        <li><code>hermes_timeout</code>: Hermes exceeded <code>HERMES_TIMEOUT_SECONDS</code>.</li>
+      </ul>
+
+      <h3>Android source is not available on this PC</h3>
+      <p>
+        This workspace currently does not include <code>gradlew</code>, <code>settings.gradle</code>,
+        <code>AndroidManifest.xml</code>, or <code>app/build/outputs/apk/debug/app-debug.apk</code>.
+        The Android app is already installed on Temi and was developed on another PC.
+      </p>
+      <p>If the Android project is copied here, create <code>/TemiAgent/local.properties</code>:</p>
+      <pre><code class="language-properties">ws.server.urls=ws://192.168.50.236:8080
+mqtt.broker.urls=tcp://192.168.50.236:1883
+mqtt.client.id=temi-agent
+</code></pre>
+      <p>Then build and install:</p>
+      <pre><code class="language-bash">./gradlew assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+</code></pre>
+    </section>
+
+    <section id="roadmap">
+      <h2>Recommended Next Work</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Priority</th>
+            <th>Work item</th>
+            <th>Why it matters</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>High</td>
+            <td>Continue resident Hermes latency tuning</td>
+            <td>Resident mode is usable, but keeping real-Hermes responses consistently below the Android watchdog remains important.</td>
+          </tr>
+          <tr>
+            <td>High</td>
+            <td>Move Android app to native Overview topics</td>
+            <td>Removes the compatibility adapter and makes the runtime match <code>Overview.md</code> directly.</td>
+          </tr>
+          <tr>
+            <td>Medium</td>
+            <td>Remove stale multicast endpoint <code>192.168.50.233</code> from the Android app configuration</td>
+            <td>Reduces repeated connection failure logs and background retry load.</td>
+          </tr>
+          <tr>
+            <td>Medium</td>
+            <td>Add command result feedback from Android app itself</td>
+            <td>The adapter currently synthesizes <code>cmd/result</code>; app-native results would be more accurate.</td>
+          </tr>
+          <tr>
+            <td>Medium</td>
+            <td>Add service supervisor scripts</td>
+            <td>Starting/stopping adapter, Bridge, and backend would be less error-prone.</td>
+          </tr>
+          <tr>
+            <td>Low</td>
+            <td>Add image quality inspection utilities</td>
+            <td>Useful for debugging VLM mistakes and camera orientation issues.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="appendix">
+      <h2>Appendix</h2>
+
+      <h3>Important IPs and ports</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Workspace</td>
+            <td><code>/TemiAgent</code></td>
+          </tr>
+          <tr>
+            <td>PC IP</td>
+            <td><code>192.168.50.236</code></td>
+          </tr>
+          <tr>
+            <td>Temi IP</td>
+            <td><code>192.168.50.205</code></td>
+          </tr>
+          <tr>
+            <td>MQTT broker</td>
+            <td><code>tcp://192.168.50.236:1883</code></td>
+          </tr>
+          <tr>
+            <td>Video WebSocket</td>
+            <td><code>ws://192.168.50.236:8080</code></td>
+          </tr>
+          <tr>
+            <td>Local OpenAI-compatible VLM</td>
+            <td><code>http://127.0.0.1:1234/v1</code></td>
+          </tr>
+          <tr>
+            <td>Android package</td>
+            <td><code>com.robotemi.agent</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Schema and skill locations</h3>
+      <ul>
+        <li>Canonical Bridge schemas: <code>/TemiAgent/hermes_temi_bridge/schemas/</code></li>
+        <li>Documentation schema copies: <code>/TemiAgent/docs/schemas/</code></li>
+        <li>Hermes skill source: <code>/TemiAgent/hermes-agent/skills/temi-robot-control/</code></li>
+        <li>Root skill mirror: <code>/TemiAgent/hermes-skills/temi-robot-control/</code></li>
+      </ul>
+    </section>
+
+    <footer>
+      <p>
+        This README is intended to be the operational entry point for the current TemiAgent lab
+        state. For the original design narrative, read <code>Overview.md</code>. For the chronological
+        machine-specific notes, read <code>docs/temi_streaming_local_runbook.md</code>.
+      </p>
+    </footer>
+  </main>
+</body>
+</html>

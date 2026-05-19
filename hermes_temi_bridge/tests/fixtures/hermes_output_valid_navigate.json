@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "event_id": "evt_20260511_000001",
+  "robot_id": "temi-01",
+  "confidence": 0.9,
+  "reasoning_summary": "The user clearly requested navigation to a known destination.",
+  "actions": [
+    {
+      "action_id": "act_001",
+      "type": "navigate",
+      "target": "meeting_room"
+    }
+  ]
+}

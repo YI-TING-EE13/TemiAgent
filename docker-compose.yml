@@ -1,0 +1,35 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  hermes-temi-bridge:
+    build: ./hermes_temi_bridge
+    depends_on:
+      - mosquitto
+    environment:
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: "1883"
+      ROBOT_ID_ALLOWLIST: temi-01
+      TEMI_SHARED_BRIDGE_PATH: /var/lib/temi_shared
+      TEMI_SHARED_HERMES_PATH: /shared/temi
+      HERMES_INVOKE_MODE: mock
+      HERMES_MOCK_RESPONSE_TEXT: 這是 Bridge mock 測試
+      LOG_DIR: /app/logs/events
+    volumes:
+      - ./temi_shared:/var/lib/temi_shared
+      - ./logs:/app/logs
+
+  temi-backend:
+    build: ./temi_backend
+    profiles: ["legacy-backend"]
+    depends_on:
+      - mosquitto
+    environment:
+      TEMI_MQTT_BROKER: mosquitto
+      TEMI_MQTT_PORT: "1883"
+    ports:
+      - "8080:8080"

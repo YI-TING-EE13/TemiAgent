@@ -1,0 +1,55 @@
+# Python / virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+*/.venv/
+*/venv/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.ppk
+*.key
+
+# Runtime logs and process files
+logs/
+*.log
+*.pid
+
+# Temi runtime/generated data
+temi_shared/
+temi_backend/debug_frames/
+temp_vision_images/
+
+# LM Studio local state and downloaded models
+.lmstudio
+.lmstudio-data/
+
+# Build outputs and package caches
+dist/
+build/
+*.egg-info/
+node_modules/
+
+# OS/editor noise
+.DS_Store
+.vscode/
+.idea/
+
+# Hermes generated/local state in nested checkout
+hermes-agent/venv/
+hermes-agent/hermes_agent.egg-info/
+hermes-agent/.env
+hermes-agent/logs/
+hermes-agent/.pytest_cache/
+hermes-agent/__pycache__/
+hermes-agent/skills/**/__pycache__/

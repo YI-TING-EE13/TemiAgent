@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TemiCommandRequest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command_id",
+    "event_id",
+    "robot_id",
+    "source",
+    "created_at_ms",
+    "actions"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "command_id": { "type": "string", "minLength": 1 },
+    "event_id": { "type": "string", "minLength": 1 },
+    "robot_id": { "type": "string", "minLength": 1 },
+    "source": { "type": "string", "const": "hermes_temi_bridge" },
+    "created_at_ms": { "type": "integer" },
+    "actions": { "type": "array", "minItems": 1, "maxItems": 5 }
+  },
+  "additionalProperties": true
+}

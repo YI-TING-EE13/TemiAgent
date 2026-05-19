@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TemiAsrFinalEvent",
+  "type": "object",
+  "required": ["schema_version", "event_id", "robot_id", "type", "asr", "vision"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "event_id": { "type": "string", "minLength": 1 },
+    "robot_id": { "type": "string", "minLength": 1 },
+    "conversation_id": { "type": "string" },
+    "type": { "type": "string", "const": "asr.final" },
+    "timestamp_ms": { "type": "integer" },
+    "speech_end_ts_ms": { "type": "integer" },
+    "language": { "type": "string" },
+    "asr": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "vision": {
+      "type": "object",
+      "required": ["frames"],
+      "properties": {
+        "sampling_policy": { "type": "string" },
+        "frames": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["name", "path"],
+            "properties": {
+              "name": { "type": "string", "enum": ["t_minus_1000", "t_minus_500", "t"] },
+              "ts_ms": { "type": "integer" },
+              "path": { "type": "string", "minLength": 1 },
+              "uri": { "type": "string", "minLength": 1 },
+              "mime_type": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "context": { "type": "object" }
+  },
+  "additionalProperties": true
+}
