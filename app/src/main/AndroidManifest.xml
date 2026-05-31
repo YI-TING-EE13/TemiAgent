@@ -8,6 +8,7 @@
 
     <!-- Camera permission (dangerous — requires runtime request) -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Wake lock for keeping MQTT connection alive -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />

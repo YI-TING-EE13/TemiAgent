@@ -1,5 +1,7 @@
 # Temi Action Examples
 
+These examples show valid Hermes output for common Temi events. Preserve the input `event_id` and `robot_id` exactly.
+
 ## Visual Question
 
 Input ASR:
@@ -44,7 +46,7 @@ Output:
   "event_id": "evt_002",
   "robot_id": "temi-01",
   "confidence": 0.45,
-  "reasoning_summary": "The referenced object is ambiguous and Temi cannot safely manipulate objects.",
+  "reasoning_summary": "The referenced object is ambiguous, and Temi cannot safely manipulate objects.",
   "actions": [
     {
       "action_id": "act_001",
@@ -111,6 +113,34 @@ Output:
 }
 ```
 
+## Turn
+
+Input ASR:
+
+```text
+往左轉一點
+```
+
+Output:
+
+```json
+{
+  "schema_version": "1.0",
+  "event_id": "evt_005",
+  "robot_id": "temi-01",
+  "confidence": 0.88,
+  "reasoning_summary": "The user requested a small left turn.",
+  "actions": [
+    {
+      "action_id": "act_001",
+      "type": "turn",
+      "direction": "left",
+      "degrees": 15
+    }
+  ]
+}
+```
+
 ## Stop
 
 Input ASR:
@@ -124,7 +154,7 @@ Output:
 ```json
 {
   "schema_version": "1.0",
-  "event_id": "evt_005",
+  "event_id": "evt_006",
   "robot_id": "temi-01",
   "confidence": 0.95,
   "reasoning_summary": "The user clearly requested the robot to stop.",

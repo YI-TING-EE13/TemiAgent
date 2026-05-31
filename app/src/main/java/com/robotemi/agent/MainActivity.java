@@ -1,9 +1,15 @@
 package com.robotemi.agent;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
@@ -33,6 +39,7 @@ import com.robotemi.agent.agent.AgentStateMachine;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * TemiAgent Main Controller & Embodied AI Orchestrator.
@@ -56,6 +63,21 @@ public class MainActivity extends AppCompatActivity
 
     private static final String TAG = "MainActivity";
     private static final int PERMISSION_REQUEST_CODE = 1001;
+    private static final String CUSTOM_WAKE_WORD = "\u5c0f\u5b89";
+    private static final String[] CUSTOM_WAKE_WORD_VARIANTS = {
+            "\u5c0f\u5b89",
+            "\u5c0f\u5b89\u4f60\u597d",
+            "\u4f60\u597d\u5c0f\u5b89",
+            "\u5c0f\u6069",
+            "\u5c0f\u5eb5",
+            "\u5c0f\u978d",
+            "\u6653\u5b89",
+            "\u6653\u6069",
+            "\u6653\u5eb5",
+            "\u6821\u5b89",
+            "\u7b11\u5b89"
+    };
+    private static final int HOTWORD_RESTART_DELAY_MS = 250;
 
     // ─── Components ───────────────────────────────────────────────────
     private Robot robot;
@@ -64,6 +86,12 @@ public class MainActivity extends AppCompatActivity
     private List<MqttManager> mqttManagers = new ArrayList<>();
     private AgentStateMachine stateMachine;
     private boolean shouldContinueListening = false;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private SpeechRecognizer hotwordRecognizer;
+    private Intent hotwordIntent;
+    private boolean hotwordEnabled = false;
+    private boolean hotwordListening = false;
+    private boolean acceptingTemiAsr = false;
 
     // ─── UI ───────────────────────────────────────────────────────────
     private PreviewView viewFinder;
@@ -110,13 +138,7 @@ public class MainActivity extends AppCompatActivity
         }
 
         // Initialize Camera with multicast callback → WebSockets
-        cameraManager = new CameraManager(videoData -> {
-            for (WebSocketClient client : webSocketClients) {
-                if (client != null && client.isConnected()) {
-                    client.sendVideoPacket(videoData);
-                }
-            }
-        });
+        cameraManager = createCameraManager();
 
         // Initialize MQTT clients (Multicast)
         String[] mqttUrls = BuildConfig.MQTT_BROKER_URLS.split(",");
@@ -150,6 +172,10 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onStop() {
         super.onStop();
+        hotwordEnabled = false;
+        mainHandler.removeCallbacksAndMessages(null);
+        stopHotwordListening();
+        destroyHotwordRecognizer();
         robot.removeOnRobotReadyListener(this);
         robot.removeAsrListener(this);
         robot.removeNlpListener(this);
@@ -160,6 +186,7 @@ public class MainActivity extends AppCompatActivity
             if (wsc != null) wsc.disconnect();
         }
         if (cameraManager != null) cameraManager.shutdown();
+        cameraManager = null;
         
         for (MqttManager mm : mqttManagers) {
             if (mm != null) mm.disconnect();
@@ -229,6 +256,11 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onStateChanged(AgentStateMachine.State oldState, AgentStateMachine.State newState) {
         updateAgentState(newState.name());
+        if (newState == AgentStateMachine.State.IDLE) {
+            startHotwordListening();
+        } else {
+            stopHotwordListening();
+        }
         
         if (newState == AgentStateMachine.State.THINKING) {
             // Non-blocking transition feedback
@@ -259,8 +291,9 @@ public class MainActivity extends AppCompatActivity
         if (stateMachine.getCurrentState() == AgentStateMachine.State.EXECUTING) {
             if (ttsRequest.getStatus() == TtsRequest.Status.COMPLETED ||
                 ttsRequest.getStatus() == TtsRequest.Status.ERROR) {
-                if (shouldContinueListening) {
-                    stateMachine.transitionTo(AgentStateMachine.State.IDLE);
+        if (shouldContinueListening) {
+                    stateMachine.transitionTo(AgentStateMachine.State.WAKEUP_TRIGGERED);
+                    stateMachine.transitionTo(AgentStateMachine.State.ASR_LISTENING);
                     wakeupWithoutBuiltInResponse();
                 } else {
                     stateMachine.transitionTo(AgentStateMachine.State.IDLE);
@@ -301,6 +334,8 @@ public class MainActivity extends AppCompatActivity
 
     private void handleWakeupAction(JSONObject json) {
         Log.i(TAG, "ACTION_WAKEUP");
+        stateMachine.transitionTo(AgentStateMachine.State.WAKEUP_TRIGGERED);
+        stateMachine.transitionTo(AgentStateMachine.State.ASR_LISTENING);
         wakeupWithoutBuiltInResponse();
     }
 
@@ -310,18 +345,29 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onWakeupWord(@NonNull String wakeupWord, int direction) {
-        stateMachine.transitionTo(AgentStateMachine.State.WAKEUP_TRIGGERED);
-        
         long wakeupTimeMs = System.currentTimeMillis();
-        Log.i(TAG, "onWakeupWord: " + wakeupWord + " dir=" + direction + " time=" + wakeupTimeMs);
-        
-        stateMachine.transitionTo(AgentStateMachine.State.ASR_LISTENING);
+        if (acceptingTemiAsr) {
+            Log.i(TAG, "Temi ASR wakeup accepted: " + wakeupWord
+                    + " dir=" + direction + " time=" + wakeupTimeMs);
+            return;
+        }
+        Log.i(TAG, "Ignoring Temi system wake word: " + wakeupWord
+                + " dir=" + direction + " time=" + wakeupTimeMs);
+        suppressLauncherConversation();
     }
 
     @Override
     public void onAsrResult(@NonNull String text, @NonNull SttLanguage sttLanguage) {
         long asrCompleteTimeMs = System.currentTimeMillis();
         Log.i(TAG, "onAsrResult: '" + text + "' (lang=" + sttLanguage + ") time=" + asrCompleteTimeMs);
+
+        if (!acceptingTemiAsr) {
+            Log.i(TAG, "Ignoring ASR because it was not requested by custom wake word.");
+            suppressLauncherConversation();
+            stateMachine.transitionTo(AgentStateMachine.State.IDLE);
+            return;
+        }
+        acceptingTemiAsr = false;
 
         if (text.isEmpty()) {
             stateMachine.transitionTo(AgentStateMachine.State.IDLE);
@@ -362,6 +408,8 @@ public class MainActivity extends AppCompatActivity
 
     private void startAllServices() {
         updateStatus("Starting services...");
+        configureTemiVoiceOwnership();
+        initHotwordRecognizer();
 
         // 1. Start all MQTT clients
         for (MqttManager mm : mqttManagers) {
@@ -371,6 +419,9 @@ public class MainActivity extends AppCompatActivity
         // 2. Start all WebSocket clients + Camera
         for (WebSocketClient wsc : webSocketClients) {
             wsc.connect();
+        }
+        if (cameraManager == null) {
+            cameraManager = createCameraManager();
         }
         cameraManager.startCamera(this, this, viewFinder);
 
@@ -398,6 +449,7 @@ public class MainActivity extends AppCompatActivity
             });
             
             stateMachine.transitionTo(AgentStateMachine.State.IDLE);
+            startHotwordListening();
         }, 3000);
 
         speakWithoutConversationLayer("系統就緒", TtsRequest.Language.ZH_TW);
@@ -409,12 +461,15 @@ public class MainActivity extends AppCompatActivity
 
     private boolean checkPermissions() {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 == PackageManager.PERMISSION_GRANTED;
     }
 
     private void requestPermissions() {
         ActivityCompat.requestPermissions(this,
-                new String[]{Manifest.permission.CAMERA}, PERMISSION_REQUEST_CODE);
+                new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO},
+                PERMISSION_REQUEST_CODE);
     }
 
     @Override
@@ -423,10 +478,10 @@ public class MainActivity extends AppCompatActivity
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            if (allPermissionsGranted(grantResults)) {
                 startAllServices();
             } else {
-                Toast.makeText(this, "Camera permission is required.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Camera and microphone permissions are required.", Toast.LENGTH_LONG).show();
                 updateStatus("Permission Denied");
             }
         }
@@ -446,6 +501,16 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+    private CameraManager createCameraManager() {
+        return new CameraManager(videoData -> {
+            for (WebSocketClient client : webSocketClients) {
+                if (client != null && client.isConnected()) {
+                    client.sendVideoPacket(videoData);
+                }
+            }
+        });
+    }
+
     private TtsRequest.Language mapTtsLanguage(String lang) {
         switch (lang) {
             case "ZH_TW": return TtsRequest.Language.ZH_TW;
@@ -456,12 +521,237 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+    private void configureTemiVoiceOwnership() {
+        try {
+            robot.toggleWakeup(true);
+            robot.setAsrLanguages(Collections.singletonList(SttLanguage.ZH_TW));
+            Log.i(TAG, "Temi built-in wake trigger disabled; custom wake word is " + CUSTOM_WAKE_WORD);
+            mainHandler.postDelayed(() ->
+                    Log.i(TAG, "Temi wakeup disabled state: " + robot.isWakeupDisabled()), 500);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to configure Temi voice ownership", e);
+        }
+    }
+
+    private void initHotwordRecognizer() {
+        if (hotwordRecognizer != null) {
+            return;
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            Log.e(TAG, "Android SpeechRecognizer is not available on this device.");
+            updateStatus("Hotword unavailable");
+            return;
+        }
+
+        hotwordIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        hotwordIntent.putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        hotwordIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-TW");
+        hotwordIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        hotwordIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+        hotwordIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+
+        hotwordRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        hotwordRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override
+            public void onReadyForSpeech(Bundle params) {
+                hotwordListening = true;
+                updateStatus("Waiting for \"" + CUSTOM_WAKE_WORD + "\"");
+            }
+
+            @Override
+            public void onBeginningOfSpeech() {
+            }
+
+            @Override
+            public void onRmsChanged(float rmsdB) {
+            }
+
+            @Override
+            public void onBufferReceived(byte[] buffer) {
+            }
+
+            @Override
+            public void onEndOfSpeech() {
+                hotwordListening = false;
+            }
+
+            @Override
+            public void onError(int error) {
+                hotwordListening = false;
+                Log.d(TAG, "Hotword recognizer error: " + error);
+                scheduleHotwordRestart();
+            }
+
+            @Override
+            public void onResults(Bundle results) {
+                hotwordListening = false;
+                if (containsCustomWakeWord(results)) {
+                    triggerCustomWakeWord();
+                } else {
+                    scheduleHotwordRestart();
+                }
+            }
+
+            @Override
+            public void onPartialResults(Bundle partialResults) {
+                if (containsCustomWakeWord(partialResults)) {
+                    triggerCustomWakeWord();
+                }
+            }
+
+            @Override
+            public void onEvent(int eventType, Bundle params) {
+            }
+        });
+    }
+
+    private void startHotwordListening() {
+        hotwordEnabled = true;
+        if (hotwordRecognizer == null) {
+            initHotwordRecognizer();
+        }
+        if (hotwordRecognizer == null || hotwordListening) {
+            return;
+        }
+        if (stateMachine.getCurrentState() != AgentStateMachine.State.IDLE) {
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        try {
+            hotwordListening = true;
+            hotwordRecognizer.startListening(hotwordIntent);
+        } catch (Exception e) {
+            hotwordListening = false;
+            Log.w(TAG, "Failed to start hotword recognizer", e);
+            scheduleHotwordRestart();
+        }
+    }
+
+    private void stopHotwordListening() {
+        if (hotwordRecognizer == null) {
+            return;
+        }
+        try {
+            hotwordRecognizer.cancel();
+        } catch (Exception e) {
+            Log.d(TAG, "Failed to cancel hotword recognizer", e);
+        }
+        hotwordListening = false;
+    }
+
+    private void destroyHotwordRecognizer() {
+        if (hotwordRecognizer == null) {
+            return;
+        }
+        hotwordRecognizer.destroy();
+        hotwordRecognizer = null;
+        hotwordIntent = null;
+        hotwordListening = false;
+    }
+
+    private void scheduleHotwordRestart() {
+        mainHandler.postDelayed(() -> {
+            if (hotwordEnabled && stateMachine.getCurrentState() == AgentStateMachine.State.IDLE) {
+                startHotwordListening();
+            }
+        }, HOTWORD_RESTART_DELAY_MS);
+    }
+
+    private boolean containsCustomWakeWord(Bundle results) {
+        if (results == null) {
+            return false;
+        }
+        ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+        if (matches == null) {
+            return false;
+        }
+
+        for (String match : matches) {
+            String normalized = normalizeHotwordText(match);
+            for (String variant : CUSTOM_WAKE_WORD_VARIANTS) {
+                String normalizedVariant = normalizeHotwordText(variant);
+                if (normalized.contains(normalizedVariant)) {
+                    Log.i(TAG, "Custom wake word matched from phrase: " + match
+                            + " variant=" + variant);
+                    return true;
+                }
+            }
+            Log.d(TAG, "Hotword phrase did not match: " + match + " normalized=" + normalized);
+        }
+        return false;
+    }
+
+    private String normalizeHotwordText(String text) {
+        if (text == null) {
+            return "";
+        }
+        StringBuilder normalized = new StringBuilder();
+        String lower = text.toLowerCase(Locale.ROOT);
+        for (int i = 0; i < lower.length(); i++) {
+            char ch = lower.charAt(i);
+            int type = Character.getType(ch);
+            if (!Character.isWhitespace(ch)
+                    && !Character.isISOControl(ch)
+                    && type != Character.CONNECTOR_PUNCTUATION
+                    && type != Character.DASH_PUNCTUATION
+                    && type != Character.START_PUNCTUATION
+                    && type != Character.END_PUNCTUATION
+                    && type != Character.OTHER_PUNCTUATION
+                    && type != Character.INITIAL_QUOTE_PUNCTUATION
+                    && type != Character.FINAL_QUOTE_PUNCTUATION) {
+                normalized.append(ch);
+            }
+        }
+        return normalized.toString();
+    }
+
+    private String normalizeSpeech(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[\\s\\p{Punct}，。！？、；：「」『』（）()]", "");
+    }
+
+    private void triggerCustomWakeWord() {
+        if (stateMachine.getCurrentState() != AgentStateMachine.State.IDLE) {
+            return;
+        }
+        stopHotwordListening();
+        long wakeupTimeMs = System.currentTimeMillis();
+        Log.i(TAG, "Custom wake word triggered: " + CUSTOM_WAKE_WORD + " time=" + wakeupTimeMs);
+        stateMachine.transitionTo(AgentStateMachine.State.WAKEUP_TRIGGERED);
+        stateMachine.transitionTo(AgentStateMachine.State.ASR_LISTENING);
+        wakeupWithoutBuiltInResponse();
+    }
+
+    private boolean allPermissionsGranted(@NonNull int[] grantResults) {
+        if (grantResults.length == 0) {
+            return false;
+        }
+        for (int grantResult : grantResults) {
+            if (grantResult != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private void suppressLauncherConversation() {
         robot.finishConversation();
         robot.cancelAllTtsRequests();
     }
 
     private void wakeupWithoutBuiltInResponse() {
+        stopHotwordListening();
+        acceptingTemiAsr = true;
         robot.wakeup(Collections.singletonList(SttLanguage.ZH_TW));
     }
 

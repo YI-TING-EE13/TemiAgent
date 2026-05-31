@@ -54,17 +54,47 @@ Important files:
 
 ## Voice Ownership and Duplicate Reply Mitigation
 
-TemiAgent still uses Temi's wake word and ASR pipeline, but the app now takes ownership of the NLU/conversation side so the robot does not normally speak both the built-in Temi answer and the backend-generated answer.
+TemiAgent uses an app-owned custom wake word and then hands the speech session to Temi ASR. The default wake word is `小安`.
+
+Current voice flow:
+
+1. The Android app listens for `小安` through Android `SpeechRecognizer`.
+2. When `小安` is detected, the app calls `robot.wakeup(Collections.singletonList(SttLanguage.ZH_TW))`.
+3. Temi performs ASR and returns the final transcript through `Robot.AsrListener`.
+4. The app publishes ASR text to the backend through MQTT.
+5. The backend returns validated commands such as `temi/action/speak`.
+6. The app executes TTS/navigation through Temi SDK.
+
+This keeps Temi's ASR while avoiding normal use of Temi's built-in assistant wake word and response flow.
+
+Accepted wake word phrases and near matches:
+
+- `小安`
+- `小安你好`
+- `你好小安`
+- `小恩`
+- `小庵`
+- `小鞍`
+- `曉安`
+- `曉恩`
+- `曉庵`
+- `校安`
+- `笑安`
 
 Current Android-side safeguards:
 
+- `AndroidManifest.xml` declares `android.permission.RECORD_AUDIO` for the app-owned wake word listener.
+- `MainActivity` disables the Temi built-in wake trigger with `robot.toggleWakeup(true)` in Kiosk mode.
 - `AndroidManifest.xml` declares `com.robotemi.sdk.metadata.OVERRIDE_NLU`.
 - `AndroidManifest.xml` declares `com.robotemi.sdk.metadata.OVERRIDE_CONVERSATION_LAYER`.
 - `MainActivity` registers `Robot.NlpListener` so Temi Launcher can detect an active app-side NLU owner.
 - When ASR arrives, the app calls `finishConversation()` and clears queued TTS before forwarding the event to the backend.
 - Backend-driven TTS uses `TtsRequest.create(text, false, language)` so speech is not shown through Temi's conversation layer.
+- The app ignores unsolicited Temi system wake events. Only app-triggered wakeups set the internal `acceptingTemiAsr` gate that allows ASR text to be forwarded to the backend.
 
-If a Temi firmware or Launcher version still speaks a built-in reply before the app can suppress it, the next stronger approach is to bypass Temi ASR entirely and use an app-owned hotword/STT stack. That is more invasive, but it gives full control of the conversation lifecycle.
+Known limitation: on the currently tested Temi Launcher, `robot.toggleWakeup(true)` logs as requested but `robot.isWakeupDisabled()` can still report `false`, and the system phrase "Hi Temi" can still produce a wake event. The app defensively ignores those events, but the system UI may still briefly react.
+
+The current wake word listener is implemented with Android `SpeechRecognizer`. It is good enough for testing but is not a true low-latency keyword spotting engine. For production-grade reliability, replace it with a dedicated local wake word engine and keep Temi only for ASR.
 
 ## Prerequisites
 
@@ -113,6 +143,27 @@ If a Temi firmware or Launcher version still speaks a built-in reply before the 
    adb install -r app\build\outputs\apk\debug\app-debug.apk
    ```
 
+5. Grant runtime permissions when deploying by ADB:
+
+   ```powershell
+   adb shell pm grant com.robotemi.agent android.permission.CAMERA
+   adb shell pm grant com.robotemi.agent android.permission.RECORD_AUDIO
+   ```
+
+   The current Android `SpeechRecognizer` implementation uses Google RecognitionService on the tested Temi device. If the app logs `Hotword recognizer error: 9` or Google RecognitionService reports microphone permission denied, also grant:
+
+   ```powershell
+   adb shell pm grant com.google.android.googlequicksearchbox android.permission.RECORD_AUDIO
+   adb shell appops set com.google.android.googlequicksearchbox RECORD_AUDIO allow
+   ```
+
+6. Restart the app:
+
+   ```powershell
+   adb shell am force-stop com.robotemi.agent
+   adb shell am start -n com.robotemi.agent/.MainActivity
+   ```
+
 ## Backend Setup
 
 1. Start the MQTT broker.
@@ -142,6 +193,10 @@ If a Temi firmware or Launcher version still speaks a built-in reply before the 
 - `.\gradlew.bat :app:assembleDebug` succeeds.
 - `app\build\outputs\apk\debug\app-debug.apk` exists.
 - Android app status shows connected WebSocket and MQTT endpoints.
+- Logcat shows `Temi built-in wake trigger disabled; custom wake word is 小安`.
+- Logcat shows `RecognitionService#onStartListening` while the app is idle.
+- Saying `小安`, `小安你好`, or `你好小安` logs `Custom wake word matched`.
+- Saying `Hi Temi` may still produce a Temi wake event, but the app should log `Ignoring Temi system wake word` unless it was triggered by the custom wake word flow.
 - Backend receives `temi/event/asr`.
 - Backend publishes `temi/action/speak`.
 - Temi speaks only the backend answer in normal operation.
@@ -151,8 +206,16 @@ If a Temi firmware or Launcher version still speaks a built-in reply before the 
 - **No device in `adb devices`**: Confirm Temi developer mode, same network, and run `adb connect <temi_ip>`.
 - **Backend does not receive ASR**: Check MQTT broker IP, port `1883`, firewall rules, and `mqtt.broker.urls`.
 - **No video stream**: Check `ws.server.urls`, backend WebSocket listener port, and camera permission.
-- **Temi still speaks twice**: Confirm the installed APK includes the current manifest metadata and `MainActivity` NLU listener changes. If the built-in reply happens before app callbacks, consider moving to app-owned hotword/STT.
+- **Temi still speaks twice**: Confirm the installed APK includes the current manifest metadata, `MainActivity` NLU listener changes, and the `acceptingTemiAsr` gate. The expected path is app-owned hotword detection followed by Temi ASR only after `robot.wakeup(...)`; unsolicited Temi system wake events should be ignored by the app.
+- **Custom wake word does not trigger**: Check logcat for `RecognitionService#onStartListening`. If `Hotword recognizer error: 9` appears, grant microphone permission to both `com.robotemi.agent` and `com.google.android.googlequicksearchbox`.
+- **Custom wake word is inconsistent**: Prefer `小安你好` or `你好小安` over the two-character `小安`. Short Mandarin phrases are less reliable through Android `SpeechRecognizer`.
 - **Build warnings about Java 8 target**: Current build still succeeds. The warning can be cleaned up later by updating Java toolchain or compile options.
+
+Useful log command:
+
+```powershell
+adb logcat -d -v time | Select-String "MainActivity|AgentStateMachine|RecognitionService|Hotword|小安|Ignoring Temi"
+```
 
 ## License
 
