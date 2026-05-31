@@ -90,6 +90,7 @@ Current Android-side safeguards:
 - `MainActivity` registers `Robot.NlpListener` so Temi Launcher can detect an active app-side NLU owner.
 - When ASR arrives, the app calls `finishConversation()` and clears queued TTS before forwarding the event to the backend.
 - Backend-driven TTS uses `TtsRequest.create(text, false, language)` so speech is not shown through Temi's conversation layer.
+- Backend-driven TTS is also mirrored to a compact bottom subtitle overlay. The subtitle uses the active TTS request id and is cleared when that request completes or errors.
 - The app ignores unsolicited Temi system wake events. Only app-triggered wakeups set the internal `acceptingTemiAsr` gate that allows ASR text to be forwarded to the backend.
 
 Known limitation: on the currently tested Temi Launcher, `robot.toggleWakeup(true)` logs as requested but `robot.isWakeupDisabled()` can still report `false`, and the system phrase "Hi Temi" can still produce a wake event. The app defensively ignores those events, but the system UI may still briefly react.
@@ -123,6 +124,8 @@ The current wake word listener is implemented with Android `SpeechRecognizer`. I
    ws.server.urls=ws://192.168.50.233:8080,ws://192.168.50.236:8080
    mqtt.broker.urls=tcp://192.168.50.233:1883,tcp://192.168.50.236:1883
    ```
+
+   On the robot UI, `MQTT: connected/total` shows how many configured MQTT brokers are currently connected. For example, `MQTT: 2/2` means both broker URLs above are connected and can receive ASR events or send robot actions.
 
 2. Build the debug APK:
 
@@ -187,12 +190,19 @@ The current wake word listener is implemented with Android `SpeechRecognizer`. I
    uv run python scripts\manual_tts.py --broker 127.0.0.1 --text "Hello, I am Temi." --language EN_US
    ```
 
+   When testing the Android app UI, send the command to one of the configured brokers, for example:
+
+   ```powershell
+   uv run python scripts\manual_tts.py --broker 192.168.50.233 --text "這是一段字幕測試。" --language ZH_TW
+   ```
+
 ## Validation Checklist
 
 - `adb devices` shows the Temi robot as connected.
 - `.\gradlew.bat :app:assembleDebug` succeeds.
 - `app\build\outputs\apk\debug\app-debug.apk` exists.
 - Android app status shows connected WebSocket and MQTT endpoints.
+- Android app status shows the expected MQTT count, such as `MQTT: 2/2` for two connected brokers.
 - Logcat shows `Temi built-in wake trigger disabled; custom wake word is 小安`.
 - Logcat shows `RecognitionService#onStartListening` while the app is idle.
 - Saying `小安`, `小安你好`, or `你好小安` logs `Custom wake word matched`.
@@ -200,12 +210,16 @@ The current wake word listener is implemented with Android `SpeechRecognizer`. I
 - Backend receives `temi/event/asr`.
 - Backend publishes `temi/action/speak`.
 - Temi speaks only the backend answer in normal operation.
+- During backend-driven TTS, a compact white subtitle appears near the bottom of the screen and disappears after TTS completion.
 
 ## Troubleshooting
 
 - **No device in `adb devices`**: Confirm Temi developer mode, same network, and run `adb connect <temi_ip>`.
 - **Backend does not receive ASR**: Check MQTT broker IP, port `1883`, firewall rules, and `mqtt.broker.urls`.
 - **No video stream**: Check `ws.server.urls`, backend WebSocket listener port, and camera permission.
+- **`MQTT: 0/N` or red MQTT status**: Check that each broker in `mqtt.broker.urls` is reachable from Temi on port `1883`.
+- **TTS works but no subtitle appears**: Confirm the installed APK includes the subtitle overlay changes and that speech is triggered through `temi/action/speak` / `speakWithoutConversationLayer(...)`, not through a separate Temi system UI path.
+- **ASR test says "連線逾時，請稍後再試"**: This is the app-side `WAITING` watchdog, not Temi's built-in ASR. It fires after 60 seconds if the backend does not publish a robot action, even if the backend received the ASR event.
 - **Temi still speaks twice**: Confirm the installed APK includes the current manifest metadata, `MainActivity` NLU listener changes, and the `acceptingTemiAsr` gate. The expected path is app-owned hotword detection followed by Temi ASR only after `robot.wakeup(...)`; unsolicited Temi system wake events should be ignored by the app.
 - **Custom wake word does not trigger**: Check logcat for `RecognitionService#onStartListening`. If `Hotword recognizer error: 9` appears, grant microphone permission to both `com.robotemi.agent` and `com.google.android.googlequicksearchbox`.
 - **Custom wake word is inconsistent**: Prefer `小安你好` or `你好小安` over the two-character `小安`. Short Mandarin phrases are less reliable through Android `SpeechRecognizer`.

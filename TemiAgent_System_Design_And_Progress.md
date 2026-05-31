@@ -68,9 +68,10 @@ In Human-Robot Interaction (HRI), silence is deadly. When a VLM takes 3-7 second
 ### Latency Masking
 TemiAgent employs a `THINKING` transitional state. Immediately upon capturing the ASR event, the Android client triggers a non-blocking TTS request (e.g., "Let me take a look"). This ~1.5-second auditory feedback perfectly masks the TTFT of the cloud-based VLM, creating an illusion of immediate, embodied awareness.
 
-### Thread-Safe Watchdogs & Global Preemption
+### Thread-Safe Watchdogs, Subtitles & Global Preemption
 If the VLM crashes or network connectivity is lost, the robot cannot remain paralyzed. 
-- **The Watchdog**: The `WAITING` state activates a rigid 15,000ms timer. If the backend fails to reply via MQTT within this window, the State Machine aborts, apologizes ("Connection timed out"), and returns to `IDLE`.
+- **The Watchdog**: The `WAITING` state activates a rigid 60,000ms timer. If the backend fails to reply via MQTT within this window, the State Machine aborts, apologizes ("Connection timed out"), and returns to `IDLE`.
+- **TTS Subtitle Mirror**: Backend-driven `speak` actions are mirrored into a compact bottom subtitle overlay. The app tracks the active `TtsRequest` id so completion from an older request cannot accidentally clear a newer subtitle.
 - **Interrupt Transition**: Linear state machines fail in dynamic environments. TemiAgent binds the Android root view (`android.R.id.content`) to a global `interrupt()` method. A single physical touch on the robot's screen instantly triggers `robot.cancelAllTtsRequests()` and `robot.stopMovement()`, purging the Watchdog and forcing a state reset. This guarantees that humans maintain ultimate physical authority over the agent's actions at all times.
 
 ---

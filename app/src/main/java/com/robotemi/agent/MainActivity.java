@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 /**
  * TemiAgent Main Controller & Embodied AI Orchestrator.
@@ -98,6 +99,8 @@ public class MainActivity extends AppCompatActivity
     private TextView statusText;
     private TextView agentStateText;
     private TextView mqttStatusText;
+    private TextView subtitleText;
+    private UUID activeSubtitleTtsId;
 
     // ═══════════════════════════════════════════════════════════════════
     //  Lifecycle
@@ -113,6 +116,7 @@ public class MainActivity extends AppCompatActivity
         statusText = findViewById(R.id.statusText);
         agentStateText = findViewById(R.id.agentStateText);
         mqttStatusText = findViewById(R.id.mqttStatusText);
+        subtitleText = findViewById(R.id.subtitleText);
 
         // Initialize State Machine
         stateMachine = new AgentStateMachine(this);
@@ -277,6 +281,7 @@ public class MainActivity extends AppCompatActivity
         Log.w(TAG, "Executing Global Interrupt: Stopping all actions.");
         robot.cancelAllTtsRequests();
         robot.stopMovement();
+        hideSubtitle();
     }
 
     @Override
@@ -288,6 +293,11 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onTtsStatusChanged(@NonNull TtsRequest ttsRequest) {
+        if (ttsRequest.getStatus() == TtsRequest.Status.COMPLETED ||
+            ttsRequest.getStatus() == TtsRequest.Status.ERROR) {
+            hideSubtitleForRequest(ttsRequest);
+        }
+
         if (stateMachine.getCurrentState() == AgentStateMachine.State.EXECUTING) {
             if (ttsRequest.getStatus() == TtsRequest.Status.COMPLETED ||
                 ttsRequest.getStatus() == TtsRequest.Status.ERROR) {
@@ -747,6 +757,7 @@ public class MainActivity extends AppCompatActivity
     private void suppressLauncherConversation() {
         robot.finishConversation();
         robot.cancelAllTtsRequests();
+        hideSubtitle();
     }
 
     private void wakeupWithoutBuiltInResponse() {
@@ -756,7 +767,37 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void speakWithoutConversationLayer(String text, TtsRequest.Language language) {
-        robot.speak(TtsRequest.create(text, false, language));
+        TtsRequest request = TtsRequest.create(text, false, language);
+        showSubtitle(text, request.getId());
+        robot.speak(request);
+    }
+
+    private void showSubtitle(String text, UUID requestId) {
+        if (text == null || text.trim().isEmpty()) {
+            hideSubtitle();
+            return;
+        }
+        activeSubtitleTtsId = requestId;
+        runOnUiThread(() -> {
+            subtitleText.setText(text.trim());
+            subtitleText.setVisibility(View.VISIBLE);
+        });
+    }
+
+    private void hideSubtitleForRequest(@NonNull TtsRequest request) {
+        UUID requestId = request.getId();
+        if (activeSubtitleTtsId == null || !activeSubtitleTtsId.equals(requestId)) {
+            return;
+        }
+        hideSubtitle();
+    }
+
+    private void hideSubtitle() {
+        activeSubtitleTtsId = null;
+        runOnUiThread(() -> {
+            subtitleText.setText("");
+            subtitleText.setVisibility(View.GONE);
+        });
     }
 
     private void updateStatus(String text) {

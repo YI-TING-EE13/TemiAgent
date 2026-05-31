@@ -41,6 +41,8 @@ Accepted hotword variants are defined in `CUSTOM_WAKE_WORD_VARIANTS`:
 
 The listener uses Android `SpeechRecognizer`. This is a pragmatic test implementation, not a production-grade keyword spotting engine. Reliability improves when users say `小安你好` or `你好小安` instead of only `小安`.
 
+Backend-driven TTS is displayed as a compact subtitle near the bottom of the Android UI. The subtitle is driven by `speakWithoutConversationLayer(...)`, tracked by the active `TtsRequest` id, and hidden when that request reaches `COMPLETED` or `ERROR`.
+
 ## Temi System Wake Behavior
 
 `MainActivity.configureTemiVoiceOwnership()` calls:
@@ -95,6 +97,17 @@ adb shell am start -n com.robotemi.agent/.MainActivity
 
 Expected build state: `:app:assembleDebug` succeeds. Warnings about Java 8 source/target and deprecated APIs are currently non-blocking.
 
+## UI Status Indicators
+
+- `MQTT: connected/total` is the count of connected MQTT brokers versus configured brokers from `mqtt.broker.urls`.
+- Example: `MQTT: 2/2` means both configured brokers are connected. ASR events are published to connected brokers, and backend actions such as `temi/action/speak` can be received.
+- The top-left status text shows the hotword/listening state, such as `Waiting for "小安"`.
+- Backend TTS subtitles appear above the bottom status area with small white text and should clear automatically after speech ends.
+
+## Timeout Behavior
+
+The `WAITING` watchdog in `AgentStateMachine` is currently 60 seconds. If ASR is published but no backend action arrives over MQTT before the watchdog fires, the app says `連線逾時，請稍後再試` and returns to `IDLE`. This timeout is app-side behavior, not a Temi built-in ASR timeout.
+
 ## Validation Commands
 
 Check device:
@@ -139,10 +152,16 @@ Expected logs when system wake phrase is ignored:
   - `CUSTOM_WAKE_WORD_VARIANTS`
   - `containsCustomWakeWord(...)`
   - `normalizeHotwordText(...)`
+  - `speakWithoutConversationLayer(...)`
+  - subtitle helpers: `showSubtitle(...)`, `hideSubtitleForRequest(...)`, `hideSubtitle()`
   - `triggerCustomWakeWord()`
   - `wakeupWithoutBuiltInResponse()`
   - `onWakeupWord(...)`
   - `onAsrResult(...)`
+- `AgentStateMachine.java`
+  - state definitions
+  - 60 second watchdog
+  - `interrupt()`
 - `AndroidManifest.xml`
   - `RECORD_AUDIO`
   - `CAMERA`

@@ -17,8 +17,8 @@ import android.util.Log;
 public class AgentStateMachine {
     private static final String TAG = "AgentStateMachine";
     
-    /** Maximum duration (15 seconds) to wait for the cloud VLM response before timing out. */
-    private static final long WAITING_TIMEOUT_MS = 15000L; 
+    /** Maximum duration (60 seconds) to wait for the cloud VLM response before timing out. */
+    private static final long WAITING_TIMEOUT_MS = 60000L; 
 
     /**
      * Enumeration of all possible autonomous states of the Agent.
