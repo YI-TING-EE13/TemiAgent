@@ -36,7 +36,7 @@ Temi App ASR + Picture Streaming
 - Picture Streaming WebSocket：`192.168.50.236:8080`。
 - Temi Android app package：`com.robotemi.agent`。
 - LM Studio / Hermes provider 已可被 Hermes 使用。
-- 所有操作在 `/TemiAgent` container 內執行。
+- 所有操作在 `/TemiAgent` container 內執行；修改文件或 skills 也應進 container，避免 host 權限與 root/nobody owner 不一致。
 
 ## 重要注意
 
@@ -174,7 +174,8 @@ python3 tools/hermes_resident_server.py \
   --port 8765 \
   --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
   --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md
+  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md
 ```
 
 確認 worker 存活：
@@ -189,6 +190,7 @@ curl -s http://127.0.0.1:8765/health
 
 - 第一次呼叫可能較慢，建議正式 Demo 前先講一句測試語音預熱。
 - 若要展示 Hermes persistent memory，可加上 `--hermes-home /root/.hermes/profiles/care-assistant --enable-memory --toolsets memory`，但 smoke test 先不開會比較快。
+- 若 Demo 透過 Discord/gateway 請 Hermes「看手勢 / 看相機」，確認 `.hermes.md`、`docker/SOUL.md` 與 `temi-discord-care-assistant` 已在目前 profile 可見；沒有 image attachment 或 frame path 時，Hermes 應要求觸發/傳送 Temi camera event。
 - Hermes output 必須是 JSON action plan；若 resident server 回自然語言，Bridge 會拒絕。
 
 ## Terminal 6：啟動 HermesTemiBridge HTTP mode

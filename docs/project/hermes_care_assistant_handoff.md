@@ -16,7 +16,7 @@
 4. 透過 Bridge / MCP / Skills 安全地發出行動，例如說話、詢問、提醒、停止、導航、紀錄或模擬通報。
 5. 將事件累積成可回顧的照護記憶，並產生今日摘要或健康報告草稿。
 
-一句話：Hermes 負責「理解、記憶、判斷、規劃」，Temi 負責「看、聽、說、移動」，HermesTemiBridge 負責「驗證與安全執行」。
+一句話：Hermes 負責「理解、記憶、判斷、規劃」，Temi 負責「看、聽、說、移動」，HermesTemiBridge 負責「驗證與安全執行」。Discord/gateway 對話也必須保留這個身份，不可把「看手勢 / 看相機」誤判成一般聊天能力限制。
 
 ## 2. 目前系統現況
 
@@ -40,6 +40,7 @@
 | HermesTemiBridge | 驗證事件、影像路徑、Hermes JSON、action schema，並發布 command |
 | Hermes Agent | 使用 skill / tool 進行情境理解與 action 規劃 |
 | `temi-robot-control` Skill | 規範 Hermes 可以輸出的安全 robot actions |
+| `temi-discord-care-assistant` Skill | 讓 Discord/gateway 對話知道 Hermes 可使用 Temi camera/gesture/care skills |
 
 重要限制：
 
@@ -474,4 +475,4 @@ resident Hermes server
    - 疑似跌倒並 mock 通報
 8. 可產生一份今日照護摘要。
 
-做到這些，就已經能合理宣稱 Hermes 具備第一年度居家照護助理大腦雛形。
+做到這些，再加上 Discord/gateway 透過 `.hermes.md`、`SOUL.md` 與 `temi-discord-care-assistant` 能辨識 Temi camera/gesture 請求，就已經能合理宣稱 Hermes 具備第一年度居家照護助理大腦雛形。

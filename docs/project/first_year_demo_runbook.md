@@ -76,7 +76,8 @@ python3 tools/hermes_resident_server.py \
   --port 8765 \
   --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
   --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md
+  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md
 ```
 
 再啟動 Bridge HTTP mode：
@@ -109,7 +110,7 @@ uv run python /TemiAgent/tools/temi_overview_adapter.py \
 ## 展示順序建議
 
 1. 說明計畫書第一年目標：多模態異常感知、個人化提醒、隱私保護資料庫雛形。
-2. 說明技術轉換：不做大型知識圖譜，改用 structured memory + Agent skills + Bridge validation。
+2. 說明技術轉換：不做大型知識圖譜，改用 structured memory + Agent skills + Bridge validation；Discord/gateway 也透過 `.hermes.md`、`SOUL.md` 與 `temi-discord-care-assistant` 保持 Temi 居家照護助理身份。
 3. 展示 P0：Temi App ASR/TTS/Picture Streaming 已可形成互動閉環。
 4. 展示 P1/P2：`memory/` 與 Bridge memory actions。
 5. 展示 P3：三個固定照護情境 artifacts。
@@ -128,6 +129,7 @@ uv run python /TemiAgent/tools/temi_overview_adapter.py \
 | 問題 | 快速處理 |
 |---|---|
 | Real Hermes 延遲過高 | 切回 `tools/demo_case_runner.py` artifacts 或 mock Bridge。 |
+| Discord 要求看手勢但 Hermes 說不能看 | 確認 gateway 工作目錄讀到 `/TemiAgent/.hermes.md`，並執行 `/reload-skills` 或重啟 gateway 讓 `temi-discord-care-assistant` 進索引。 |
 | Temi App picture streaming 不穩 | 用 legacy backend route 展示 ASR/TTS，並用 deterministic artifacts 補照護記憶流程。 |
 | MQTT command 沒到 Temi | 用 `mosquitto_sub -t '#' -v` 或 `tools/subscribe_cmd_request.sh` 觀察 topic。 |
 | Bridge 拒絕 output | 檢查 `cognitive_state.home_esi_level`、`risk_reason`、action schema。 |

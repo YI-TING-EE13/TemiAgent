@@ -1,6 +1,6 @@
 ---
 name: temi-robot-control
-description: Generate safe JSON-only Temi robot action plans for Hermes from Temi ASR text, robot_id, event_id, conversation context, and synchronized visual frame paths. Use for Temi visual question answering, clarification, speech replies, safe turn/navigation/stop/noop planning, and bridge-validated robot command output. Do not use to directly control hardware, publish MQTT, run shell commands, or execute Temi SDK calls.
+description: Generate safe JSON-only Temi robot action plans for Hermes from Temi ASR text, robot_id, event_id, conversation context, image attachments, and synchronized visual frame paths. Use for Temi visual question answering, Discord/gateway camera requests, hand gestures, pointing, clarification, speech replies, safe turn/navigation/stop/noop planning, and bridge-validated robot command output. Do not use to directly control hardware, publish MQTT, run shell commands, or execute Temi SDK calls.
 ---
 
 # Temi Robot Control Skill
@@ -10,6 +10,20 @@ description: Generate safe JSON-only Temi robot action plans for Hermes from Tem
 Use this skill when Hermes receives a single Temi robot interaction event from `HermesTemiBridge`.
 
 This skill is an operation manual for decision making only. It must output one JSON object that the bridge can validate and dispatch. It must never directly control Temi hardware, publish MQTT messages, run scripts, or call the Temi SDK.
+
+## Activation Hints
+
+Use this skill when Hermes receives Temi frame paths from the Bridge, or when a Discord/gateway user asks Hermes to inspect Temi camera context, for example:
+
+- "看我的手勢"
+- "看我的手"
+- "我比的是什麼"
+- "你看得到我嗎"
+- "看一下相機"
+- "我指的那個是什麼"
+- "桌上那個東西是什麼"
+
+First check whether the current turn includes image attachments, image paths, or Bridge-provided frame paths. If no current image/frame is available, say that Hermes does not have a live Temi camera frame in this turn and ask the user to trigger/send a Temi camera event or attach an image. Do not invent visual details.
 
 ## Expected Input
 

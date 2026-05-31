@@ -53,7 +53,7 @@ TemiAgent 是一套以 Temi robot 為實體載具、Hermes Agent 為認知核心
 |---|---|---|
 | `hermes_temi_bridge/` | [hermes_temi_bridge/README.md](hermes_temi_bridge/README.md) | Canonical MQTT event receiver、Hermes caller、JSON/action validator、command dispatcher。 |
 | `hermes-agent/` | [hermes-agent/README.TemiAgent.md](hermes-agent/README.TemiAgent.md) | Hermes 認知核心與 resident runtime；上游說明見 `hermes-agent/README.md`。 |
-| `hermes-skills/` | [hermes-skills/README.md](hermes-skills/README.md) | Temi 專用 skill mirror：robot control、care memory、Home-ESI。 |
+| `hermes-skills/` | [hermes-skills/README.md](hermes-skills/README.md) | Temi 專用 skill mirror：robot control、care memory、Home-ESI、Discord/gateway 入口。 |
 | `temi_backend/` | [temi_backend/README.md](temi_backend/README.md) | 已驗證 legacy route：WebSocket 影像、ASR、LM Studio/VLM、MQTT actions。 |
 | `mqtt/` | [mqtt/README.md](mqtt/README.md) | Mosquitto broker 設定與 MQTT topic contract。 |
 | `memory/` | [memory/README.md](memory/README.md) | Demo structured memory：男性 persona、提醒、當日狀態、event log、summary artifacts。 |
@@ -96,11 +96,14 @@ User speaks to Temi
 | 不適 / 求助 | 中風險主動關懷 | `cognitive_state.home_esi_level = L2`、`ask_clarification`、`log_event`。 |
 | 疑似跌倒 / 高風險 | 高風險確認與 mock 通報 | `home_esi_level = L1`、安全確認、`notify_caregiver_mock`、abnormal event。 |
 
-照護認知使用三個 Hermes skills：
+照護認知使用三個核心 Hermes skills，並新增一個 Discord/gateway 入口 skill：
 
 - `temi-robot-control`：robot action contract 與安全限制。
 - `temi-care-memory`：structured care memory 讀寫規則。
 - `temi-home-esi`：Home-ESI Lite 風險分級。
+- `temi-discord-care-assistant`：Discord/gateway 對話入口提示，負責把「看手勢、看相機、我指的是什麼」等自然語句導向 Temi robot/care skills。
+
+Hermes 透過 Discord 對話時，身份與專案上下文由 `hermes-agent/docker/SOUL.md`、`/TemiAgent/.hermes.md` 與 gateway 的 `$HERMES_HOME/SOUL.md` 決定。若使用者請 Hermes 看手勢或相機畫面，Hermes 應先檢查 Discord 圖片附件、`temi_shared/` 圖片路徑或 Bridge frame paths；有影像時使用 vision 與 `temi-robot-control`，沒有影像時要求使用者觸發/傳送 Temi camera event 或附圖。
 
 ## 常用指令
 
@@ -141,7 +144,8 @@ python3 tools/hermes_resident_server.py \
   --port 8765 \
   --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
   --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md
+  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md
 ```
 
 Docker mock stack：

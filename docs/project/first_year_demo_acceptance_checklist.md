@@ -41,6 +41,7 @@ git diff --cached --check: ok
 - [ ] Picture Streaming 連上 PC 端 WebSocket。
 - [ ] TTS command 可讓 Temi 說話。
 - [ ] LM Studio 或 Hermes resident mode 已啟動。
+- [ ] Resident Hermes preload 包含 `temi-robot-control`、`temi-care-memory`、`temi-home-esi`、`temi-discord-care-assistant`。
 - [ ] Bridge 使用正確 `MEMORY_DIR`。
 
 ### Deterministic artifacts
@@ -72,7 +73,7 @@ git diff --cached --check: ok
 ## 不納入本次主線驗收
 
 - Navigation 實機移動。
-- 手勢辨識。
+- 手勢辨識：Discord/gateway 需先確認有 image attachment、`temi_shared/` path 或 Bridge frame paths；沒有影像時 Hermes 要要求觸發/傳送 Temi camera event。
 - 真實家屬或 119 通報。
 - 完整健康報告模板。
 - 醫療級診斷或正式分診。

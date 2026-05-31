@@ -26,7 +26,7 @@ docs/
 | `project/hermes_care_assistant_task_readme.md` | 照護助理任務的快速入口與更新紀錄。 |
 | `project/first_year_demo_phase_tasks.md` | 第一年度 Demo 的 P0-P5 階段任務、驗收項目與 artifact 規劃。 |
 | `project/first_year_demo_runbook.md` | 第一年度 Demo 現場操作、服務啟動、展示順序與故障切換。 |
-| `project/first_year_demo_e2e_operation_manual.md` | Temi 語音/影像到 Hermes 對話再回到 Temi TTS 的端到端操作手冊。 |
+| `project/first_year_demo_e2e_operation_manual.md` | Temi 語音/影像到 Hermes 對話再回到 Temi TTS 的端到端操作手冊；包含 container 內操作與 resident multi-skill preload。 |
 | `project/first_year_demo_scenario_script.md` | 三個照護 Demo scenario 的口頭腳本與 artifact 對應。 |
 | `project/first_year_demo_acceptance_checklist.md` | Demo 前驗收 checklist、測試狀態與不納入主線項目。 |
 | `operations/temi_integration_runbook.md` | 從 unit test 到 mock E2E、真 Hermes、硬體檢查的整合 runbook。 |
@@ -34,6 +34,7 @@ docs/
 | `operations/temi_streaming_manual.md` | Android/PC 多點廣播開發部署手冊。 |
 | `operations/lmstudio_gpu_selection.md` | LM Studio GPU selection 操作筆記。 |
 | `schemas/*.schema.json` | ASR event、Hermes output、command request/result 的文件副本。 |
+| `../.hermes.md` / `../hermes-agent/docker/SOUL.md` | Discord/gateway 讓 Hermes 知道自己是 Temi 居家照護助理、可使用 Temi skills 的 runtime context。 |
 
 ## 目前文件狀態
 

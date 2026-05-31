@@ -4,7 +4,7 @@
 
 ## 文件目的
 
-本文件把第一年度 Demo 拆成可驗收的階段任務。Demo 目標是展示 Temi App、Local LLM/VLM、Hermes Agent、Bridge safety layer 與結構化照護記憶如何形成一個可解釋的居家照護助理雛形。
+本文件把第一年度 Demo 拆成可驗收的階段任務。Demo 目標是展示 Temi App、Local LLM/VLM、Hermes Agent、Bridge safety layer、Discord/gateway Temi 入口與結構化照護記憶如何形成一個可解釋的居家照護助理雛形。
 
 本文件不追求完整產品化，也不回到知識圖譜路線。第一年度 Demo 先採用 JSON / JSONL structured memory，讓系統能在三個固定照護情境中讀取背景、記錄事件、輸出風險分級與生成摘要。
 
@@ -112,6 +112,7 @@ notify_caregiver_mock
 1. 日常提醒：Temi 提醒王先生早餐後服藥，使用者確認後寫入 reminder done 與 event log。
 2. 不適求助 L2：使用者說「我有點不舒服」，Hermes 判斷 L2，Temi 追問並記錄事件。
 3. 疑似跌倒 L1：影像或 mock event 顯示疑似跌倒/無回應，Hermes 判斷 L1，Temi 先確認，再 mock notify caregiver。
+4. Discord/gateway 手勢入口：使用者要求「看我的手勢」時，Hermes 先找圖片附件或 Temi frame paths；沒有影像則要求觸發/傳送 camera event。
 
 每個 case 的 artifact：
 

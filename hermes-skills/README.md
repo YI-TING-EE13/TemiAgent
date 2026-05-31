@@ -14,9 +14,10 @@
 hermes-agent/skills/temi-robot-control/
 hermes-agent/skills/temi-care-memory/
 hermes-agent/skills/temi-home-esi/
+hermes-agent/skills/temi-discord-care-assistant/
 ```
 
-`hermes-skills/` 與 `hermes-agent/skills/temi-*` 內容應保持一致。
+`hermes-skills/` 與 `hermes-agent/skills/temi-*` 內容應保持一致；Discord/gateway 入口 skill 也要同步 mirror。
 
 ## Skill 分工
 
@@ -25,6 +26,7 @@ hermes-agent/skills/temi-home-esi/
 | `temi-robot-control` | Robot action contract | JSON-only output、安全 robot actions、MQTT/action schema、範例。 |
 | `temi-care-memory` | 照護記憶規則 | profile、daily state、reminders、event log、summary 的讀寫邊界。 |
 | `temi-home-esi` | 風險分級規則 | Home-ESI Lite `Normal/L3/L2/L1` 判斷與行動優先序。 |
+| `temi-discord-care-assistant` | Discord/gateway 入口 | 讓 Hermes 在 Discord 遇到手勢、相機、指物或照護語句時載入 Temi skills。 |
 
 ## 與其他模組的關係
 
@@ -53,6 +55,9 @@ hermes-skills/
   temi-home-esi/
     SKILL.md
     references/home_esi_lite.md
+  temi-discord-care-assistant/
+    SKILL.md
+    references/discord_temi_context.md
 ```
 
 ## Resident server 使用方式
@@ -64,10 +69,11 @@ python3 tools/hermes_resident_server.py \
   --port 8765 \
   --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
   --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md
+  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md
 ```
 
-順序很重要：`temi-robot-control` 應先載入，作為 action contract；照護記憶與 Home-ESI policy 接在後面補充認知規則。
+順序很重要：`temi-robot-control` 應先載入，作為 action contract；照護記憶與 Home-ESI policy 接在後面補充認知規則；`temi-discord-care-assistant` 最後補上 Discord/gateway 的相機、手勢與 skill routing 線索。
 
 ## 同步檢查
 
@@ -77,6 +83,7 @@ python3 tools/hermes_resident_server.py \
 diff -ru hermes-skills/temi-robot-control hermes-agent/skills/temi-robot-control
 diff -ru hermes-skills/temi-care-memory hermes-agent/skills/temi-care-memory
 diff -ru hermes-skills/temi-home-esi hermes-agent/skills/temi-home-esi
+diff -ru hermes-skills/temi-discord-care-assistant hermes-agent/skills/temi-discord-care-assistant
 ```
 
 若刻意不同，請在相關 README 或 task readme 中說明原因。

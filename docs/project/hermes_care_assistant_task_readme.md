@@ -34,7 +34,8 @@
 - HermesTemiBridge 已支援 ASR event validation、image path validation、Hermes JSON parsing、action validation、command publish、event dedup 與 result logging。
 - Bridge mock/unit/local E2E 在 container 中通過：Bridge unittest 33 tests、backend pytest 14 tests、root mock E2E `status: ok`。
 - Resident Hermes HTTP server 已支援多 skill preload，並可選擇開啟 Hermes memory/profile。
-- 三個 Temi care skills 已存在於 `hermes-agent/skills/temi-*` 與 `hermes-skills/temi-*`。
+- 三個 Temi care 核心 skills 與 `temi-discord-care-assistant` 入口 skill 已存在於 `hermes-agent/skills/temi-*`；mirror 同步於 `hermes-skills/`。
+- Discord/gateway 對話已補上 Temi 身份與 skill 路由文件：`/TemiAgent/.hermes.md`、`hermes-agent/docker/SOUL.md`、`hermes-agent/skills/temi-discord-care-assistant/`。
 - 第一年度 Demo 階段任務已整理為 P0-P5，見 `docs/project/first_year_demo_phase_tasks.md`。
 - P1 structured memory demo state 已建立於 `memory/`，目前 persona 設定為男性 Demo 長者 `王先生`。
 - P2 Bridge memory actions 已完成最小實作：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
@@ -48,13 +49,14 @@
 
 ## Skill 分工
 
-第一版採三個 skill 分層，避免把照護規則、記憶規則與 robot action contract 混在同一份 prompt。
+第一版採三個核心 skill 分層，避免把照護規則、記憶規則與 robot action contract 混在同一份 prompt；另加一個 Discord/gateway 入口 skill，負責把自然語句導向核心 Temi skills。
 
 | Skill | 角色 | 主要內容 |
 |---|---|---|
 | `temi-robot-control` | Robot action contract | Temi 可執行 action、JSON-only output、安全動作限制 |
 | `temi-care-memory` | 照護記憶操作規則 | structured care memory、Hermes memory/provider 同步、提醒與事件資料流 |
 | `temi-home-esi` | 風險分級規則 | Home-ESI Lite 的 `Normal/L3/L2/L1` 判斷與行動優先序 |
+| `temi-discord-care-assistant` | Discord/gateway 入口提示 | 讓 Hermes 在 Discord 遇到手勢、相機、指物、照護語句時知道要載入 Temi skills |
 
 Skill 路徑規劃：
 
@@ -62,13 +64,25 @@ Skill 路徑規劃：
 hermes-agent/skills/temi-robot-control/
 hermes-agent/skills/temi-care-memory/
 hermes-agent/skills/temi-home-esi/
+hermes-agent/skills/temi-discord-care-assistant/
 
 hermes-skills/temi-robot-control/
 hermes-skills/temi-care-memory/
 hermes-skills/temi-home-esi/
+hermes-skills/temi-discord-care-assistant/
 ```
 
 `hermes-agent/skills/` 是 resident Hermes 主要讀取位置；`hermes-skills/` 是 repo root mirror，維持目前 `temi-robot-control` 的雙路徑慣例。
+
+### Discord/gateway 補充
+
+Discord gateway 不一定會走 `tools/hermes_resident_server.py` 的 `--skill-path` preload；它通常依賴 `$HERMES_HOME/SOUL.md`、工作目錄 project context 與 skills index。為了讓 Hermes 知道自己仍是 Temi 居家照護助理，本專案新增：
+
+- `/TemiAgent/.hermes.md`：project context，列出 Temi role、三個核心 skills、相機/手勢處理規則。
+- `hermes-agent/docker/SOUL.md`：新 Docker/gateway profile 的預設身份。
+- `hermes-agent/skills/temi-discord-care-assistant/`：可被 skills index 搜尋的 Discord/gesture/camera 路由 skill。
+
+使用者在 Discord 說「看我的手勢」、「看一下相機」、「我指的是什麼」時，Hermes 應先找圖片附件、`temi_shared/` path 或 Bridge frame paths；有影像才分析，沒有影像就請使用者觸發/傳送 Temi camera event 或附圖，不要虛構畫面。
 
 ## 記憶分層
 
@@ -117,7 +131,8 @@ python3 tools/hermes_resident_server.py \
   --port 8765 \
   --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
   --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md
+  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md
 ```
 
 後續啟用 `care-assistant` Hermes profile 與 memory 時，resident mode 不應固定 `skip_memory=True`。建議改成可設定：
@@ -205,7 +220,7 @@ python3 tools/hermes_resident_server.py \
 
 整合測試：
 
-- 使用三個 skills 啟動 resident server。
+- 使用四個 skills 啟動 resident server。
 - Bridge resident HTTP mode 仍能取得 JSON-only Hermes output。
 - 三個 Demo case 的 output 都包含 `cognitive_state.home_esi_level`。
 - `tools/demo_case_runner.py` 可產生三個固定 Demo case artifacts。
@@ -217,4 +232,5 @@ python3 tools/hermes_resident_server.py \
 - 2026-05-31：完成 P3 deterministic Demo case runner，可產生提醒、不適 L2、疑似跌倒 L1 三個案例 artifacts。
 - 2026-05-31：整理 P5 展示素材，新增 Demo runbook、端到端串接操作手冊、scenario script 與 acceptance checklist；P4 Navigation 本輪先跳過。
 - 2026-05-30：補上目前實作狀態；確認整合底座已通過 container 內測試，照護記憶與 Demo actions 留待下一階段。
+- 2026-05-31：補上 Discord/gateway Temi 身份與 `temi-discord-care-assistant` skill，讓「看手勢 / 看相機」可導向 Temi camera/vision skills。
 - 2026-05-19：建立本任務 README，記錄三 skill 分工、混合記憶策略與 resident multi-skill preload 需求。

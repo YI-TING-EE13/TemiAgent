@@ -8,7 +8,7 @@ TemiAgent is an embodied AI home-care assistant project for a Temi robot. The ro
 - `tools/temi_overview_adapter.py` adapts the installed Android app's legacy MQTT topics into the canonical project contract.
 - `hermes_temi_bridge/` is the safety boundary. It validates ASR events, image paths, Hermes JSON output, and action schemas before publishing robot commands.
 - `hermes-agent/` is the Hermes runtime. For this project, read `hermes-agent/README.TemiAgent.md` before touching the upstream Hermes codebase.
-- `hermes-agent/skills/temi-*` and `hermes-skills/temi-*` define robot control, care memory, and Home-ESI Lite risk policy.
+- `hermes-agent/skills/temi-*` and `hermes-skills/temi-*` define robot control, care memory, Home-ESI Lite risk policy, and the Discord/gateway Temi entry skill for camera or gesture requests.
 - `temi_shared/` stores ASR-aligned image snapshots and event metadata. MQTT carries paths, not image binaries.
 
 ## Safety Rules
@@ -40,4 +40,4 @@ cd /TemiAgent
 python3 tools/e2e_test_runner.py
 ```
 
-For real Hermes demos, prefer resident HTTP mode via `tools/hermes_resident_server.py` and configure the Bridge with `HERMES_INVOKE_MODE=http`.
+For real Hermes demos, prefer resident HTTP mode via `tools/hermes_resident_server.py` and configure the Bridge with `HERMES_INVOKE_MODE=http`. Run maintenance commands from inside the `/TemiAgent` container as documented in `docs/project/first_year_demo_e2e_operation_manual.md`, because several Temi skill mirrors are container-owned.

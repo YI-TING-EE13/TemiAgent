@@ -12,7 +12,7 @@
 
 建議口述：
 
-> 本 Demo 將原計畫中多模態異常行為偵測、個人化提醒、隱私保護資料庫與緊急應變，落地成 Temi 機器人上的本地 Agent 系統。Temi App 負責 ASR、TTS 與影像串流；Hermes / LM Studio 在本地端推理；Bridge 負責驗證與安全執行；照護紀錄則以 structured memory 保存，不使用大型知識圖譜。
+> 本 Demo 將原計畫中多模態異常行為偵測、個人化提醒、隱私保護資料庫與緊急應變，落地成 Temi 機器人上的本地 Agent 系統；同時讓 Discord/gateway 對話也保留 Temi 居家照護助理身份，可將「看手勢 / 看相機」導向 Temi skills。Temi App 負責 ASR、TTS 與影像串流；Hermes / LM Studio 在本地端推理；Bridge 負責驗證與安全執行；照護紀錄則以 structured memory 保存，不使用大型知識圖譜。
 
 ## Scenario A：日常提醒與完成紀錄
 
