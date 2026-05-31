@@ -21,12 +21,14 @@ venv/
 *.key
 
 # Runtime logs and process files
-logs/
+logs/*
+!logs/README.md
 *.log
 *.pid
 
 # Temi runtime/generated data
-temi_shared/
+temi_shared/*
+!temi_shared/README.md
 temi_backend/debug_frames/
 temp_vision_images/
 

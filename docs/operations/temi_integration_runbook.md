@@ -1,6 +1,6 @@
 # Temi + Hermes Integration Runbook
 
-This runbook follows `Overview.md`: validate each layer first, then connect the full system.
+This runbook follows `docs/architecture/project_overview.md`: validate each layer first, then connect the full system.
 
 ## 1. Unit Tests
 

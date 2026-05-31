@@ -59,6 +59,7 @@ class BridgeConfig:
     event_dedup_ttl_seconds: int = 600
     log_level: str = "INFO"
     log_dir: str = "logs/events"
+    memory_dir: str = "memory"
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> "BridgeConfig":
@@ -109,4 +110,5 @@ class BridgeConfig:
             ),
             log_level=os.getenv("LOG_LEVEL", values.get("LOG_LEVEL", cls.log_level)),
             log_dir=os.getenv("LOG_DIR", values.get("LOG_DIR", cls.log_dir)),
+            memory_dir=os.getenv("MEMORY_DIR", values.get("MEMORY_DIR", cls.memory_dir)),
         )

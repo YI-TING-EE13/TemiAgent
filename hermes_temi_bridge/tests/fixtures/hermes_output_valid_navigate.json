@@ -3,6 +3,12 @@
   "event_id": "evt_20260511_000001",
   "robot_id": "temi-01",
   "confidence": 0.9,
+  "cognitive_state": {
+    "intent": "navigation_request",
+    "home_esi_level": "Normal",
+    "risk_reason": "使用者提出一般導航需求，沒有照護風險訊號。",
+    "next_step": "navigate"
+  },
   "reasoning_summary": "The user clearly requested navigation to a known destination.",
   "actions": [
     {

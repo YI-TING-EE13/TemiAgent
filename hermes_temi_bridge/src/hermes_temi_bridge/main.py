@@ -25,6 +25,7 @@ from .hermes_client import (
 from .idempotency import TTLProcessedEventCache
 from .image_resolver import ImageValidationError, translate_frames, validate_image_file
 from .logging_utils import EventJsonlLogger, configure_logging
+from .memory_store import EventContext, MemoryActionError, StructuredMemoryStore
 from .mqtt_client import TemiMqttClient
 
 LOGGER = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ class HermesTemiBridgeService:
         hermes_client: HermesClient | HttpHermesClient | MockHermesClient,
         event_cache: TTLProcessedEventCache | None = None,
         event_logger: EventJsonlLogger | None = None,
+        memory_store: StructuredMemoryStore | None = None,
     ):
         """Create a Bridge service with injectable clients for tests."""
         self.config = config
@@ -56,6 +58,7 @@ class HermesTemiBridgeService:
         self.hermes_client = hermes_client
         self.event_cache = event_cache or TTLProcessedEventCache(config.event_dedup_ttl_seconds)
         self.event_logger = event_logger or EventJsonlLogger(config.log_dir)
+        self.memory_store = memory_store or StructuredMemoryStore(config.memory_dir)
 
     def start(self) -> None:
         """Start the MQTT runtime and block forever."""
@@ -122,19 +125,36 @@ class HermesTemiBridgeService:
                 expected_robot_id=event.robot_id,
                 max_actions=self.config.max_actions_per_event,
             )
-            command = build_command_request(validated_output)
-            self.mqtt_client.publish_command(event.robot_id, command)
+            memory_results = []
+            if validated_output.memory_actions:
+                memory_results = self.memory_store.execute(
+                    validated_output,
+                    EventContext(
+                        asr_text=event.asr_text,
+                        image_paths=[frame.path for frame in event.frames],
+                        conversation_id=event.conversation_id,
+                    ),
+                )
+            command = None
+            if validated_output.robot_actions:
+                command = build_command_request(validated_output)
+                self.mqtt_client.publish_command(event.robot_id, command)
             self.event_cache.mark_seen(event.event_id)
             self.event_logger.write(
                 event.event_id,
-                "command_published",
+                "event_completed",
                 {
                     "validated_actions": validated_output.actions,
-                    "published_command_id": command["command_id"],
+                    "robot_actions": validated_output.robot_actions,
+                    "memory_action_results": memory_results,
+                    "published_command_id": command["command_id"] if command else None,
                     "raw_hermes_output_path": str(raw_path),
                 },
             )
-            return {"status": "success", "command_id": command["command_id"]}
+            result = {"status": "success", "memory_action_results": memory_results}
+            if command:
+                result["command_id"] = command["command_id"]
+            return result
         except EventValidationError as exc:
             text = FALLBACKS.get(exc.reason, FALLBACKS["generic"])
             return self._fail_with_fallback(event_id, robot_id, exc.reason, text, exc.details)
@@ -161,6 +181,10 @@ class HermesTemiBridgeService:
         except ActionValidationError as exc:
             return self._fail_with_fallback(
                 event_id, robot_id, exc.reason, FALLBACKS["unsafe_action"], exc.details
+            )
+        except MemoryActionError as exc:
+            return self._fail_with_fallback(
+                event_id, robot_id, exc.reason, FALLBACKS["generic"], exc.details
             )
         except HermesInvocationError as exc:
             return self._fail_with_fallback(

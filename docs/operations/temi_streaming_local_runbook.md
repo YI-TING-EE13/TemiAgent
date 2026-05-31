@@ -1,6 +1,6 @@
 # Temi Streaming Local Runbook
 
-This is the local version of `temi_streaming_manual.md` for this machine.
+This is the local version of `docs/operations/temi_streaming_manual.md` for this machine.
 
 ## Local Paths And IPs
 
@@ -165,7 +165,7 @@ temi/action/navigate
 temi/action/wakeup
 ```
 
-To test the `Overview.md` contract without changing the Android app, run the adapter:
+To test the `docs/architecture/project_overview.md` contract without changing the Android app, run the adapter:
 
 ```bash
 cd /TemiAgent/temi_backend
@@ -214,7 +214,7 @@ Hermes latency: 96940 ms
 Temi spoke: 可以，我能聽到您說話。
 ```
 
-This proves the full `Overview.md` chain works, but real Hermes is currently slower than the Android app's 15-second `WAITING` watchdog. For responsive demos, use mock Bridge or the legacy `temi_backend` LMStudio route; for the Overview architecture, optimize Hermes latency or increase the Android watchdog.
+This proves the full `docs/architecture/project_overview.md` chain works, but real Hermes is currently slower than the Android app's 15-second `WAITING` watchdog. For responsive demos, use mock Bridge or the legacy `temi_backend` LMStudio route; for the Overview architecture, optimize Hermes latency or increase the Android watchdog.
 
 ## Resident Hermes latency experiment
 

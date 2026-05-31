@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "date": "2026-05-31",
+  "user_id": "elder_demo_001",
+  "risk_state": "normal",
+  "last_seen_location": "living_room",
+  "last_interaction": null,
+  "active_reminders": [
+    "rem_morning_medication",
+    "rem_hydration"
+  ],
+  "recent_event_ids": [],
+  "demo_flags": {
+    "home_esi_level": "Normal",
+    "caregiver_mock_notified": false,
+    "summary_generated": false
+  }
+}

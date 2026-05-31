@@ -19,6 +19,8 @@ def build_command_request(
     created_at_ms: int | None = None,
 ) -> dict[str, Any]:
     """Build a canonical command request from validated Hermes actions."""
+    if not output.robot_actions:
+        raise ValueError("cannot build command request without robot actions")
     return {
         "schema_version": "1.0",
         "command_id": command_id or make_command_id(output.event_id),
@@ -26,7 +28,7 @@ def build_command_request(
         "robot_id": output.robot_id,
         "source": "hermes_temi_bridge",
         "created_at_ms": created_at_ms or now_ms(),
-        "actions": output.actions,
+        "actions": output.robot_actions,
     }
 
 

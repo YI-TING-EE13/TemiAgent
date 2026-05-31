@@ -234,7 +234,7 @@ Hermes container 中看到：
 ## 2.4 HermesTemiBridge
 
 **目錄位置**：`hermes_temi_bridge/`
-**目前狀態**：僅完成過編譯測試，尚未經過實際驗證。
+**目前狀態**：已完成 hardware-free unit/mock E2E 驗證，並曾透過 Overview adapter 串接真 Hermes 與 Temi command request。照護 Demo 的 memory actions 與 Home-ESI 強制驗證仍屬下一階段。
 
 ### 角色
 

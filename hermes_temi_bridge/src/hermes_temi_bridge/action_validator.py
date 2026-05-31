@@ -1,4 +1,4 @@
-"""Validation helpers for Hermes-produced Temi command actions."""
+"""Validation helpers for Hermes-produced Temi and care-memory actions."""
 
 from __future__ import annotations
 
@@ -6,10 +6,13 @@ from dataclasses import dataclass
 from typing import Any
 
 
-ALLOWED_ACTION_TYPES = {"speak", "ask_clarification", "turn", "navigate", "stop", "noop"}
+ROBOT_ACTION_TYPES = {"speak", "ask_clarification", "turn", "navigate", "stop", "noop"}
+MEMORY_ACTION_TYPES = {"log_event", "mark_reminder_done", "generate_summary", "notify_caregiver_mock"}
+ALLOWED_ACTION_TYPES = ROBOT_ACTION_TYPES | MEMORY_ACTION_TYPES
 ALLOWED_TURN_DIRECTIONS = {"left", "right"}
 ALLOWED_TURN_DEGREES = {15, 30, 45, 60, 90}
 DEFAULT_NAVIGATION_TARGETS = {"home_base", "kitchen", "living_room", "meeting_room"}
+HOME_ESI_LEVELS = {"Normal", "L1", "L2", "L3"}
 
 
 class ActionValidationError(ValueError):
@@ -31,7 +34,10 @@ class ValidatedActionOutput:
     robot_id: str
     confidence: float
     reasoning_summary: str
+    cognitive_state: dict[str, Any]
     actions: list[dict[str, Any]]
+    robot_actions: list[dict[str, Any]]
+    memory_actions: list[dict[str, Any]]
     raw: dict[str, Any]
 
 
@@ -72,6 +78,7 @@ def validate_action_output(
         raise ActionValidationError("missing_reasoning_summary")
     if len(reasoning_summary) > 500:
         raise ActionValidationError("reasoning_summary_too_long")
+    cognitive_state = _validate_cognitive_state(payload.get("cognitive_state"))
     actions = payload.get("actions")
     if not isinstance(actions, list) or not actions:
         raise ActionValidationError("missing_actions")
@@ -79,15 +86,37 @@ def validate_action_output(
         raise ActionValidationError("too_many_actions", {"max_actions": max_actions})
 
     validated_actions = [_validate_action(action, targets) for action in actions]
+    robot_actions = [action for action in validated_actions if action["type"] in ROBOT_ACTION_TYPES]
+    memory_actions = [action for action in validated_actions if action["type"] in MEMORY_ACTION_TYPES]
     return ValidatedActionOutput(
         schema_version="1.0",
         event_id=expected_event_id,
         robot_id=expected_robot_id,
         confidence=float(confidence),
         reasoning_summary=reasoning_summary.strip(),
+        cognitive_state=cognitive_state,
         actions=validated_actions,
+        robot_actions=robot_actions,
+        memory_actions=memory_actions,
         raw=payload,
     )
+
+
+def _validate_cognitive_state(value: Any) -> dict[str, Any]:
+    """Validate the care cognition debug state required for the Demo."""
+    if not isinstance(value, dict):
+        raise ActionValidationError("missing_cognitive_state")
+    home_esi_level = value.get("home_esi_level")
+    if home_esi_level not in HOME_ESI_LEVELS:
+        raise ActionValidationError("invalid_home_esi_level", {"home_esi_level": home_esi_level})
+    risk_reason = value.get("risk_reason")
+    if not isinstance(risk_reason, str) or not risk_reason.strip():
+        raise ActionValidationError("missing_risk_reason")
+
+    cognitive_state = dict(value)
+    cognitive_state["home_esi_level"] = home_esi_level
+    cognitive_state["risk_reason"] = risk_reason.strip()
+    return cognitive_state
 
 
 def _validate_action(action: Any, navigation_targets: set[str]) -> dict[str, Any]:
@@ -139,7 +168,90 @@ def _validate_action(action: Any, navigation_targets: set[str]) -> dict[str, Any
     if action_type == "stop":
         return {"action_id": action_id, "type": "stop"}
 
-    reason = action.get("reason")
-    if not isinstance(reason, str) or not reason.strip():
-        raise ActionValidationError("missing_noop_reason", {"action_id": action_id})
-    return {"action_id": action_id, "type": "noop", "reason": reason.strip()}
+    if action_type == "noop":
+        reason = action.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ActionValidationError("missing_noop_reason", {"action_id": action_id})
+        return {"action_id": action_id, "type": "noop", "reason": reason.strip()}
+
+    return _validate_memory_action(action_id, action_type, action)
+
+
+def _validate_memory_action(action_id: str, action_type: str, action: dict[str, Any]) -> dict[str, Any]:
+    """Validate a Bridge-internal memory/demo action."""
+    data = _action_parameters(action)
+    if action_type == "log_event":
+        event_type = data.get("event_type")
+        if not isinstance(event_type, str) or not event_type.strip():
+            raise ActionValidationError("missing_event_type", {"action_id": action_id})
+        return {
+            "action_id": action_id,
+            "type": "log_event",
+            "event_type": event_type.strip(),
+            "outcome": _optional_str(data.get("outcome")),
+            "details": _memory_details(data),
+        }
+
+    if action_type == "mark_reminder_done":
+        reminder_id = data.get("reminder_id")
+        if not isinstance(reminder_id, str) or not reminder_id.strip():
+            raise ActionValidationError("missing_reminder_id", {"action_id": action_id})
+        return {
+            "action_id": action_id,
+            "type": "mark_reminder_done",
+            "reminder_id": reminder_id.strip(),
+            "completed_at": _optional_str(data.get("completed_at")),
+        }
+
+    if action_type == "generate_summary":
+        return {
+            "action_id": action_id,
+            "type": "generate_summary",
+            "date": _optional_str(data.get("date")),
+        }
+
+    if action_type == "notify_caregiver_mock":
+        message = data.get("message")
+        return {
+            "action_id": action_id,
+            "type": "notify_caregiver_mock",
+            "target": _optional_str(data.get("target")) or "caregiver_demo_primary",
+            "message": message.strip() if isinstance(message, str) and message.strip() else "",
+        }
+
+    raise ActionValidationError("invalid_action_type", {"type": action_type})
+
+
+def _action_parameters(action: dict[str, Any]) -> dict[str, Any]:
+    """Return action parameters, accepting either flat fields or a payload object."""
+    payload = action.get("payload")
+    merged = dict(payload) if isinstance(payload, dict) else {}
+    for key, value in action.items():
+        if key not in {"payload", "action_id", "type"}:
+            merged[key] = value
+    return merged
+
+
+def _memory_details(data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize optional memory details while preserving useful model-provided context."""
+    details = dict(data["details"]) if isinstance(data.get("details"), dict) else {}
+    for key in ("description", "note"):
+        value = _optional_str(data.get(key))
+        if value:
+            details[key] = value
+    return details
+
+
+def _optional_str(value: Any) -> str | None:
+    """Return a stripped optional string."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _optional_dict(value: Any) -> dict[str, Any]:
+    """Return an optional details object."""
+    return value if isinstance(value, dict) else {}

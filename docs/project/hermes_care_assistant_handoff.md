@@ -4,7 +4,7 @@
 
 這份文件說明我們希望把現有 Hermes agent、Harness/MCP/Skills 機制，以及 Temi 機器人整合成符合國科會計畫子計畫三目標的「居家照護助理大腦」。目前先不追求完整產品化，而是要做出第一年度 Demo 可展示、可解釋、可繼續擴充的認知架構。
 
-任務維護入口：後續實作決策、skill 分工、resident mode 啟動方式與更新紀錄請同步維護在 `docs/hermes_care_assistant_task_readme.md`。
+任務維護入口：後續實作決策、skill 分工、resident mode 啟動方式與更新紀錄請同步維護在 `docs/project/hermes_care_assistant_task_readme.md`。
 
 ## 1. 最終目標
 

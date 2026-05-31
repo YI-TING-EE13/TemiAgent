@@ -167,6 +167,12 @@ class MockHermesClient:
             "event_id": request.event_id,
             "robot_id": request.robot_id,
             "confidence": 1.0,
+            "cognitive_state": {
+                "intent": "mock_test",
+                "home_esi_level": "Normal",
+                "risk_reason": "Mock response for hardware-free Bridge testing.",
+                "next_step": "speak",
+            },
             "reasoning_summary": "Mock response for HermesTemiBridge integration testing.",
             "actions": [
                 {
@@ -226,6 +232,8 @@ Instructions:
 - Do not execute shell commands directly.
 - Do not invent unavailable robot capabilities.
 - If uncertain, ask a clarification question through a speak or ask_clarification action.
+- Include cognitive_state.home_esi_level and cognitive_state.risk_reason for every response.
+- Use memory actions when the event should be recorded or summarized; memory actions are handled by the Bridge and are not sent to Temi.
 
 Allowed action types:
 - speak
@@ -234,6 +242,10 @@ Allowed action types:
 - navigate
 - stop
 - noop
+- log_event
+- mark_reminder_done
+- generate_summary
+- notify_caregiver_mock
 
 Required output JSON schema:
 {{
@@ -241,6 +253,12 @@ Required output JSON schema:
   "event_id": "{request.event_id}",
   "robot_id": "{request.robot_id}",
   "confidence": 0.0,
+  "cognitive_state": {{
+    "intent": "brief intent",
+    "home_esi_level": "Normal|L1|L2|L3",
+    "risk_reason": "brief reason for the risk level",
+    "next_step": "brief next step"
+  }},
   "reasoning_summary": "brief non-sensitive summary",
   "actions": [
     {{

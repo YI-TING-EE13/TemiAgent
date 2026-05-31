@@ -6,6 +6,12 @@ Here is the result:
   "event_id": "evt_20260511_000001",
   "robot_id": "temi-01",
   "confidence": 0.86,
+  "cognitive_state": {
+    "intent": "visual_question",
+    "home_esi_level": "Normal",
+    "risk_reason": "使用者只是詢問視覺內容，沒有照護風險訊號。",
+    "next_step": "speak"
+  },
   "reasoning_summary": "The user asks a visual question and a spoken answer is enough.",
   "actions": [
     {

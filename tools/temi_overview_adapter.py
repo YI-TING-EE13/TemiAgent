@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adapt the installed Temi Android app topics to the Overview.md contract.
+"""Adapt the installed Temi Android app topics to the project overview contract.
 
 The Android app available on this PC publishes legacy topics such as
 ``temi/event/asr`` and subscribes to ``temi/action/speak``. The Overview bridge

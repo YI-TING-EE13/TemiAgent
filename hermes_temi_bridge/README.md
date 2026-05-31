@@ -1,213 +1,165 @@
-# Hermes Temi Bridge
+# HermesTemiBridge 模組 README
 
-`hermes_temi_bridge` connects Temi Android ASR events to Hermes Agent decisions.
-It receives lightweight MQTT events, validates the three synchronized image references,
-invokes Hermes with the `temi-robot-control` skill, validates JSON actions, then publishes
-safe Temi command requests.
+最後更新日期：2026-05-31
 
-## Architecture
+## 本文件維護規則
 
-```text
-Temi Android Client
-  └─ publish temi/{robot_id}/asr/final
-       ↓
-HermesTemiBridge
-  ├─ validate ASR event and image files
-  ├─ translate /var/lib/temi_shared paths to /shared/temi paths
-  ├─ invoke Hermes CLI with temi-robot-control instructions
-  ├─ parse and validate Hermes JSON actions
-  └─ publish temi/{robot_id}/cmd/request
-       ↓
-Temi Android Client
-  └─ publish temi/{robot_id}/cmd/result
-       ↓
-HermesTemiBridge logs result
-```
+這份 README 是 `hermes_temi_bridge/` 的快速入口。只要 MQTT contract、Hermes invocation mode、action schema、path translation、log format 或測試方式改變，都要同步更新本文件，讓後續維護者可以只讀本模組 README 就進入狀況。
 
-## MQTT Topics
+## 模組定位
 
-- Subscribe: `temi/+/asr/final`
-- Subscribe: `temi/+/cmd/result`
-- Publish: `temi/{robot_id}/cmd/request`
-
-## Payload Examples
-
-ASR event:
-
-```json
-{
-  "schema_version": "1.0",
-  "event_id": "evt_20260511_000001",
-  "robot_id": "temi-01",
-  "conversation_id": "conv_20260511_a",
-  "type": "asr.final",
-  "timestamp_ms": 1778499000200,
-  "speech_end_ts_ms": 1778499000123,
-  "language": "zh-TW",
-  "asr": { "text": "幫我看看桌上的東西是什麼", "confidence": 0.92 },
-  "vision": {
-    "sampling_policy": "T-1000,T-500,T",
-    "frames": [
-      {
-        "name": "t_minus_1000",
-        "ts_ms": 1778498999123,
-        "path": "/var/lib/temi_shared/events/temi-01/evt_20260511_000001/frame_t_minus_1000.jpg",
-        "mime_type": "image/jpeg"
-      },
-      {
-        "name": "t_minus_500",
-        "ts_ms": 1778498999623,
-        "path": "/var/lib/temi_shared/events/temi-01/evt_20260511_000001/frame_t_minus_500.jpg",
-        "mime_type": "image/jpeg"
-      },
-      {
-        "name": "t",
-        "ts_ms": 1778499000123,
-        "path": "/var/lib/temi_shared/events/temi-01/evt_20260511_000001/frame_t.jpg",
-        "mime_type": "image/jpeg"
-      }
-    ]
-  }
-}
-```
-
-Command request:
-
-```json
-{
-  "schema_version": "1.0",
-  "command_id": "cmd_evt_20260511_000001_1778499001200",
-  "event_id": "evt_20260511_000001",
-  "robot_id": "temi-01",
-  "source": "hermes_temi_bridge",
-  "created_at_ms": 1778499001200,
-  "actions": [
-    {
-      "action_id": "act_001",
-      "type": "speak",
-      "text": "我看到桌上可能有一個杯子和一台筆電。",
-      "language": "zh-TW"
-    }
-  ]
-}
-```
-
-## Docker Volumes
-
-Mount the same host directory into both containers:
-
-```yaml
-services:
-  hermes:
-    image: hermes-agent:latest
-    volumes:
-      - ./temi_shared:/shared/temi
-
-  hermes-temi-bridge:
-    build: ./hermes_temi_bridge
-    volumes:
-      - ./temi_shared:/var/lib/temi_shared
-    environment:
-      MQTT_BROKER_HOST: mosquitto
-      MQTT_BROKER_PORT: "1883"
-      TEMI_SHARED_BRIDGE_PATH: /var/lib/temi_shared
-      TEMI_SHARED_HERMES_PATH: /shared/temi
-```
-
-## Environment
-
-Copy `.env.example` to `.env` and adjust:
-
-```env
-MQTT_BROKER_HOST=localhost
-MQTT_BROKER_PORT=1883
-ROBOT_ID_ALLOWLIST=temi-01
-TEMI_SHARED_BRIDGE_PATH=/var/lib/temi_shared
-TEMI_SHARED_HERMES_PATH=/shared/temi
-HERMES_CLI_COMMAND=hermes -z {prompt}
-HERMES_MOCK_RESPONSE_TEXT=這是 Bridge mock 測試
-HERMES_TIMEOUT_SECONDS=60
-MAX_ACTIONS_PER_EVENT=5
-MAX_IMAGE_SIZE_MB=8
-EVENT_DEDUP_TTL_SECONDS=600
-```
-
-## Start Bridge
-
-```powershell
-uv venv .venv
-uv pip install -e '.[mqtt]'
-uv run hermes-temi-bridge --env-file .env
-```
-
-If your Hermes invocation uses a longer command, set `HERMES_CLI_COMMAND`, for example:
-
-```env
-HERMES_CLI_COMMAND=hermes chat --toolsets skills
-```
-
-The bridge appends `-q "<prompt>"` unless the command contains `{prompt}`.
-For Hermes Agent v0.12, prefer `hermes -z {prompt}` because oneshot mode prints only the final response.
-
-For MQTT and Bridge integration tests that should not call a real model, set:
-
-```env
-HERMES_INVOKE_MODE=mock
-```
-
-Mock mode returns a deterministic `speak` action using `HERMES_MOCK_RESPONSE_TEXT`.
-
-For lower-latency real Hermes experiments, run the resident Hermes server once:
-
-```powershell
-python ../tools/hermes_resident_server.py --host 127.0.0.1 --port 8765
-```
-
-Then start the Bridge in HTTP mode:
-
-```env
-HERMES_INVOKE_MODE=http
-HERMES_HTTP_URL=http://127.0.0.1:8765/invoke
-```
-
-HTTP mode avoids starting a new `hermes -z` process for every ASR event. The resident server keeps a Hermes `AIAgent` instance loaded and preloads the `temi-robot-control` skill into the system prompt. When launched with system `python3`, the resident server reexecs into `/TemiAgent/hermes-agent/venv/bin/python3` if that interpreter exists.
-
-Latest local measurements:
-
-- CLI Hermes mode: about `96,940 ms`.
-- Resident smoke invocation after warmup: about `6,979 ms`.
-- Bridge validation through resident HTTP mode: about `8,384 ms`.
-
-## Install Skill
-
-The version-controlled skill lives at:
+HermesTemiBridge 是 Temi 與 Hermes 之間的安全邊界。它不是高階推理核心，也不是 Temi Android App；它負責接收 Temi 事件、驗證資料、呼叫 Hermes、驗證 Hermes JSON output，最後只把安全的 command request 發回 MQTT。
 
 ```text
-../skills/temi-robot-control/
+Temi Android / Overview Adapter
+  -> MQTT temi/{robot_id}/asr/final
+  -> HermesTemiBridge
+  -> Hermes CLI / Resident HTTP / Mock Hermes
+  -> validated temi/{robot_id}/cmd/request
+  -> Temi Android
 ```
 
-Install or mirror it to Hermes' skill directory:
+## 對外關係
 
-```powershell
-New-Item -ItemType Directory -Force "$HOME\.hermes\skills"
-Copy-Item -Recurse -Force ..\skills\temi-robot-control "$HOME\.hermes\skills\temi-robot-control"
+| 關聯模組 | 關係 |
+|---|---|
+| `mqtt/` | Bridge subscribe ASR/result topics，publish command request。 |
+| `temi_shared/` | Bridge 讀取 ASR event 內的三張影像路徑，並做 Bridge path 到 Hermes path 的轉換。 |
+| `hermes-agent/` | CLI mode 與 resident HTTP mode 會呼叫本地 Hermes runtime。 |
+| `hermes-skills/` / `hermes-agent/skills/temi-*` | Hermes prompt 的 robot action、care memory、Home-ESI 規則來源。 |
+| `docs/schemas/` | 文件用 schema 副本；本模組執行時以 `hermes_temi_bridge/schemas/` 為準。 |
+| `tools/hermes_resident_server.py` | 提供低延遲 HTTP invocation endpoint。 |
+
+## 核心職責
+
+- 連線到 MQTT broker。
+- Subscribe `temi/+/asr/final` 與 `temi/+/cmd/result`。
+- 驗證 ASR event schema 與 robot allowlist。
+- 驗證三張影像存在、大小合理，且位於 shared root 內。
+- 將 `/var/lib/temi_shared/...` 轉成 Hermes 可讀的 `/shared/temi/...` 或本機等價路徑。
+- 建立 Hermes prompt。
+- 支援 `mock`、`cli`、`http` 三種 Hermes invocation mode。
+- 解析 Hermes JSON-only output，容忍常見 Markdown code fence 包裝。
+- 驗證 action schema 與安全限制。
+- 將 robot actions 發布到 `temi/{robot_id}/cmd/request`。
+- 執行 Bridge-internal memory/demo actions，包含 event log、reminder done、summary 與 mock caregiver notification。
+- 記錄 raw output、parsed output、robot command request、memory action result、command result 與錯誤。
+
+## 目前狀態與限制
+
+2026-05-31 盤點：
+
+- Hardware-free path 已驗證：`uv run python -m unittest discover -s tests` 通過 38 tests。
+- Root local mock E2E 已驗證：`python3 tools/e2e_test_runner.py` 回傳 `status: ok`。
+- HTTP resident mode 已完成 client 與 server wiring；實機紀錄顯示 warm resident latency 約 7-8 秒級，比 CLI cold start 約 97 秒明顯降低。
+- Action validator 會強制檢查 `cognitive_state.home_esi_level` 與 `cognitive_state.risk_reason`。
+- Robot-facing actions：`speak`、`ask_clarification`、`turn`、`navigate`、`stop`、`noop`。
+- Bridge-internal memory/demo actions：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
+- 只有 robot-facing actions 會 publish 到 `temi/{robot_id}/cmd/request`；memory/demo actions 只寫入 `MEMORY_DIR`。
+
+## 不負責的事
+
+- 不自行做照護推理或意圖判斷。
+- 不直接操作 Temi SDK 或硬體。
+- 不把圖片 binary 放入 MQTT。
+- 不信任 Hermes 任意輸出；所有 action 都必須通過 schema validation。
+- 不執行 shell command 或任意工具呼叫。
+
+## 主要檔案
+
+```text
+hermes_temi_bridge/
+  src/hermes_temi_bridge/
+    main.py                 # CLI 入口與 runtime wiring
+    mqtt_client.py          # MQTT subscribe/publish
+    event_models.py         # ASR event parsing/validation
+    image_resolver.py       # shared path validation and translation
+    hermes_client.py        # mock/cli/http Hermes invocation
+    action_validator.py     # Hermes action contract validation
+    command_dispatcher.py   # command request publishing
+    idempotency.py          # event_id dedup
+  schemas/                  # runtime JSON schemas
+  tests/                    # hardware-free unittest suite
 ```
 
-## Test
+## 常用模式
 
-This project uses only the Python standard library for unit tests.
+### Mock mode
 
-```powershell
-uv venv .venv
+最快的整合測試模式，不呼叫真模型。
+
+```bash
+cd /TemiAgent/hermes_temi_bridge
+HERMES_INVOKE_MODE=mock \
+TEMI_SHARED_BRIDGE_PATH=/TemiAgent/temi_shared \
+TEMI_SHARED_HERMES_PATH=/shared/temi \
+uv run --extra mqtt hermes-temi-bridge --env-file .env.example
+```
+
+### CLI mode
+
+每個 ASR event 啟動一次 `hermes -z`，功能最直覺但 cold start 較慢。
+
+```bash
+HERMES_INVOKE_MODE=cli \
+HERMES_CLI_COMMAND="hermes -z {prompt}" \
+uv run --extra mqtt hermes-temi-bridge --env-file .env.example
+```
+
+### Resident HTTP mode
+
+Demo 優先路線。Hermes 常駐，Bridge 呼叫 HTTP endpoint。
+
+```bash
+cd /TemiAgent
+python3 tools/hermes_resident_server.py \
+  --host 127.0.0.1 \
+  --port 8765 \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md
+```
+
+```bash
+cd /TemiAgent/hermes_temi_bridge
+HERMES_INVOKE_MODE=http \
+HERMES_HTTP_URL=http://127.0.0.1:8765/invoke \
+uv run --extra mqtt hermes-temi-bridge --env-file .env.example
+```
+
+## 重要環境變數
+
+| Variable | Purpose |
+|---|---|
+| `MQTT_BROKER_HOST` / `MQTT_BROKER_PORT` | MQTT broker 位置。 |
+| `ROBOT_ID_ALLOWLIST` | 允許處理的 robot id，逗號分隔。 |
+| `TEMI_SHARED_BRIDGE_PATH` | Bridge 可讀的 shared root。 |
+| `TEMI_SHARED_HERMES_PATH` | prompt 中給 Hermes 使用的 shared root。 |
+| `HERMES_INVOKE_MODE` | `mock`、`cli` 或 `http`。 |
+| `HERMES_CLI_COMMAND` | CLI mode 的 Hermes 指令，可包含 `{prompt}`。 |
+| `HERMES_HTTP_URL` | HTTP mode endpoint。 |
+| `HERMES_TIMEOUT_SECONDS` | 呼叫 Hermes 的 timeout。 |
+| `LOG_DIR` | event JSONL 與 debug logs 位置。 |
+| `MEMORY_DIR` | structured memory root，預設 `memory`。 |
+
+## 測試
+
+```bash
+cd /TemiAgent/hermes_temi_bridge
 uv run python -m unittest discover -s tests
-Remove-Item -Recurse -Force .venv
 ```
 
-## Troubleshooting
+根目錄整合 smoke test：
 
-- `paho-mqtt is required`: install runtime MQTT support with `uv pip install -e '.[mqtt]'`.
-- `missing_image`: Temi published an image path the bridge container cannot read.
-- `path is outside bridge shared root`: check `TEMI_SHARED_BRIDGE_PATH`.
-- `invalid_hermes_json`: Hermes returned Markdown, prose, or malformed JSON.
-- `navigation_target_not_allowed`: update the allowlist in `action_validator.py` and the skill schema only after the Temi map location exists.
-- Duplicate event ignored: the event id is still inside `EVENT_DEDUP_TTL_SECONDS`.
+```bash
+cd /TemiAgent
+python3 tools/e2e_test_runner.py
+```
+
+## 常見問題
+
+- `missing_image`：ASR event 指向的影像不存在，先檢查 `temi_shared/events/{robot_id}/{event_id}/`。
+- `path is outside bridge shared root`：Temi 或 adapter 發出的 path 不在 `TEMI_SHARED_BRIDGE_PATH` 下。
+- `invalid_hermes_json`：Hermes 回傳 Markdown、自然語言或破碎 JSON。
+- `navigation_target_not_allowed`：導航目標尚未加入 Bridge allowlist 與 skill schema。
+- 重複事件被忽略：相同 `event_id` 還在 `EVENT_DEDUP_TTL_SECONDS` 內。

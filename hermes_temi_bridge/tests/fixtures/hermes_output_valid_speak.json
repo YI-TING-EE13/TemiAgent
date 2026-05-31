@@ -3,6 +3,12 @@
   "event_id": "evt_20260511_000001",
   "robot_id": "temi-01",
   "confidence": 0.86,
+  "cognitive_state": {
+    "intent": "visual_question",
+    "home_esi_level": "Normal",
+    "risk_reason": "使用者只是詢問桌上物品，沒有照護風險訊號。",
+    "next_step": "speak"
+  },
   "reasoning_summary": "User asks the robot to identify objects on the table. Speaking is sufficient.",
   "actions": [
     {

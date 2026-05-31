@@ -1,0 +1,1 @@
+{"event_id":"evt_demo_bootstrap_001","timestamp":"2026-05-31T00:00:00+08:00","source":"demo_bootstrap","asr_text":"","perception":{"intent":"demo_memory_initialized","visual_status":"not_applicable"},"risk":{"home_esi_level":"Normal","reason":"初始化第一年度 Demo structured memory。"},"actions_taken":["initialize_memory"],"outcome":"ready_for_demo"}

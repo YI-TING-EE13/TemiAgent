@@ -7,6 +7,7 @@
     "event_id",
     "robot_id",
     "confidence",
+    "cognitive_state",
     "reasoning_summary",
     "actions"
   ],
@@ -15,6 +16,7 @@
     "event_id": { "type": "string", "minLength": 1 },
     "robot_id": { "type": "string", "minLength": 1 },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "cognitive_state": { "$ref": "#/$defs/cognitiveState" },
     "reasoning_summary": { "type": "string", "minLength": 1, "maxLength": 500 },
     "actions": {
       "type": "array",
@@ -27,12 +29,28 @@
           { "$ref": "#/$defs/turnAction" },
           { "$ref": "#/$defs/navigateAction" },
           { "$ref": "#/$defs/stopAction" },
-          { "$ref": "#/$defs/noopAction" }
+          { "$ref": "#/$defs/noopAction" },
+          { "$ref": "#/$defs/logEventAction" },
+          { "$ref": "#/$defs/markReminderDoneAction" },
+          { "$ref": "#/$defs/generateSummaryAction" },
+          { "$ref": "#/$defs/notifyCaregiverMockAction" }
         ]
       }
     }
   },
   "$defs": {
+    "cognitiveState": {
+      "type": "object",
+      "required": ["home_esi_level", "risk_reason"],
+      "properties": {
+        "intent": { "type": "string" },
+        "home_esi_level": { "type": "string", "enum": ["Normal", "L1", "L2", "L3"] },
+        "risk_reason": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "memory_updates": { "type": "array", "items": { "type": "string" } },
+        "next_step": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
     "speakAction": {
       "type": "object",
       "required": ["action_id", "type", "text"],
@@ -95,6 +113,50 @@
         "action_id": { "type": "string", "minLength": 1 },
         "type": { "const": "noop" },
         "reason": { "type": "string", "minLength": 1, "maxLength": 300 }
+      },
+      "additionalProperties": false
+    },
+    "logEventAction": {
+      "type": "object",
+      "required": ["action_id", "type", "event_type"],
+      "properties": {
+        "action_id": { "type": "string", "minLength": 1 },
+        "type": { "const": "log_event" },
+        "event_type": { "type": "string", "minLength": 1 },
+        "outcome": { "type": "string" },
+        "details": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "markReminderDoneAction": {
+      "type": "object",
+      "required": ["action_id", "type", "reminder_id"],
+      "properties": {
+        "action_id": { "type": "string", "minLength": 1 },
+        "type": { "const": "mark_reminder_done" },
+        "reminder_id": { "type": "string", "minLength": 1 },
+        "completed_at": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "generateSummaryAction": {
+      "type": "object",
+      "required": ["action_id", "type"],
+      "properties": {
+        "action_id": { "type": "string", "minLength": 1 },
+        "type": { "const": "generate_summary" },
+        "date": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "notifyCaregiverMockAction": {
+      "type": "object",
+      "required": ["action_id", "type"],
+      "properties": {
+        "action_id": { "type": "string", "minLength": 1 },
+        "type": { "const": "notify_caregiver_mock" },
+        "target": { "type": "string" },
+        "message": { "type": "string" }
       },
       "additionalProperties": false
     }

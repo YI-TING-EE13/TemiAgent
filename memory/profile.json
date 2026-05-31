@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "user_id": "elder_demo_001",
+  "persona_type": "demo_synthetic",
+  "preferred_name": "王先生",
+  "gender": "male",
+  "language": "zh-TW",
+  "display_age_group": "older_adult",
+  "demo_notes": {
+    "actor": "male_student",
+    "privacy": "synthetic_profile_no_real_personal_data"
+  },
+  "care_preferences": {
+    "speak_style": "溫和、簡短、清楚",
+    "confirmation_style": "需要口頭確認",
+    "risk_escalation_style": "先確認狀況，再進行 mock notification"
+  },
+  "known_conditions": [
+    {
+      "condition": "高血壓",
+      "source": "demo_profile",
+      "severity": "background_context"
+    }
+  ],
+  "caregiver_contacts": [
+    {
+      "contact_id": "caregiver_demo_primary",
+      "name": "家屬",
+      "role": "primary",
+      "channel": "demo_mock"
+    }
+  ]
+}

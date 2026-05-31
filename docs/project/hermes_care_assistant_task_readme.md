@@ -1,10 +1,10 @@
 # Hermes 居家照護助理大腦任務 README
 
-最後更新日期：2026-05-19
+最後更新日期：2026-05-31
 
 ## 本文件維護規則
 
-這份文件是 Hermes 居家照護助理大腦改造任務的快速入口，不取代根目錄的 `Hermes_Care_Assistant_Handoff.md`。之後只要本任務的 scope、skill 分工、記憶策略、resident 啟動方式、Demo scenario 或驗收標準有變更，都要同步更新本文件，讓後續維護者可以不用重讀完整對話就快速進入狀況。
+這份文件是 Hermes 居家照護助理大腦改造任務的快速入口，不取代 `docs/project/hermes_care_assistant_handoff.md`。之後只要本任務的 scope、skill 分工、記憶策略、resident 啟動方式、Demo scenario 或驗收標準有變更，都要同步更新本文件，讓後續維護者可以不用重讀完整對話就快速進入狀況。
 
 ## 任務目標
 
@@ -22,6 +22,29 @@
 - Hermes 不直接 publish MQTT。
 - Hermes 不直接寫照護權威資料；它輸出 JSON action plan，由 Bridge 執行。
 - 真實通知家屬或 119 不在第一版 scope；Demo 一律使用 mock notification。
+
+## 目前實作狀態
+
+2026-05-31 盤點：
+
+已完成：
+
+- `temi_backend` legacy route 已完成實機路線驗證，適合作為快速展示備援。
+- Overview adapter 已能將 legacy Android topics 轉成 canonical ASR event，並輸出三張影像 path。
+- HermesTemiBridge 已支援 ASR event validation、image path validation、Hermes JSON parsing、action validation、command publish、event dedup 與 result logging。
+- Bridge mock/unit/local E2E 在 container 中通過：Bridge unittest 33 tests、backend pytest 14 tests、root mock E2E `status: ok`。
+- Resident Hermes HTTP server 已支援多 skill preload，並可選擇開啟 Hermes memory/profile。
+- 三個 Temi care skills 已存在於 `hermes-agent/skills/temi-*` 與 `hermes-skills/temi-*`。
+- 第一年度 Demo 階段任務已整理為 P0-P5，見 `docs/project/first_year_demo_phase_tasks.md`。
+- P1 structured memory demo state 已建立於 `memory/`，目前 persona 設定為男性 Demo 長者 `王先生`。
+- P2 Bridge memory actions 已完成最小實作：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
+- P3 deterministic Demo case runner 已完成，P5 runbook / e2e operation manual / scenario script / checklist 已整理。
+- Bridge validator 已強制要求 `cognitive_state.home_esi_level` 與 `cognitive_state.risk_reason`。
+
+尚未完成，留待 Demo 驗收階段：
+
+- `update_memory`、`set_reminder` 尚未接成 Bridge 內部 actions；第一年度 Demo 先以 `log_event` 與 `mark_reminder_done` 覆蓋必要流程。
+- 三個 Demo case 尚未產生完整的 raw output、parsed output、command request、memory diff/event log 與 daily summary。
 
 ## Skill 分工
 
@@ -69,7 +92,18 @@ memory/
   abnormal_events/
 ```
 
-Hermes 可以透過 Bridge 注入的摘要理解這些資料，也可以輸出 memory 類 actions，例如 `log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。實際寫入 JSON/JSONL 或 Holographic provider 由 Bridge 或專用工具層完成。
+Hermes 可以透過 Bridge 注入的摘要理解這些資料，也可以輸出 memory 類 actions，例如 `log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。實際寫入 JSON/JSONL 目前由 Bridge structured memory store 完成；Holographic provider 或 MCP memory tools 可留到 Demo 穩定後再接。
+
+目前 P1 Demo state 已建立：
+
+| 檔案 | Demo 用途 |
+|---|---|
+| `memory/profile.json` | 男性合成 persona，稱呼 `王先生`，不含真實個資。 |
+| `memory/reminders.json` | 早餐後服藥與補充水分兩個 active reminders。 |
+| `memory/daily_state.json` | 今日風險狀態、active reminders、recent event ids。 |
+| `memory/event_log.jsonl` | 追加式事件紀錄；目前包含初始化紀錄。 |
+| `memory/abnormal_events/` | 後續 L1 / 重要 L2 mock artifact。 |
+| `memory/summaries/` | 後續每日照護摘要 artifact。 |
 
 ## Resident Server 實作注意
 
@@ -157,7 +191,7 @@ python3 tools/hermes_resident_server.py \
 文件測試：
 
 - 本 README path 存在。
-- `Hermes_Care_Assistant_Handoff.md` 有連到本 README。
+- `docs/project/hermes_care_assistant_handoff.md` 有連到本 README。
 - 本 README 包含 skill 分工、記憶分層、resident multi-skill path、更新規則。
 
 程式測試：
@@ -166,13 +200,21 @@ python3 tools/hermes_resident_server.py \
 - resident server 多個 `--skill-path` 會按 CLI 順序全部注入 prompt。
 - resident server 預設仍停用 memory；加上 `--enable-memory` 時才載入 Hermes memory。
 - skill path 不存在時有清楚 warning，不靜默成功。
+- Bridge validator 強制檢查 `cognitive_state.home_esi_level`。
+- Bridge memory store 可更新 reminder、追加 event log、寫入 mock abnormal event。
 
 整合測試：
 
 - 使用三個 skills 啟動 resident server。
 - Bridge resident HTTP mode 仍能取得 JSON-only Hermes output。
 - 三個 Demo case 的 output 都包含 `cognitive_state.home_esi_level`。
+- `tools/demo_case_runner.py` 可產生三個固定 Demo case artifacts。
 
 ## 後續更新紀錄
 
+- 2026-05-31：新增第一年度 Demo P0-P5 階段任務文件；完成 P1 structured memory demo state，男性 persona 設定為 `王先生`。
+- 2026-05-31：完成 P2 最小實作，Bridge 支援 Home-ESI schema validation 與四個 memory/demo actions。
+- 2026-05-31：完成 P3 deterministic Demo case runner，可產生提醒、不適 L2、疑似跌倒 L1 三個案例 artifacts。
+- 2026-05-31：整理 P5 展示素材，新增 Demo runbook、端到端串接操作手冊、scenario script 與 acceptance checklist；P4 Navigation 本輪先跳過。
+- 2026-05-30：補上目前實作狀態；確認整合底座已通過 container 內測試，照護記憶與 Demo actions 留待下一階段。
 - 2026-05-19：建立本任務 README，記錄三 skill 分工、混合記憶策略與 resident multi-skill preload 需求。

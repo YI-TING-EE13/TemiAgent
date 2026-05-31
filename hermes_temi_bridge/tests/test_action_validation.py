@@ -18,10 +18,69 @@ class ActionValidationTests(unittest.TestCase):
     def test_valid_speak_action(self):
         output = self.validate(load_fixture("hermes_output_valid_speak.json"))
         self.assertEqual(output.actions[0]["type"], "speak")
+        self.assertEqual(output.cognitive_state["home_esi_level"], "Normal")
+        self.assertEqual(output.robot_actions[0]["type"], "speak")
+        self.assertEqual(output.memory_actions, [])
 
     def test_valid_navigate_action(self):
         output = self.validate(load_fixture("hermes_output_valid_navigate.json"))
         self.assertEqual(output.actions[0]["target"], "meeting_room")
+
+    def test_valid_memory_actions_are_separated_from_robot_actions(self):
+        output = self.validate(load_fixture("hermes_output_valid_memory_actions.json"))
+        self.assertEqual([action["type"] for action in output.robot_actions], ["speak"])
+        self.assertEqual(
+            [action["type"] for action in output.memory_actions],
+            ["mark_reminder_done", "log_event"],
+        )
+
+
+    def test_memory_action_accepts_payload_parameters(self):
+        payload = load_fixture("hermes_output_valid_speak.json")
+        payload["cognitive_state"] = {
+            "intent": "report_discomfort",
+            "home_esi_level": "L2",
+            "risk_reason": "使用者表示身體不舒服，需要追問症狀。",
+        }
+        payload["actions"] = [
+            {
+                "action_id": "act_001",
+                "type": "ask_clarification",
+                "text": "您是哪裡不舒服？",
+                "language": "zh-TW",
+            },
+            {
+                "action_id": "act_002",
+                "type": "log_event",
+                "payload": {
+                    "event_type": "health_discomfort",
+                    "home_esi_level": "L2",
+                    "description": "使用者主訴身體有一點不舒服",
+                    "outcome": "已追問症狀",
+                },
+            },
+        ]
+
+        output = self.validate(payload)
+
+        self.assertEqual(output.memory_actions[0]["event_type"], "health_discomfort")
+        self.assertEqual(output.memory_actions[0]["outcome"], "已追問症狀")
+        self.assertEqual(
+            output.memory_actions[0]["details"]["description"],
+            "使用者主訴身體有一點不舒服",
+        )
+
+    def test_missing_cognitive_state_is_rejected(self):
+        payload = load_fixture("hermes_output_valid_speak.json")
+        del payload["cognitive_state"]
+        with self.assertRaisesRegex(ActionValidationError, "missing_cognitive_state"):
+            self.validate(payload)
+
+    def test_invalid_home_esi_level_is_rejected(self):
+        payload = load_fixture("hermes_output_valid_speak.json")
+        payload["cognitive_state"]["home_esi_level"] = "Critical"
+        with self.assertRaisesRegex(ActionValidationError, "invalid_home_esi_level"):
+            self.validate(payload)
 
     def test_invalid_action_type(self):
         with self.assertRaisesRegex(ActionValidationError, "invalid_action_type"):

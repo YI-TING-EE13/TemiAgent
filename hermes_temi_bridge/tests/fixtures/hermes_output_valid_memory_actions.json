@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "event_id": "evt_20260511_000001",
+  "robot_id": "temi-01",
+  "confidence": 0.88,
+  "cognitive_state": {
+    "intent": "care_reminder_confirmation",
+    "home_esi_level": "L3",
+    "risk_reason": "使用者確認完成日常提醒，屬於低風險照護紀錄。",
+    "next_step": "mark_reminder_done"
+  },
+  "reasoning_summary": "The user confirmed the medication reminder, so the reminder should be marked done and logged.",
+  "actions": [
+    {
+      "action_id": "act_001",
+      "type": "speak",
+      "text": "好的，王先生，我已經幫您記錄完成。",
+      "language": "zh-TW"
+    },
+    {
+      "action_id": "act_002",
+      "type": "mark_reminder_done",
+      "reminder_id": "rem_morning_medication"
+    },
+    {
+      "action_id": "act_003",
+      "type": "log_event",
+      "event_type": "care_reminder",
+      "outcome": "reminder_completed"
+    }
+  ]
+}
