@@ -26,9 +26,9 @@ android {
 
         // Inject config from local.properties into BuildConfig
         buildConfigField "String", "WS_SERVER_URLS",
-                "\"${localProps.getProperty('ws.server.urls', 'ws://192.168.50.233:8080')}\""
+                "\"${localProps.getProperty('ws.server.urls', 'ws://192.168.50.233:8080,ws://192.168.50.236:8080')}\""
         buildConfigField "String", "MQTT_BROKER_URLS",
-                "\"${localProps.getProperty('mqtt.broker.urls', 'tcp://192.168.50.233:1883')}\""
+                "\"${localProps.getProperty('mqtt.broker.urls', 'tcp://192.168.50.233:1883,tcp://192.168.50.236:1883')}\""
         buildConfigField "String", "MQTT_CLIENT_ID",
                 "\"${localProps.getProperty('mqtt.client.id', 'temi-agent')}\""
         buildConfigField "String", "ROBOT_ID",

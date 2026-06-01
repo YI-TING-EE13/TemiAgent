@@ -1,12 +1,12 @@
 # local.properties.example — Copy this to local.properties and edit values
 #
-# WebSocket server URL for video streaming
-# Replace with the IP of your PC-B backend machine.
-ws.server.url=ws://192.168.1.100:8080
+# WebSocket server URLs for video streaming.
+# Multiple backend machines are comma-separated.
+ws.server.urls=ws://192.168.50.233:8080,ws://192.168.50.236:8080
 
-# MQTT Broker URL
-# Replace with the IP of your MQTT broker (Mosquitto).
-mqtt.broker.url=tcp://192.168.1.100:1883
+# MQTT broker URLs.
+# Multiple brokers are comma-separated.
+mqtt.broker.urls=tcp://192.168.50.233:1883,tcp://192.168.50.236:1883
 
 # MQTT Client ID (must be unique per device)
 mqtt.client.id=temi-agent
