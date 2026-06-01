@@ -113,19 +113,20 @@ The current wake word listener is implemented with Android `SpeechRecognizer`. I
 
    ```properties
    sdk.dir=C:\\path\\to\\Android\\Sdk
-   ws.server.urls=ws://192.168.50.233:8080
-   mqtt.broker.urls=tcp://192.168.50.233:1883
-   mqtt.client.id=temi-agent
-   ```
-
-   Multiple endpoints are comma-separated:
-
-   ```properties
    ws.server.urls=ws://192.168.50.233:8080,ws://192.168.50.236:8080
    mqtt.broker.urls=tcp://192.168.50.233:1883,tcp://192.168.50.236:1883
+   mqtt.client.id=temi-agent
+   robot.id=temi-01
    ```
 
-   On the robot UI, `MQTT: connected/total` shows how many configured MQTT brokers are currently connected. For example, `MQTT: 2/2` means both broker URLs above are connected and can receive ASR events or send robot actions.
+   These two endpoints are required for the local Hermes/Temi setup:
+
+   - `192.168.50.233`
+   - `192.168.50.236`
+
+   Keep both IPs in `ws.server.urls` and `mqtt.broker.urls` unless the deployment topology is intentionally changed.
+
+   On the robot UI, `MQTT: connected/total` shows how many configured MQTT brokers are currently connected. For this setup, the expected healthy state is `MQTT: 2/2`, meaning both broker URLs above are connected and can receive ASR events or send robot actions.
 
 2. Build the debug APK:
 
