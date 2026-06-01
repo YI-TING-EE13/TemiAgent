@@ -32,6 +32,7 @@ import com.robotemi.sdk.TtsRequest;
 import com.robotemi.sdk.listeners.OnRobotReadyListener;
 
 import org.json.JSONException;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import com.robotemi.agent.agent.AgentStateMachine;
@@ -93,6 +94,7 @@ public class MainActivity extends AppCompatActivity
     private boolean hotwordEnabled = false;
     private boolean hotwordListening = false;
     private boolean acceptingTemiAsr = false;
+    private String activeConversationId = "conv-" + UUID.randomUUID();
 
     // ─── UI ───────────────────────────────────────────────────────────
     private PreviewView viewFinder;
@@ -236,6 +238,9 @@ public class MainActivity extends AppCompatActivity
         try {
             JSONObject json = new JSONObject(payload);
             switch (topic) {
+                case MqttTopics.COMMAND_REQUEST:
+                    handleCommandRequest(json);
+                    break;
                 case MqttTopics.ACTION_SPEAK:
                     handleSpeakAction(json);
                     break;
@@ -334,7 +339,10 @@ public class MainActivity extends AppCompatActivity
     private void handleNavigateAction(JSONObject json) throws JSONException {
         stateMachine.transitionTo(AgentStateMachine.State.EXECUTING);
         
-        String target = json.getString("target_location");
+        String target = json.optString("target", json.optString("target_location", ""));
+        if (target.trim().isEmpty()) {
+            throw new JSONException("Missing navigation target");
+        }
         Log.i(TAG, "ACTION_NAVIGATE: " + target);
         robot.goTo(target);
         
@@ -347,6 +355,126 @@ public class MainActivity extends AppCompatActivity
         stateMachine.transitionTo(AgentStateMachine.State.WAKEUP_TRIGGERED);
         stateMachine.transitionTo(AgentStateMachine.State.ASR_LISTENING);
         wakeupWithoutBuiltInResponse();
+    }
+
+    private void handleCommandRequest(JSONObject command) throws JSONException {
+        String commandId = command.optString("command_id", "unknown_command");
+        String eventId = command.optString("event_id", "");
+        JSONArray actions = command.getJSONArray("actions");
+        JSONArray results = new JSONArray();
+
+        Log.i(TAG, "COMMAND_REQUEST: " + commandId + " actions=" + actions.length());
+        int failedCount = 0;
+        boolean hasSpeechAction = false;
+        for (int i = 0; i < actions.length(); i++) {
+            JSONObject action = actions.getJSONObject(i);
+            String type = action.optString("type", "");
+            if ("speak".equals(type) || "ask_clarification".equals(type)) {
+                hasSpeechAction = true;
+            }
+            JSONObject actionResult = executeHermesAction(action);
+            if ("failed".equals(actionResult.optString("status"))) {
+                failedCount++;
+            }
+            results.put(actionResult);
+        }
+
+        String status = failedCount == 0 ? "success" : failedCount == actions.length() ? "failed" : "partial_success";
+        publishCommandResult(commandId, eventId, status, results, null);
+        if (!hasSpeechAction && stateMachine.getCurrentState() != AgentStateMachine.State.IDLE) {
+            stateMachine.transitionTo(AgentStateMachine.State.IDLE);
+        }
+    }
+
+    private JSONObject executeHermesAction(JSONObject action) {
+        String actionId = action.optString("action_id", "unknown_action");
+        String type = action.optString("type", "");
+        JSONObject result = new JSONObject();
+        try {
+            switch (type) {
+                case "speak":
+                case "ask_clarification":
+                    if ("ask_clarification".equals(type) && !action.has("continue_listening")) {
+                        action.put("continue_listening", true);
+                    }
+                    handleSpeakAction(action);
+                    break;
+                case "navigate":
+                    handleNavigateAction(action);
+                    break;
+                case "turn":
+                    handleTurnAction(action);
+                    break;
+                case "stop":
+                    handleStopAction();
+                    break;
+                case "noop":
+                    Log.i(TAG, "ACTION_NOOP: " + action.optString("reason", ""));
+                    break;
+                default:
+                    throw new JSONException("Unsupported action type: " + type);
+            }
+            result.put("action_id", actionId);
+            result.put("type", type);
+            result.put("status", "completed");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to execute Hermes action: " + action, e);
+            try {
+                result.put("action_id", actionId);
+                result.put("type", type);
+                result.put("status", "failed");
+                result.put("error", e.getMessage());
+            } catch (JSONException ignored) {}
+        }
+        return result;
+    }
+
+    private void handleTurnAction(JSONObject json) throws JSONException {
+        stateMachine.transitionTo(AgentStateMachine.State.EXECUTING);
+        String direction = json.getString("direction");
+        int degrees = json.getInt("degrees");
+        int signedDegrees = "left".equals(direction) ? degrees : -degrees;
+        Log.i(TAG, "ACTION_TURN: " + direction + " " + degrees);
+        robot.turnBy(signedDegrees, 0.6f);
+        stateMachine.transitionTo(AgentStateMachine.State.IDLE);
+    }
+
+    private void handleStopAction() {
+        Log.i(TAG, "ACTION_STOP");
+        robot.cancelAllTtsRequests();
+        robot.stopMovement();
+        hideSubtitle();
+        stateMachine.transitionTo(AgentStateMachine.State.IDLE);
+    }
+
+    private void publishCommandResult(
+            String commandId,
+            String eventId,
+            String status,
+            JSONArray actionResults,
+            String error
+    ) {
+        try {
+            JSONObject result = new JSONObject();
+            result.put("schema_version", "1.0");
+            result.put("command_id", commandId);
+            result.put("event_id", eventId);
+            result.put("robot_id", MqttTopics.ROBOT_ID);
+            result.put("status", status);
+            result.put("finished_at_ms", System.currentTimeMillis());
+            result.put("results", actionResults);
+            if (error != null) {
+                result.put("error", error);
+            }
+
+            for (MqttManager mm : mqttManagers) {
+                if (mm != null && mm.isConnected()) {
+                    mm.publish(MqttTopics.COMMAND_RESULT, result.toString());
+                }
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "Failed to publish command result", e);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -388,6 +516,12 @@ public class MainActivity extends AppCompatActivity
 
         try {
             JSONObject json = new JSONObject();
+            String eventId = "evt_" + asrCompleteTimeMs + "_" + UUID.randomUUID().toString().substring(0, 8);
+            json.put("schema_version", "1.0");
+            json.put("event_id", eventId);
+            json.put("robot_id", MqttTopics.ROBOT_ID);
+            json.put("conversation_id", activeConversationId);
+            json.put("type", "asr.legacy_text");
             json.put("text", text);
             json.put("language", sttLanguage.name());
             json.put("timestamp_ms", asrCompleteTimeMs);
@@ -395,7 +529,7 @@ public class MainActivity extends AppCompatActivity
             // Multicast: Publish ASR to ALL connected MQTT brokers
             for (MqttManager mm : mqttManagers) {
                 if (mm != null && mm.isConnected()) {
-                    mm.publish(MqttTopics.EVENT_ASR, json.toString());
+                    mm.publish(MqttTopics.EVENT_ASR_LEGACY, json.toString());
                 }
             }
             
@@ -522,7 +656,8 @@ public class MainActivity extends AppCompatActivity
     }
 
     private TtsRequest.Language mapTtsLanguage(String lang) {
-        switch (lang) {
+        String normalized = lang == null ? "ZH_TW" : lang.trim().replace('-', '_').toUpperCase(Locale.ROOT);
+        switch (normalized) {
             case "ZH_TW": return TtsRequest.Language.ZH_TW;
             case "ZH_CN": return TtsRequest.Language.ZH_CN;
             case "EN_US": return TtsRequest.Language.EN_US;

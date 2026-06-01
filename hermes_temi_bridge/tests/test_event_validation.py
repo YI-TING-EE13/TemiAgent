@@ -65,6 +65,21 @@ class EventValidationTests(unittest.TestCase):
         self.assertEqual(event.asr_text, "幫我看看桌上的東西是什麼")
         self.assertEqual({frame.name for frame in event.frames}, {"t_minus_1000", "t_minus_500", "t"})
 
+    def test_legacy_text_asr_event_should_pass_without_frames(self):
+        payload = {
+            "schema_version": "1.0",
+            "event_id": "evt_legacy_001",
+            "robot_id": "temi-01",
+            "conversation_id": "conv_legacy",
+            "type": "asr.legacy_text",
+            "text": "請去會議室",
+            "language": "ZH_TW",
+            "timestamp_ms": 1778499000200,
+        }
+        event = ASRFinalEvent.from_payload(payload, ("temi-01",))
+        self.assertEqual(event.asr_text, "請去會議室")
+        self.assertEqual(event.frames, ())
+
     def test_missing_event_id_should_fail(self):
         payload = load_fixture("asr_final_valid.json")
         del payload["event_id"]
@@ -107,6 +122,51 @@ class EventValidationTests(unittest.TestCase):
             self.assertEqual(first["status"], "success")
             self.assertEqual(second, {"status": "ignored", "reason": "duplicate_event_id"})
             self.assertEqual(len(mqtt.published), 1)
+
+    def test_legacy_text_event_should_publish_command_without_images(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payload = {
+                "schema_version": "1.0",
+                "event_id": "evt_legacy_002",
+                "robot_id": "temi-01",
+                "conversation_id": "conv_legacy",
+                "type": "asr.legacy_text",
+                "text": "請說你好",
+                "language": "ZH_TW",
+                "timestamp_ms": 1778499000200,
+            }
+            hermes_raw = json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "event_id": "evt_legacy_002",
+                    "robot_id": "temi-01",
+                    "confidence": 0.8,
+                    "reasoning_summary": "The user asked for a spoken response.",
+                    "actions": [
+                        {
+                            "action_id": "act_001",
+                            "type": "speak",
+                            "text": "你好",
+                            "language": "zh-TW",
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            )
+            mqtt = MockMqtt()
+            config = BridgeConfig(log_dir=(root / "logs").as_posix())
+            service = HermesTemiBridgeService(
+                config,
+                mqtt,
+                MockHermes(hermes_raw),
+                TTLProcessedEventCache(600),
+                EventJsonlLogger(root / "logs"),
+            )
+            result = service.handle_asr_payload("temi/event/asr", payload)
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(mqtt.published[0][0], "temi-01")
+            self.assertEqual(mqtt.published[0][1]["actions"][0]["text"], "你好")
 
 
 if __name__ == "__main__":

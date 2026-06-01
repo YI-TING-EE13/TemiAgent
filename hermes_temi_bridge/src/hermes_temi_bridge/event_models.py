@@ -41,6 +41,9 @@ class ASRFinalEvent:
     def from_payload(
         cls, payload: dict[str, Any], robot_id_allowlist: tuple[str, ...] = ()
     ) -> "ASRFinalEvent":
+        if "text" in payload and "asr" not in payload:
+            return cls._from_legacy_text_payload(payload, robot_id_allowlist)
+
         if payload.get("schema_version") != SUPPORTED_SCHEMA_VERSION:
             raise EventValidationError("unsupported_schema_version")
 
@@ -82,6 +85,33 @@ class ASRFinalEvent:
             asr_text=asr_text,
             asr_confidence=_optional_float(asr, "confidence"),
             frames=frames,
+            raw=payload,
+        )
+
+    @classmethod
+    def _from_legacy_text_payload(
+        cls, payload: dict[str, Any], robot_id_allowlist: tuple[str, ...] = ()
+    ) -> "ASRFinalEvent":
+        event_id = _required_string(payload, "event_id")
+        robot_id = _required_string(payload, "robot_id")
+        if robot_id_allowlist and robot_id not in robot_id_allowlist:
+            raise EventValidationError("robot_not_allowed", {"robot_id": robot_id})
+
+        asr_text = str(payload.get("text", "")).strip()
+        if not asr_text:
+            raise EventValidationError("empty_asr_text")
+
+        return cls(
+            schema_version=SUPPORTED_SCHEMA_VERSION,
+            event_id=event_id,
+            robot_id=robot_id,
+            conversation_id=_optional_string(payload, "conversation_id"),
+            timestamp_ms=_optional_int(payload, "timestamp_ms"),
+            speech_end_ts_ms=_optional_int(payload, "timestamp_ms"),
+            language=str(payload.get("language") or "zh-TW"),
+            asr_text=asr_text,
+            asr_confidence=None,
+            frames=(),
             raw=payload,
         )
 

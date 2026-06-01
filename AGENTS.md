@@ -100,7 +100,7 @@ Expected build state: `:app:assembleDebug` succeeds. Warnings about Java 8 sourc
 ## UI Status Indicators
 
 - `MQTT: connected/total` is the count of connected MQTT brokers versus configured brokers from `mqtt.broker.urls`.
-- Example: `MQTT: 2/2` means both configured brokers are connected. ASR events are published to connected brokers, and backend actions such as `temi/action/speak` can be received.
+- Example: `MQTT: 2/2` means both configured brokers are connected. Text ASR events are published to connected brokers, and Hermes command requests such as `temi/{robot_id}/cmd/request` can be received.
 - The top-left status text shows the hotword/listening state, such as `Waiting for "小安"`.
 - Backend TTS subtitles appear above the bottom status area with small white text and should clear automatically after speech ends.
 
@@ -158,6 +158,8 @@ Expected logs when system wake phrase is ignored:
   - `wakeupWithoutBuiltInResponse()`
   - `onWakeupWord(...)`
   - `onAsrResult(...)`
+  - `handleCommandRequest(...)`
+  - `executeHermesAction(...)`
 - `AgentStateMachine.java`
   - state definitions
   - 60 second watchdog
@@ -183,6 +185,8 @@ Expected logs when system wake phrase is ignored:
 
 - `F:\sdk` has unrelated changes from the broader SDK workspace. Do not reset or clean it.
 - `F:\sdk\TemiAgent` is the active working copy used for implementation and robot deployment.
+- The active Hermes command contract is `temi/{robot_id}/cmd/request` -> Android execution -> `temi/{robot_id}/cmd/result`. The legacy `temi/action/*` topics are still subscribed for manual scripts and the original backend.
+- The Android app still publishes `temi/event/asr` as a text-only compatibility event. Visual Hermes events require a PC-side frame assembler to publish `temi/{robot_id}/asr/final` with frame paths under the shared Temi directory.
 - `F:\TemiAgent` is the separate GitHub/backup working tree. If asked to push, sync `F:\sdk\TemiAgent` into `F:\TemiAgent` while preserving `F:\TemiAgent\.git` and excluding local/build artifacts.
 - Do not commit `local.properties`, `.gradle`, `.idea`, `build`, APK files, cache folders, or debug frames.
 

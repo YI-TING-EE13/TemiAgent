@@ -80,13 +80,15 @@ class HermesTemiBridgeService:
                 },
             )
 
-            for frame in event.frames:
-                validate_image_file(frame.path, self.config.max_image_size_mb)
-            translated_frames = translate_frames(
-                event.frames,
-                self.config.temi_shared_bridge_path,
-                self.config.temi_shared_hermes_path,
-            )
+            translated_frames = []
+            if event.frames:
+                for frame in event.frames:
+                    validate_image_file(frame.path, self.config.max_image_size_mb)
+                translated_frames = translate_frames(
+                    event.frames,
+                    self.config.temi_shared_bridge_path,
+                    self.config.temi_shared_hermes_path,
+                )
             hermes_request = HermesRequest(
                 event_id=event.event_id,
                 robot_id=event.robot_id,

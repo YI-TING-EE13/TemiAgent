@@ -27,6 +27,7 @@ HermesTemiBridge logs result
 ## MQTT Topics
 
 - Subscribe: `temi/+/asr/final`
+- Subscribe: `temi/event/asr` for legacy text-only TemiAgent ASR events
 - Subscribe: `temi/+/cmd/result`
 - Publish: `temi/{robot_id}/cmd/request`
 
@@ -91,6 +92,23 @@ Command request:
   ]
 }
 ```
+
+Legacy text-only ASR event:
+
+```json
+{
+  "schema_version": "1.0",
+  "event_id": "evt_1778499000200_abcd1234",
+  "robot_id": "temi-01",
+  "conversation_id": "conv-local",
+  "type": "asr.legacy_text",
+  "timestamp_ms": 1778499000200,
+  "language": "ZH_TW",
+  "text": "請去會議室"
+}
+```
+
+This path supports non-visual speech and control requests. Visual requests still need the full `asr.final` event with three readable image paths.
 
 ## Docker Volumes
 

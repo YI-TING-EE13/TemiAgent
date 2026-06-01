@@ -85,7 +85,7 @@ def build_prompt(request: HermesRequest) -> str:
             f"{order.get(str(frame['name']), len(frame_lines) + 1)}. {frame['name']}:\n"
             f"   {frame['hermes_path']}"
         )
-    frames_text = "\n".join(frame_lines)
+    frames_text = "\n".join(frame_lines) or "No current visual frames are available for this event."
     return f"""You are controlling a Temi robot through the temi-robot-control skill.
 
 Use the installed skill: /temi-robot-control

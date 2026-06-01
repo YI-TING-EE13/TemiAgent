@@ -58,6 +58,7 @@ class TemiMqttClient:
             return
         LOGGER.info("connected to MQTT broker")
         client.subscribe("temi/+/asr/final", qos=1)
+        client.subscribe("temi/event/asr", qos=1)
         client.subscribe("temi/+/cmd/result", qos=1)
 
     def _on_message(self, client, userdata, msg) -> None:
@@ -69,7 +70,7 @@ class TemiMqttClient:
         if not isinstance(payload, dict):
             LOGGER.warning("ignored non-object payload on %s", msg.topic)
             return
-        if msg.topic.endswith("/asr/final") and self._asr_handler:
+        if (msg.topic.endswith("/asr/final") or msg.topic == "temi/event/asr") and self._asr_handler:
             self._asr_handler(msg.topic, payload)
         elif msg.topic.endswith("/cmd/result") and self._result_handler:
             self._result_handler(msg.topic, payload)

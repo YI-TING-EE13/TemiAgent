@@ -6,7 +6,7 @@ TemiAgent turns a Temi robot into a VLM-driven embodied AI agent. The Android ap
 
 - **Vision-language interaction**: Streams H.264 camera frames from the robot to a PC backend and pairs them with user ASR events.
 - **Timestamp-aligned frame sampling**: Uses robot-side timestamps to sample visual context around the end of speech, such as `T-1000ms`, `T-500ms`, and `T`.
-- **MQTT command bridge**: Sends ASR events from Android to the backend and receives validated robot actions such as speak, navigate, stop, and wakeup.
+- **MQTT command bridge**: Sends text ASR events from Android to the backend and receives Hermes command requests such as speak, ask clarification, navigate, turn, stop, and noop.
 - **State-machine control**: Uses `AgentStateMachine` to manage `IDLE`, `WAKEUP_TRIGGERED`, `ASR_LISTENING`, `THINKING`, `WAITING`, and `EXECUTING` states.
 - **Multicast telemetry**: Supports multiple WebSocket and MQTT backend endpoints for parallel backends or Hermes integration.
 - **Temi built-in voice suppression**: The Android app declares NLU/conversation-layer ownership and suppresses Temi Launcher conversation output before playing backend-generated TTS.
@@ -62,7 +62,7 @@ Current voice flow:
 2. When `小安` is detected, the app calls `robot.wakeup(Collections.singletonList(SttLanguage.ZH_TW))`.
 3. Temi performs ASR and returns the final transcript through `Robot.AsrListener`.
 4. The app publishes ASR text to the backend through MQTT.
-5. The backend returns validated commands such as `temi/action/speak`.
+5. HermesTemiBridge returns validated command requests on `temi/{robot_id}/cmd/request`.
 6. The app executes TTS/navigation through Temi SDK.
 
 This keeps Temi's ASR while avoiding normal use of Temi's built-in assistant wake word and response flow.
@@ -207,8 +207,9 @@ The current wake word listener is implemented with Android `SpeechRecognizer`. I
 - Logcat shows `RecognitionService#onStartListening` while the app is idle.
 - Saying `小安`, `小安你好`, or `你好小安` logs `Custom wake word matched`.
 - Saying `Hi Temi` may still produce a Temi wake event, but the app should log `Ignoring Temi system wake word` unless it was triggered by the custom wake word flow.
-- Backend receives `temi/event/asr`.
-- Backend publishes `temi/action/speak`.
+- Backend receives `temi/event/asr` for text-only ASR, or `temi/{robot_id}/asr/final` when a PC-side frame assembler provides synchronized image paths.
+- HermesTemiBridge publishes `temi/{robot_id}/cmd/request`.
+- Android publishes `temi/{robot_id}/cmd/result`.
 - Temi speaks only the backend answer in normal operation.
 - During backend-driven TTS, a compact white subtitle appears near the bottom of the screen and disappears after TTS completion.
 
@@ -218,7 +219,8 @@ The current wake word listener is implemented with Android `SpeechRecognizer`. I
 - **Backend does not receive ASR**: Check MQTT broker IP, port `1883`, firewall rules, and `mqtt.broker.urls`.
 - **No video stream**: Check `ws.server.urls`, backend WebSocket listener port, and camera permission.
 - **`MQTT: 0/N` or red MQTT status**: Check that each broker in `mqtt.broker.urls` is reachable from Temi on port `1883`.
-- **TTS works but no subtitle appears**: Confirm the installed APK includes the subtitle overlay changes and that speech is triggered through `temi/action/speak` / `speakWithoutConversationLayer(...)`, not through a separate Temi system UI path.
+- **TTS works but no subtitle appears**: Confirm the installed APK includes the subtitle overlay changes and that speech is triggered through `temi/{robot_id}/cmd/request` or the legacy `temi/action/speak` path, not through a separate Temi system UI path.
+- **Visual questions say there is no camera frame**: `temi/event/asr` is text-only. Run the PC-side frame assembler path that emits `temi/{robot_id}/asr/final` with `t_minus_1000`, `t_minus_500`, and `t` frame paths readable by HermesTemiBridge.
 - **ASR test says "連線逾時，請稍後再試"**: This is the app-side `WAITING` watchdog, not Temi's built-in ASR. It fires after 60 seconds if the backend does not publish a robot action, even if the backend received the ASR event.
 - **Temi still speaks twice**: Confirm the installed APK includes the current manifest metadata, `MainActivity` NLU listener changes, and the `acceptingTemiAsr` gate. The expected path is app-owned hotword detection followed by Temi ASR only after `robot.wakeup(...)`; unsolicited Temi system wake events should be ignored by the app.
 - **Custom wake word does not trigger**: Check logcat for `RecognitionService#onStartListening`. If `Hotword recognizer error: 9` appears, grant microphone permission to both `com.robotemi.agent` and `com.google.android.googlequicksearchbox`.
