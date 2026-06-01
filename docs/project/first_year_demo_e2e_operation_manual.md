@@ -1,10 +1,10 @@
 # 第一年度 Demo 端到端串接操作手冊
 
-最後更新日期：2026-05-31
+最後更新日期：2026-06-01
 
 ## 目的
 
-本手冊用於進行「Temi 端收到語音或影像後，交由 Hermes 對話推理，再回到 Temi 語音回應」的端到端串接測試。主線路徑採用目前已安裝在 Temi 上的 legacy Android app，加上 `tools/temi_overview_adapter.py` 轉成 canonical Overview contract，最後由 HermesTemiBridge 呼叫 resident Hermes。
+本手冊用於進行「Temi 端收到語音或影像後，交由 Hermes 對話推理，再回到 Temi 語音回應」的端到端串接測試。主線路徑採用目前已安裝在 Temi 上的 legacy Android app，加上 `tools/temi_overview_adapter.py` 轉成 canonical Overview contract，最後由 HermesTemiBridge 呼叫 resident Hermes。2026-06-01 起，adapter 只負責 ASR 與 camera，不再轉發 command；Temi app 直接執行 canonical `cmd/request`。
 
 本手冊假設所有指令都在 container 內執行。若是在 host terminal，先進入 container：
 
@@ -24,8 +24,8 @@ Temi App ASR + Picture Streaming
   -> resident Hermes HTTP worker
   -> validated robot actions + memory actions
   -> temi/temi-01/cmd/request
-  -> adapter converts to temi/action/speak
-  -> Temi TTS response
+  -> Temi app directly executes TTS/action
+  -> temi/temi-01/cmd/result
 ```
 
 ## 事前條件
@@ -128,7 +128,6 @@ mosquitto_sub -h 192.168.50.236 -p 1883 -t '#' -v
 temi/event/asr {...}
 temi/temi-01/asr/final {...}
 temi/temi-01/cmd/request {...}
-temi/action/speak {...}
 temi/temi-01/cmd/result {...}
 ```
 
@@ -136,12 +135,12 @@ temi/temi-01/cmd/result {...}
 
 - 只看到 `temi/event/asr`：Temi ASR 有進來，但 adapter 沒轉 canonical event。
 - 看到 `asr/final` 但沒有 `cmd/request`：Bridge 或 Hermes 沒成功產生 action。
-- 看到 `cmd/request` 但沒有 `temi/action/speak`：adapter 沒把 canonical command 轉回 legacy topic。
-- 看到 `temi/action/speak` 但 Temi 沒說話：Temi app MQTT subscription 或 TTS 端有問題。
+- 看到 `cmd/request` 但沒有 `cmd/result` 或 Temi 沒說話：Temi app MQTT subscription、robot id、command schema 或 TTS 端有問題。
+- Canonical 主線中若同一次回應又出現 `temi/action/speak`，代表有舊 adapter/backend 重複轉發 command，應停止它。
 
 ## Terminal 4：啟動 Overview adapter
 
-用途：銜接目前 Temi App 的 legacy topics 與本專案 canonical Overview contract。它會開 `0.0.0.0:8080` 接收 Picture Streaming，從 frame buffer 取三張影像，寫入 `temi_shared/events/...`，再把 image paths 放進 ASR event。
+用途：銜接目前 Temi App 的 legacy ASR 與 camera stream 到本專案 canonical Overview ASR event。它會開 `0.0.0.0:8080` 接收 Picture Streaming，從 frame buffer 取三張影像，寫入 `temi_shared/events/...`，再把 image paths 放進 ASR event；它不訂閱或轉發 command。
 
 ```bash
 cd /TemiAgent/temi_backend
@@ -161,7 +160,7 @@ uv run python /TemiAgent/tools/temi_overview_adapter.py \
 - 若 `8080` 已被佔用，先確認是否有 `temi_backend` 還在跑。
 - `--shared-root` 是 container 實際寫檔位置。
 - `--bridge-root` 是 Bridge 驗證 image path 時看到的路徑；目前 container 內同樣使用 `/TemiAgent/temi_shared`。
-- 若 adapter 回覆「我目前看不到畫面」，代表 ASR 時間點附近沒有足夠的影像 frame。
+- 若 adapter log 顯示 no aligned vision frames，代表 ASR 時間點附近沒有足夠的影像 frame；adapter 不會用 TTS fallback，以免造成重複說話。
 
 ## Terminal 5：啟動 resident Hermes
 
@@ -214,7 +213,8 @@ uv run --extra mqtt hermes-temi-bridge --env-file /TemiAgent/hermes_temi_bridge/
 成功時：
 
 - Terminal 3 會看到 `temi/temi-01/cmd/request`。
-- Terminal 4 會把 `cmd/request` 轉成 `temi/action/speak`。
+- Temi app 會直接執行 `cmd/request` 中的 robot action。
+- Terminal 3 會看到 Temi app 發回 `temi/temi-01/cmd/result`。
 - Temi 會說出 Hermes 規劃的回應。
 - `logs/overview_bridge_resident/*.jsonl` 會記錄 ASR event、Hermes latency、command result。
 - `memory/event_log.jsonl`、`memory/abnormal_events/` 或 `memory/summaries/` 可能被更新，視 Hermes output actions 而定。
@@ -245,7 +245,7 @@ uv run --extra mqtt hermes-temi-bridge --env-file /TemiAgent/hermes_temi_bridge/
 
 - Terminal 3 看到 legacy ASR 與 canonical ASR。
 - Bridge 呼叫 Hermes 後發布 `cmd/request`。
-- Adapter 發出 `temi/action/speak`。
+- Temi app 直接執行 canonical command，並回 `cmd/result`。
 - Temi 用中文回應。
 
 ### B. 手動測 TTS 回路
@@ -300,8 +300,8 @@ cd /TemiAgent
 - Bridge 成功呼叫 resident Hermes。
 - Hermes output 通過 Bridge validation。
 - Bridge 發布 `temi/temi-01/cmd/request`。
-- Adapter 發布 `temi/action/speak`。
-- Temi 實際說出回應。
+- Temi app 直接執行 `temi/temi-01/cmd/request`。
+- Temi 實際說出回應並發布 `cmd/result`。
 - Bridge log 或 memory artifact 可追溯該次互動。
 
 ## 常見問題與處理
@@ -314,7 +314,7 @@ cd /TemiAgent
 | Bridge 沒反應 | Bridge 是否訂閱同一個 broker、topic 是否為 `temi/temi-01/asr/final`。 |
 | Hermes 很慢 | 使用 resident mode、先預熱一次、確認不是 CLI mode。 |
 | Bridge 拒絕 Hermes output | 檢查 JSON-only、`actions`、`cognitive_state.home_esi_level`、`risk_reason`。 |
-| Temi 沒說話 | 是否有 `temi/action/speak`、Temi app 是否仍 connected to MQTT。 |
+| Temi 沒說話 | 是否有 `temi/temi-01/cmd/request`、Temi app 是否仍 connected to MQTT、robot id 是否一致、是否有 `cmd/result`。 |
 | memory 沒更新 | Hermes 是否輸出 memory actions、Bridge 是否設定 `MEMORY_DIR=/TemiAgent/memory`。 |
 
 ## Demo 現場建議

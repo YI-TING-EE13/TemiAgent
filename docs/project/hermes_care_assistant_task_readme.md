@@ -1,6 +1,6 @@
 # Hermes 居家照護助理大腦任務 README
 
-最後更新日期：2026-05-31
+最後更新日期：2026-06-01
 
 ## 本文件維護規則
 
@@ -30,12 +30,13 @@
 已完成：
 
 - `temi_backend` legacy route 已完成實機路線驗證，適合作為快速展示備援。
-- Overview adapter 已能將 legacy Android topics 轉成 canonical ASR event，並輸出三張影像 path。
+- Overview adapter 已調整為只處理 legacy ASR 與 camera frames，輸出 canonical ASR event 與三張影像 path；不再轉發 command。
 - HermesTemiBridge 已支援 ASR event validation、image path validation、Hermes JSON parsing、action validation、command publish、event dedup 與 result logging。
 - Bridge mock/unit/local E2E 在 container 中通過：Bridge unittest 33 tests、backend pytest 14 tests、root mock E2E `status: ok`。
 - Resident Hermes HTTP server 已支援多 skill preload，並可選擇開啟 Hermes memory/profile。
 - 三個 Temi care 核心 skills 與 `temi-discord-care-assistant` 入口 skill 已存在於 `hermes-agent/skills/temi-*`；mirror 同步於 `hermes-skills/`。
 - Discord/gateway 對話已補上 Temi 身份與 skill 路由文件：`/TemiAgent/.hermes.md`、`hermes-agent/docker/SOUL.md`、`hermes-agent/skills/temi-discord-care-assistant/`。
+- Manual Discord/CLI TTS 若只得到 Hermes action JSON，可用 `tools/dispatch_hermes_action_output.py --publish` 驗證並包成 `temi/{robot_id}/cmd/request`。
 - 第一年度 Demo 階段任務已整理為 P0-P5，見 `docs/project/first_year_demo_phase_tasks.md`。
 - P1 structured memory demo state 已建立於 `memory/`，目前 persona 設定為男性 Demo 長者 `王先生`。
 - P2 Bridge memory actions 已完成最小實作：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
@@ -82,7 +83,7 @@ Discord gateway 不一定會走 `tools/hermes_resident_server.py` 的 `--skill-p
 - `hermes-agent/docker/SOUL.md`：新 Docker/gateway profile 的預設身份。
 - `hermes-agent/skills/temi-discord-care-assistant/`：可被 skills index 搜尋的 Discord/gesture/camera 路由 skill。
 
-使用者在 Discord 說「看我的手勢」、「看一下相機」、「我指的是什麼」時，Hermes 應先找圖片附件、`temi_shared/` path 或 Bridge frame paths；有影像才分析，沒有影像就請使用者觸發/傳送 Temi camera event 或附圖，不要虛構畫面。
+使用者在 Discord 說「看我的手勢」、「看一下相機」、「我指的是什麼」時，Hermes 應先找圖片附件、`temi_shared/` path 或 Bridge frame paths；有影像才分析，沒有影像就請使用者觸發/傳送 Temi camera event 或附圖，不要虛構畫面。若使用者要求 Temi 立刻 TTS，Hermes 不應只把 action JSON 貼回聊天；需透過 `tools/dispatch_hermes_action_output.py --publish` 或 ASR/Bridge 路徑送到 `cmd/request`。
 
 ## 記憶分層
 
@@ -234,3 +235,8 @@ python3 tools/hermes_resident_server.py \
 - 2026-05-30：補上目前實作狀態；確認整合底座已通過 container 內測試，照護記憶與 Demo actions 留待下一階段。
 - 2026-05-31：補上 Discord/gateway Temi 身份與 `temi-discord-care-assistant` skill，讓「看手勢 / 看相機」可導向 Temi camera/vision skills。
 - 2026-05-19：建立本任務 README，記錄三 skill 分工、混合記憶策略與 resident multi-skill preload 需求。
+
+
+### Temi embodied capability mapping
+
+在 Discord/gateway 中，Hermes 應把使用者說的「看、說、聽」理解為 Temi 身上的能力：看 = camera/vision frames，說 = Temi TTS，聽 = Temi ASR/microphone。若需要讓 Temi 實際說話，不能只回覆 action JSON，必須經 ASR/Bridge route 或 `tools/dispatch_hermes_action_output.py --publish` 發成 `temi/{robot_id}/cmd/request`。

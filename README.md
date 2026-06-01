@@ -1,6 +1,6 @@
 # TemiAgent
 
-最後更新日期：2026-05-31
+最後更新日期：2026-06-01
 
 TemiAgent 是一套以 Temi robot 為實體載具、Hermes Agent 為認知核心的 embodied AI 居家照護助理專案。目標是讓 Temi 能聽見使用者語音、取得同步影像、透過 Hermes 進行情境理解與照護風險判斷，再由安全橋接層把通過驗證的行動發回 robot。
 
@@ -11,7 +11,7 @@ TemiAgent 是一套以 Temi robot 為實體載具、Hermes Agent 為認知核心
 2026-05-31 盤點結果：
 
 - `temi_backend` legacy live route 已完成硬體實測，可展示 Temi ASR、WebSocket 影像、LM Studio/VLM 與 MQTT speak 閉環。
-- `tools/temi_overview_adapter.py` 已可把目前 Android app 的 legacy topics 轉成 canonical Overview contract。
+- `tools/temi_overview_adapter.py` 已調整為 ASR/camera-only adapter：只把 legacy ASR 與 WebSocket camera frames 轉成 canonical ASR event，不再轉發 command，避免 Temi 重複說話。
 - `hermes_temi_bridge` 的 mock/unit/E2E 路線可在 container 內通過，並支援 mock、CLI、resident HTTP 三種 Hermes invocation mode。
 - `tools/hermes_resident_server.py` 已支援多 `--skill-path` preload、`--hermes-home` 與 `--enable-memory`，適合後續真 Hermes Demo。
 - 第一年度照護助理 Demo 的三個 scenario 已完成 scope 與 skill 設計；P1 structured memory demo state 已建立，P2 Bridge memory actions 與 Home-ESI output validation 已完成最小實作，P5 Demo 素材已整理；P4 Navigation 本輪先跳過。
@@ -22,6 +22,7 @@ TemiAgent 是一套以 Temi robot 為實體載具、Hermes Agent 為認知核心
 |---|---|
 | 全系統架構與 MQTT / payload contract | [docs/architecture/project_overview.md](docs/architecture/project_overview.md) |
 | 照護助理任務 scope 與驗收 | [docs/project/hermes_care_assistant_task_readme.md](docs/project/hermes_care_assistant_task_readme.md) |
+| 持續影像串流與異常行為辨識交接 | [docs/project/continuous_vision_abnormal_behavior_handoff.md](docs/project/continuous_vision_abnormal_behavior_handoff.md) |
 | 第一年度 Demo 階段任務 | [docs/project/first_year_demo_phase_tasks.md](docs/project/first_year_demo_phase_tasks.md) |
 | Demo runbook / 端到端操作 / 腳本 / checklist | [docs/project/first_year_demo_runbook.md](docs/project/first_year_demo_runbook.md)、[docs/project/first_year_demo_e2e_operation_manual.md](docs/project/first_year_demo_e2e_operation_manual.md)、[docs/project/first_year_demo_scenario_script.md](docs/project/first_year_demo_scenario_script.md)、[docs/project/first_year_demo_acceptance_checklist.md](docs/project/first_year_demo_acceptance_checklist.md) |
 | 照護助理完整交接背景 | [docs/project/hermes_care_assistant_handoff.md](docs/project/hermes_care_assistant_handoff.md) |
@@ -33,7 +34,7 @@ TemiAgent 是一套以 Temi robot 為實體載具、Hermes Agent 為認知核心
 
 本專案把傳統「機器人 app + 後端模型」拆成清楚的安全邊界：
 
-- Temi 負責看、聽、說、移動等硬體互動。
+- Temi 負責看、聽、說、移動等硬體互動；目前 app 直接訂閱 canonical `temi/{robot_id}/cmd/request` 執行 robot actions。
 - MQTT 負責事件與命令傳遞。
 - Shared volume 負責傳遞 ASR 對齊影像路徑。
 - HermesTemiBridge 負責驗證事件、影像、Hermes JSON 與 action schema。
@@ -44,7 +45,7 @@ TemiAgent 是一套以 Temi robot 為實體載具、Hermes Agent 為認知核心
 - Hermes 不直接控制硬體。
 - Hermes 不直接 publish MQTT。
 - 圖片不塞進 MQTT，只傳 path。
-- 所有 robot actions 都必須是 JSON，並由 Bridge 驗證後才執行。
+- 所有 robot actions 都必須是 JSON，並由 Bridge 驗證後發布到 canonical command topic；adapter 不再翻譯或重發 command。
 - 第一版緊急通知只做 mock notification，不宣稱真實通報 119。
 
 ## 模組索引
@@ -83,7 +84,7 @@ User speaks to Temi
 | 路線 | 狀態 | 用途 |
 |---|---|---|
 | Legacy live route | 已驗證 | `temi_backend` + LM Studio/VLM，適合快速展示 Temi ASR、影像與 TTS 閉環。 |
-| Overview canonical route | 已可運作 | Legacy topics 經 `tools/temi_overview_adapter.py` 轉成 canonical ASR event，再由 Bridge 呼叫 Hermes。 |
+| Overview canonical route | 已可運作 | Legacy ASR/camera 經 `tools/temi_overview_adapter.py` 轉成 canonical ASR event；Bridge 呼叫 Hermes 後發布 `cmd/request`，由 Temi app 直接執行。 |
 | Resident Hermes HTTP mode | 已驗證 | 避免 Hermes CLI cold start，Demo 優先使用。 |
 
 ## 照護助理 Demo Scope
@@ -103,7 +104,13 @@ User speaks to Temi
 - `temi-home-esi`：Home-ESI Lite 風險分級。
 - `temi-discord-care-assistant`：Discord/gateway 對話入口提示，負責把「看手勢、看相機、我指的是什麼」等自然語句導向 Temi robot/care skills。
 
-Hermes 透過 Discord 對話時，身份與專案上下文由 `hermes-agent/docker/SOUL.md`、`/TemiAgent/.hermes.md` 與 gateway 的 `$HERMES_HOME/SOUL.md` 決定。若使用者請 Hermes 看手勢或相機畫面，Hermes 應先檢查 Discord 圖片附件、`temi_shared/` 圖片路徑或 Bridge frame paths；有影像時使用 vision 與 `temi-robot-control`，沒有影像時要求使用者觸發/傳送 Temi camera event 或附圖。
+Hermes 透過 Discord 對話時，身份與專案上下文由 `hermes-agent/docker/SOUL.md`、`/TemiAgent/.hermes.md` 與 gateway 的 `$HERMES_HOME/SOUL.md` 決定。若使用者請 Hermes 看手勢或相機畫面，Hermes 應先檢查 Discord 圖片附件、`temi_shared/` 圖片路徑或 Bridge frame paths；有影像時使用 vision 與 `temi-robot-control`，沒有影像時要求使用者觸發/傳送 Temi camera event 或附圖。若 Discord/CLI 只產生 Hermes action JSON 而沒有 ASR/Bridge invocation，可用 `tools/dispatch_hermes_action_output.py --publish` 將 JSON 驗證並包成 `temi/{robot_id}/cmd/request`。
+
+
+
+### Temi embodied capability mapping
+
+在 Discord/gateway 中，Hermes 應把使用者說的「看、說、聽」理解為 Temi 身上的能力：看 = camera/vision frames，說 = Temi TTS，聽 = Temi ASR/microphone。若需要讓 Temi 實際說話，不能只回覆 action JSON，必須經 ASR/Bridge route 或 `tools/dispatch_hermes_action_output.py --publish` 發成 `temi/{robot_id}/cmd/request`。
 
 ## 常用指令
 

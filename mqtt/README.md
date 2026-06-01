@@ -1,6 +1,6 @@
 # MQTT 模組 README
 
-最後更新日期：2026-05-19
+最後更新日期：2026-06-01
 
 ## 本文件維護規則
 
@@ -30,7 +30,7 @@ temi/action/navigate
 temi/action/wakeup
 ```
 
-`tools/temi_overview_adapter.py` 負責 legacy topics 與 canonical topics 的轉換。
+`tools/temi_overview_adapter.py` 只負責 legacy ASR/camera 到 canonical ASR event 的轉換。新版 Temi app 直接訂閱 `temi/{robot_id}/cmd/request`，因此 adapter 不再把 command 轉成 `temi/action/speak` 或合成 `cmd/result`。
 
 ## 對外關係
 
@@ -38,7 +38,7 @@ temi/action/wakeup
 |---|---|
 | `docker-compose.yml` | 掛載 `mqtt/mosquitto.conf` 啟動 broker。 |
 | `hermes_temi_bridge/` | Subscribe canonical ASR/result，publish canonical command。 |
-| `temi_backend/` | Legacy route 使用 MQTT 驗證 ASR/TTS/navigation。 |
+| `temi_backend/` | Legacy route 使用 MQTT 驗證 ASR/TTS/navigation；canonical Demo 主線僅重用其 vision buffer。 |
 | `tools/` | 提供 publish/subscribe smoke test scripts。 |
 
 ## 啟動方式
@@ -77,3 +77,4 @@ mosquitto_pub -h localhost -p 1883 \
 - 開發預設是 unauthenticated local broker；上線或跨網段展示時請另外評估帳密、ACL 與 TLS。
 - 圖片只用 path/URL 傳遞，影像檔本體放在 `temi_shared/`。
 - Topic 改動必須同步更新 `docs/schemas/`、Bridge tests、skills reference 與 Android/adapter 端。
+- Canonical route 中若同一次 TTS 同時出現 `temi/{robot_id}/cmd/request` 與 adapter 發出的 `temi/action/speak`，代表 command 被重複轉發，應回頭檢查 adapter。

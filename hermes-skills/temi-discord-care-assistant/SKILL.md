@@ -51,6 +51,20 @@ Equivalent English requests include "look at my gesture", "what am I pointing
 at", "what do you see on the camera", "check the robot camera", "I feel
 unwell", and "remind me to take medicine".
 
+
+## Embodied Verb Routing
+
+In Discord/gateway conversations, map the user's natural verbs to Temi capabilities:
+
+| User wording | Temi capability | What Hermes should do |
+|---|---|---|
+| 看 / look / see / watch | Temi camera and vision frames | Load/use `temi-robot-control`; inspect image attachment or Temi frame paths; ask for a camera event if no frame is available. |
+| 說 / 講 / speak / say / TTS | Temi TTS | Generate a safe `speak` action. If execution is requested from Discord/CLI, use `tools/dispatch_hermes_action_output.py --publish`; do not use Hermes/Discord built-in `text_to_speech` as a substitute for Temi speaking. |
+| 聽 / listen / hear / ASR | Temi microphone and ASR | Treat provided ASR text/event as what Temi heard; if no ASR event exists, ask the user to speak to Temi or provide ASR text. |
+| 轉向 / 移動 / 導航 / 停止 | Temi motion control | Use Bridge-validated `turn`, `navigate`, or `stop` actions and obey `temi-robot-control` safety rules. |
+
+The user may say "你看", "你說", or "你聽" because Hermes is embodied through Temi. Do not interpret these as only generic Discord chatbot abilities when the request is about the robot.
+
 ## Camera And Gesture Procedure
 
 1. Check whether the current turn includes an image attachment, image path, or
@@ -71,6 +85,20 @@ Common frame path roots in this project:
 /shared/temi/
 ```
 
+
+## Manual Gateway TTS Dispatch
+
+If a Discord/gateway user explicitly asks you to make Temi speak now, do not only paste the JSON action plan into chat. The JSON action plan is not the transport command that the Android app subscribes to.
+
+When terminal access is available and the user requested execution, send the action plan through the approved dispatcher:
+
+```bash
+cd /TemiAgent
+python3 tools/dispatch_hermes_action_output.py --publish --json '<Hermes action JSON>'
+```
+
+The dispatcher validates the Hermes action JSON with the Bridge validator, fills a `Normal` cognitive state for older manual TTS JSON when needed, builds a canonical `temi/{robot_id}/cmd/request`, publishes it to MQTT, and checks whether a non-local robot/app MQTT client is connected. If it returns `published_no_robot_connection_detected`, the PC-side publish succeeded but Temi is not online; tell the user to reconnect/start the Temi Android app instead of saying the robot spoke. For safety, do not publish raw robot topics by hand when this dispatcher can be used.
+
 ## Output Rules
 
 For ordinary Discord conversation, answer naturally in the user's language.
@@ -79,6 +107,7 @@ For Bridge-invoked Temi events, follow `temi-robot-control` and return exactly
 one JSON object that matches the active Bridge schema. Do not output Markdown or
 prose around the JSON object.
 
-Do not directly control hardware, publish MQTT messages, run Temi SDK calls, or
-claim that real emergency services or caregivers were contacted. Demo
+Do not directly control hardware, publish raw robot MQTT messages by hand, run
+Temi SDK calls, or claim that real emergency services or caregivers were contacted.
+For manual gateway TTS execution, use only the approved dispatcher path above. A dispatcher publish is not proof of audible playback when no robot/app MQTT client is connected. Demo
 notifications are mock-only unless a verified Bridge result says otherwise.

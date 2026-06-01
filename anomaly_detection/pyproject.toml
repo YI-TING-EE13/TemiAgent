@@ -1,0 +1,25 @@
+[project]
+name = "temi-anomaly-detection"
+version = "0.1.0"
+description = "Temi camera stream test viewer for anomaly detection development."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.13.0",
+    "av>=17.0.1",
+    "numpy>=2.4.4",
+    "opencv-python>=4.13.0.92",
+]
+
+[project.scripts]
+temi-live-viewer = "temi_live_viewer:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+only-include = ["temi_live_viewer.py"]

@@ -1,6 +1,6 @@
 # HermesTemiBridge 模組 README
 
-最後更新日期：2026-05-31
+最後更新日期：2026-06-01
 
 ## 本文件維護規則
 
@@ -11,19 +11,20 @@
 HermesTemiBridge 是 Temi 與 Hermes 之間的安全邊界。它不是高階推理核心，也不是 Temi Android App；它負責接收 Temi 事件、驗證資料、呼叫 Hermes、驗證 Hermes JSON output，最後只把安全的 command request 發回 MQTT。
 
 ```text
-Temi Android / Overview Adapter
+Temi Android + ASR/camera-only Overview Adapter
   -> MQTT temi/{robot_id}/asr/final
   -> HermesTemiBridge
   -> Hermes CLI / Resident HTTP / Mock Hermes
   -> validated temi/{robot_id}/cmd/request
-  -> Temi Android
+  -> Temi Android directly executes command
+  -> MQTT temi/{robot_id}/cmd/result
 ```
 
 ## 對外關係
 
 | 關聯模組 | 關係 |
 |---|---|
-| `mqtt/` | Bridge subscribe ASR/result topics，publish command request。 |
+| `mqtt/` | Bridge subscribe ASR/result topics，publish command request；command 不經 adapter 二次轉發。 |
 | `temi_shared/` | Bridge 讀取 ASR event 內的三張影像路徑，並做 Bridge path 到 Hermes path 的轉換。 |
 | `hermes-agent/` | CLI mode 與 resident HTTP mode 會呼叫本地 Hermes runtime。 |
 | `hermes-skills/` / `hermes-agent/skills/temi-*` | Hermes prompt 的 robot action、care memory、Home-ESI 規則來源。 |
@@ -57,10 +58,17 @@ Temi Android / Overview Adapter
 - Bridge-internal memory/demo actions：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
 - 只有 robot-facing actions 會 publish 到 `temi/{robot_id}/cmd/request`；memory/demo actions 只寫入 `MEMORY_DIR`。
 
+## Bridge 設計檢視
+
+目前 Bridge 的職責邊界是清楚且專業的：它是 canonical event/action 的安全閘門，負責 schema validation、path validation、Hermes invocation、action validation、idempotency、memory/demo side effects 與 command dispatch。ASR/camera compatibility 放在 adapter，硬體執行放在 Temi app，推理放在 Hermes；這個分工讓每個模組都容易單測與替換。
+
+本輪刻意移除 adapter command forwarding，避免同一個 `speak` action 同時經 `cmd/request` 與 legacy `temi/action/speak` 觸發。後續若要降低複雜度，應維持以下原則：Bridge 不做影像推理、不碰 Temi SDK、不直接執行任意工具；adapter 不做 command dispatcher；Hermes 不直接 publish MQTT。
+
 ## 不負責的事
 
 - 不自行做照護推理或意圖判斷。
 - 不直接操作 Temi SDK 或硬體。
+- 不把 command request 轉成 legacy `temi/action/speak`；新版 Temi app 直接執行 canonical command。
 - 不把圖片 binary 放入 MQTT。
 - 不信任 Hermes 任意輸出；所有 action 都必須通過 schema validation。
 - 不執行 shell command 或任意工具呼叫。

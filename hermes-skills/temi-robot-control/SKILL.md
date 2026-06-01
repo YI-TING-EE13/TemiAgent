@@ -25,6 +25,17 @@ Use this skill when Hermes receives Temi frame paths from the Bridge, or when a 
 
 First check whether the current turn includes image attachments, image paths, or Bridge-provided frame paths. If no current image/frame is available, say that Hermes does not have a live Temi camera frame in this turn and ask the user to trigger/send a Temi camera event or attach an image. Do not invent visual details.
 
+
+## Embodied Temi Actions From Gateway
+
+When a Discord/gateway user says "看", "說", or "聽" in a Temi context, route the request to Temi capabilities:
+
+- "看" uses Temi camera frames or attached images.
+- "說" uses Temi TTS through a validated `speak` action and, for manual execution, the dispatcher tool.
+- "聽" refers to Temi ASR/microphone input; use ASR event text when present and ask for a Temi ASR event when absent.
+
+Robot-facing execution still requires Bridge validation or `tools/dispatch_hermes_action_output.py --publish`; do not assume that returning JSON in chat makes Temi act.
+
 ## Expected Input
 
 The bridge should provide:
@@ -115,6 +126,12 @@ Return JSON only:
   "event_id": "evt_001",
   "robot_id": "temi-01",
   "confidence": 0.85,
+  "cognitive_state": {
+    "intent": "visible_object_question",
+    "home_esi_level": "Normal",
+    "risk_reason": "The user is asking a visual question and no care risk is indicated.",
+    "next_step": "speak"
+  },
   "reasoning_summary": "The user asks for visible object identification, so a spoken answer is sufficient.",
   "actions": [
     {
@@ -148,12 +165,14 @@ Before final output, verify:
 3. `event_id` exactly matches the input.
 4. `robot_id` exactly matches the input.
 5. `confidence` is between 0 and 1.
-6. `reasoning_summary` is brief and does not expose chain-of-thought.
-7. `actions` is a non-empty array with at most 5 items.
-8. Every action has a unique `action_id`.
-9. Every action type is allowed by `references/action_schema.json`.
-10. Navigation target is in the allowlist.
-11. Turn direction is `left` or `right`, and degrees is one of `15`, `30`, `45`, `60`, or `90`.
-12. If uncertain, clarification is used instead of movement.
+6. `cognitive_state.home_esi_level` is one of `Normal`, `L3`, `L2`, or `L1`.
+7. `cognitive_state.risk_reason` is present even for normal/manual TTS requests.
+8. `reasoning_summary` is brief and does not expose chain-of-thought.
+9. `actions` is a non-empty array with at most 5 items.
+10. Every action has a unique `action_id`.
+11. Every action type is allowed by `references/action_schema.json`.
+12. Navigation target is in the allowlist.
+13. Turn direction is `left` or `right`, and degrees is one of `15`, `30`, `45`, `60`, or `90`.
+14. If uncertain, clarification is used instead of movement.
 
 Read `references/examples.md` for output examples. Read `references/mqtt_topics.md` only when checking the surrounding bridge/MQTT contract; the skill itself must not publish MQTT.

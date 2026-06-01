@@ -1,6 +1,6 @@
 # Docs 模組 README
 
-最後更新日期：2026-05-31
+最後更新日期：2026-06-01
 
 ## 本文件維護規則
 
@@ -24,8 +24,10 @@ docs/
 | `architecture/project_overview.md` | Temi + Hermes 分層架構、MQTT topics、payload 與驗證計畫。 |
 | `project/hermes_care_assistant_handoff.md` | 居家照護助理大腦的完整交接文件。 |
 | `project/hermes_care_assistant_task_readme.md` | 照護助理任務的快速入口與更新紀錄。 |
+| `project/continuous_vision_abnormal_behavior_handoff.md` | 持續影像串流與異常行為辨識需求的架構修改、實作原則、測試與交接文件。 |
 | `project/first_year_demo_phase_tasks.md` | 第一年度 Demo 的 P0-P5 階段任務、驗收項目與 artifact 規劃。 |
 | `project/first_year_demo_runbook.md` | 第一年度 Demo 現場操作、服務啟動、展示順序與故障切換。 |
+| `project/first_year_demo_system_design_20260601.md` | 本次 Demo 最新系統設計、已實作功能、Bridge review 與 adapter ASR/camera-only 調整紀錄。 |
 | `project/first_year_demo_e2e_operation_manual.md` | Temi 語音/影像到 Hermes 對話再回到 Temi TTS 的端到端操作手冊；包含 container 內操作與 resident multi-skill preload。 |
 | `project/first_year_demo_scenario_script.md` | 三個照護 Demo scenario 的口頭腳本與 artifact 對應。 |
 | `project/first_year_demo_acceptance_checklist.md` | Demo 前驗收 checklist、測試狀態與不納入主線項目。 |
@@ -42,7 +44,7 @@ docs/
 
 - 根目錄長篇文件已移入 `docs/architecture/`、`docs/operations/`、`docs/project/` 與 `docs/archive/`。
 - 根 README 保留專案入口、模組索引與目前狀態快照。
-- 第一年度 Demo 階段任務已整理在 `project/first_year_demo_phase_tasks.md`，P5 展示素材已整理為 runbook、scenario script 與 acceptance checklist。
+- 第一年度 Demo 階段任務已整理在 `project/first_year_demo_phase_tasks.md`，P5 展示素材已整理為 runbook、scenario script、acceptance checklist 與 `project/first_year_demo_system_design_20260601.md`。
 - Demo 實驗資料與 runtime artifacts 不納入文件索引；只保留 `logs/README.md` 與 `temi_shared/README.md` 說明用途。
 - Android app 原始碼目前不在此 workspace；相關限制記錄在 `operations/temi_streaming_local_runbook.md`。
 

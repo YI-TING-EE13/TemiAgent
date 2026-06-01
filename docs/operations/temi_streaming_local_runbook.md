@@ -27,7 +27,7 @@ Verified on this machine:
 - Backend keyframes: saved into `/TemiAgent/temi_backend/debug_frames`
 - LMStudio/VLM route: ASR + frames produces a speak action
 - End-to-end test: user speech -> ASR MQTT -> keyframes -> VLM -> MQTT speak -> Temi speaks
-- Overview adapter path: legacy `temi/event/asr` -> `temi/temi-01/asr/final` with three image paths -> HermesTemiBridge -> `temi/temi-01/cmd/request` -> legacy `temi/action/speak` -> `temi/temi-01/cmd/result`
+- Overview canonical path after 2026-06-01 adapter cleanup: legacy `temi/event/asr` + WebSocket camera -> ASR/camera-only adapter -> `temi/temi-01/asr/final` with three image paths -> HermesTemiBridge -> `temi/temi-01/cmd/request` -> Temi app direct execution -> `temi/temi-01/cmd/result`. During this path, `temi/action/speak` should not appear for the same command.
 - Overview mock Bridge path after Temi restart: passed
 - Overview real Hermes path after Temi restart: passed functionally, but Hermes latency was about 97 seconds
 
@@ -165,7 +165,7 @@ temi/action/navigate
 temi/action/wakeup
 ```
 
-To test the `docs/architecture/project_overview.md` contract without changing the Android app, run the adapter:
+To test the `docs/architecture/project_overview.md` ASR/camera contract without changing the Android app, run the adapter. It does not forward command requests:
 
 ```bash
 cd /TemiAgent/temi_backend
@@ -267,8 +267,7 @@ LOG_DIR=/TemiAgent/logs/overview_bridge_resident \
 uv run --extra mqtt hermes-temi-bridge --env-file /TemiAgent/hermes_temi_bridge/.env.example
 ```
 
-Expected result: the Bridge still publishes `temi/temi-01/cmd/request`, but the
-Hermes process is already loaded. Compare `hermes_latency_ms` in
+Expected result: the Bridge publishes `temi/temi-01/cmd/request`, Temi app executes it directly, and the Hermes process is already loaded. Compare `hermes_latency_ms` in
 `/TemiAgent/logs/overview_bridge_resident/*.jsonl` with the earlier 96,940 ms CLI result.
 
 Validated resident results on this machine:

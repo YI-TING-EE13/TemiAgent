@@ -234,7 +234,7 @@ Hermes container 中看到：
 ## 2.4 HermesTemiBridge
 
 **目錄位置**：`hermes_temi_bridge/`
-**目前狀態**：已完成 hardware-free unit/mock E2E 驗證，並曾透過 Overview adapter 串接真 Hermes 與 Temi command request。照護 Demo 的 memory actions 與 Home-ESI 強制驗證仍屬下一階段。
+**目前狀態**：已完成 hardware-free unit/mock E2E 驗證、resident Hermes route、manual Discord action dispatcher，以及實機 canonical command path。2026-06-01 起 Overview adapter 僅負責 ASR/camera，不再轉發 command；Temi app 直接執行 `temi/{robot_id}/cmd/request`，避免重複 TTS。
 
 ### 角色
 
@@ -265,7 +265,7 @@ HermesTemiBridge 負責：
 11. 發送 command 到 `temi/{robot_id}/cmd/request`。
 12. 接收 `cmd/result`。
 13. 記錄完整 log。
-14. 錯誤時執行 fallback。
+14. 錯誤時記錄可追蹤 log；robot-facing fallback 仍需通過 action schema。
 
 ### Bridge 不應該做的事
 
@@ -274,6 +274,7 @@ Bridge 不應該：
 *   自己做高階推理。
 *   自己判斷複雜使用者意圖。
 *   直接控制 Temi SDK。
+*   重新把 canonical command 轉成 legacy `temi/action/speak`。
 *   把圖片 binary 塞進 MQTT。
 *   直接相信 Hermes 的 output。
 *   執行 Hermes 回傳的任意 shell command。

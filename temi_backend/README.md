@@ -1,6 +1,6 @@
 # Temi Backend 模組 README
 
-最後更新日期：2026-05-19
+最後更新日期：2026-06-01
 
 ## 本文件維護規則
 
@@ -13,14 +13,14 @@
 目前它有兩個用途：
 
 - Legacy live route：最快驗證 Temi ASR、camera、TTS、navigation 與 LM Studio/VLM 閉環。
-- Overview adapter support：`tools/temi_overview_adapter.py` 會重用本模組的 `VisionServer`，把 legacy Android topics 轉成 `docs/architecture/project_overview.md` 的 canonical contract。
+- Overview adapter support：`tools/temi_overview_adapter.py` 會重用本模組的 `VisionServer`，把 legacy ASR 與 camera frames 轉成 `docs/architecture/project_overview.md` 的 canonical ASR event；command 由 Temi app 直接訂閱 canonical topic，不再經 adapter 轉發。
 
 ## 對外關係
 
 | 關聯模組 | 關係 |
 |---|---|
 | `mqtt/` | 使用 legacy topics 接收 ASR、發送 speak/navigation。 |
-| `tools/temi_overview_adapter.py` | 匯入 `VisionServer`，產生 canonical ASR event 與三張影像。 |
+| `tools/temi_overview_adapter.py` | 匯入 `VisionServer`，產生 canonical ASR event 與三張影像；不處理 command。 |
 | `temi_shared/` | Overview adapter 會把 keyframes 寫入 shared events 目錄。 |
 | `hermes_temi_bridge/` | 新架構中由 Bridge 接手 Hermes 呼叫與 command validation。 |
 | LM Studio / local VLM | Legacy route 的 OpenAI-compatible model endpoint。 |
@@ -65,13 +65,15 @@ temi/action/navigate
 temi/action/wakeup
 ```
 
-新架構 canonical topics 則由 `tools/temi_overview_adapter.py` 轉換：
+新架構 canonical topics：
 
 ```text
 temi/{robot_id}/asr/final
 temi/{robot_id}/cmd/request
 temi/{robot_id}/cmd/result
 ```
+
+其中 adapter 只發布 `asr/final`；Bridge 發布 `cmd/request`；Temi app 執行後發布 `cmd/result`。
 
 ## 安裝與測試
 
@@ -125,4 +127,5 @@ uv run python scripts/manual_video_receiver.py --host 0.0.0.0 --port 8080
 
 - `temi_backend` 是可展示的 legacy route，不要在還沒替代驗證前移除。
 - Overview canonical contract 應優先放在 `hermes_temi_bridge/` 與 `docs/schemas/`，避免 legacy topic 污染新架構。
+- 不要把 canonical command 轉發責任放回 `temi_backend` 或 adapter；這會讓新版 Temi app 與 legacy speak topic 同時觸發 TTS。
 - `debug_frames/` 是 runtime artifact，不應被當成測試 fixture 或權威資料。

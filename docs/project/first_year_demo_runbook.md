@@ -1,6 +1,6 @@
 # 第一年度 Demo Runbook
 
-最後更新日期：2026-05-31
+最後更新日期：2026-06-01
 
 ## 目的
 
@@ -13,7 +13,7 @@
 - Temi App 整合 ASR、TTS、Picture Streaming。
 - PC 端透過 MQTT 與 shared image paths 收到事件。
 - Hermes / LM Studio 在本地端進行推理。
-- HermesTemiBridge 驗證 JSON output 與 robot actions。
+- HermesTemiBridge 驗證 JSON output 與 robot actions，並把通過驗證的 command 發到 canonical `temi/{robot_id}/cmd/request`。
 - Structured memory 記錄提醒、不適、疑似跌倒與摘要。
 
 ## 展示架構
@@ -95,7 +95,7 @@ LOG_DIR=/TemiAgent/logs/overview_bridge_resident \
 uv run --extra mqtt hermes-temi-bridge --env-file /TemiAgent/hermes_temi_bridge/.env.example
 ```
 
-若要接目前 Temi App legacy topics，啟動 adapter：
+若要接目前 Temi App 的 legacy ASR 與 camera stream，啟動 ASR/camera-only adapter。command 不經 adapter 轉發，Temi app 會直接訂閱 canonical `cmd/request`：
 
 ```bash
 cd /TemiAgent/temi_backend
@@ -131,5 +131,5 @@ uv run python /TemiAgent/tools/temi_overview_adapter.py \
 | Real Hermes 延遲過高 | 切回 `tools/demo_case_runner.py` artifacts 或 mock Bridge。 |
 | Discord 要求看手勢但 Hermes 說不能看 | 確認 gateway 工作目錄讀到 `/TemiAgent/.hermes.md`，並執行 `/reload-skills` 或重啟 gateway 讓 `temi-discord-care-assistant` 進索引。 |
 | Temi App picture streaming 不穩 | 用 legacy backend route 展示 ASR/TTS，並用 deterministic artifacts 補照護記憶流程。 |
-| MQTT command 沒到 Temi | 用 `mosquitto_sub -t '#' -v` 或 `tools/subscribe_cmd_request.sh` 觀察 topic。 |
+| MQTT command 沒到 Temi | 用 `mosquitto_sub -t '#' -v` 或 `tools/subscribe_cmd_request.sh` 觀察 topic；canonical 主線不應再由 adapter 發 `temi/action/speak`。 |
 | Bridge 拒絕 output | 檢查 `cognitive_state.home_esi_level`、`risk_reason`、action schema。 |

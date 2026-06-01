@@ -9,7 +9,15 @@
     "rem_morning_medication",
     "rem_hydration"
   ],
-  "recent_event_ids": [],
+  "recent_event_ids": [
+    "evt_temi_1780235475889",
+    "evt_temi_1780235628516",
+    "evt_temi_1780235787688",
+    "evt_temi_1780236488874",
+    "evt_second_e2e_1780237376",
+    "evt_temi_1780237529928",
+    "evt_temi_1780238770043"
+  ],
   "demo_flags": {
     "home_esi_level": "Normal",
     "caregiver_mock_notified": false,

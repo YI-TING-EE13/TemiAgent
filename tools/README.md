@@ -1,6 +1,6 @@
 # Tools 模組 README
 
-最後更新日期：2026-05-31
+最後更新日期：2026-06-01
 
 ## 本文件維護規則
 
@@ -15,13 +15,14 @@
 | Script | 用途 |
 |---|---|
 | `hermes_resident_server.py` | 啟動低延遲 resident Hermes HTTP worker，供 Bridge `HERMES_INVOKE_MODE=http` 使用。 |
-| `temi_overview_adapter.py` | 將已安裝 Android app 的 legacy topics 轉成 canonical Overview contract，並重用 `temi_backend` video buffer。 |
+| `temi_overview_adapter.py` | ASR/camera-only adapter：接 legacy `temi/event/asr` 與 WebSocket camera frames，產生 canonical `temi/{robot_id}/asr/final` 與三張 keyframe path；不轉發 command。 |
 | `e2e_test_runner.py` | 不需硬體的本地 mock E2E smoke test。 |
 | `demo_case_runner.py` | 跑第一年度 Demo 三個固定照護案例並輸出 artifacts。 |
 | `create_mock_event_images.py` | 產生 ASR event 測試用三張 mock images。 |
 | `publish_mock_asr_event.sh` | 發送 canonical mock ASR event。 |
 | `subscribe_cmd_request.sh` | 訂閱 canonical command request，方便觀察 Bridge output。 |
 | `publish_mock_cmd_result.sh` | 發送 mock command result。 |
+| `dispatch_hermes_action_output.py` | 將 Hermes skill action JSON 驗證、包成 `temi/{robot_id}/cmd/request`，並可 publish 到 MQTT，供 Discord/manual TTS 執行使用。 |
 | `start_temi_pc_services.sh` | 啟動 PC 端 Temi legacy services。 |
 | `start_temi_pc_services_background.sh` | 背景啟動 PC 端 services。 |
 | `check_temi_connection.sh` | 檢查 Temi ADB、MQTT、WebSocket 等連線狀態。 |
@@ -44,6 +45,17 @@ python3 tools/demo_case_runner.py --keep-artifacts
 
 輸出包含三個 case 的 input event、Hermes raw output、parsed output、command request/result、memory snapshot 與 run summary。若指定 `--output-dir logs/demo_cases/<name>`，artifact 會保留在該目錄。
 
+### Manual Hermes action dispatch
+
+當 Hermes 在 Discord/CLI 只產生 action JSON，而沒有經過 ASR -> Bridge invocation 時，可用 dispatcher 把 JSON 送進 Temi command path：
+
+```bash
+cd /TemiAgent
+python3 tools/dispatch_hermes_action_output.py --publish --json '{"schema_version":"1.0","event_id":"manual_greet_20260601","robot_id":"temi-01","confidence":1.0,"reasoning_summary":"Manual TTS greeting.","actions":[{"action_id":"act_001","type":"speak","text":"嗨 King！","language":"zh-TW"}]}'
+```
+
+這個工具會重用 Bridge validator 與 command builder；舊的 manual TTS JSON 若缺 `cognitive_state`，會補 `Normal` 預設值。
+
 ### Resident Hermes
 
 ```bash
@@ -61,7 +73,7 @@ Health check：
 curl -s http://127.0.0.1:8765/health
 ```
 
-### Legacy app to canonical contract
+### Legacy ASR/camera to canonical contract
 
 ```bash
 cd /TemiAgent/temi_backend
@@ -75,6 +87,7 @@ uv run python /TemiAgent/tools/temi_overview_adapter.py \
 
 ## 維護注意
 
+- `temi_overview_adapter.py` 只負責 ASR 與 camera；不要在 adapter 重新加入 `cmd/request` -> `temi/action/speak` 轉發，否則新版 Temi app 會重複說話。
 - 腳本應保持可從 `/TemiAgent` 絕對路徑執行，方便 runbook 複製。
 - 修改 topic、schema 或 path mapping 時，必須同步更新 `hermes_temi_bridge/README.md` 與 `docs/operations/` runbooks。
 - Demo 用 IP、機器人狀態與臨時結果應放 runbook，不要硬編到 reusable scripts。
