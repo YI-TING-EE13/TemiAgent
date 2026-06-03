@@ -27,7 +27,7 @@ import paho.mqtt.client as mqtt
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "temi_backend" / "src"))
 
-from temi_backend.vision_server import VisionServer  # noqa: E402
+from temi_backend.vision_server import JpegFrameBroadcaster, VisionServer  # noqa: E402
 
 
 LOGGER = logging.getLogger("temi_overview_adapter")
@@ -60,12 +60,20 @@ class OverviewAdapter:
         shared_root: Path,
         bridge_root: str,
         conversation_id: str,
+        frame_broadcast_host: str = "0.0.0.0",
+        frame_broadcast_port: int = 8081,
+        enable_frame_broadcast: bool = True,
     ) -> None:
         """Configure MQTT translation and the local video receiver."""
         self.robot_id = robot_id
         self.broker = broker
         self.port = port
-        self.vision = VisionServer(host=vision_host, port=vision_port)
+        frame_broadcaster = (
+            JpegFrameBroadcaster(host=frame_broadcast_host, port=frame_broadcast_port)
+            if enable_frame_broadcast
+            else None
+        )
+        self.vision = VisionServer(host=vision_host, port=vision_port, frame_broadcaster=frame_broadcaster)
         self.shared_root = shared_root
         self.bridge_root = bridge_root.rstrip("/")
         self.conversation_id = conversation_id
@@ -188,6 +196,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=1883)
     parser.add_argument("--vision-host", default="0.0.0.0")
     parser.add_argument("--vision-port", type=int, default=8080)
+    parser.add_argument("--frame-broadcast-host", default="0.0.0.0")
+    parser.add_argument("--frame-broadcast-port", type=int, default=8081)
+    parser.add_argument("--disable-frame-broadcast", action="store_true")
     parser.add_argument("--shared-root", default="/TemiAgent/temi_shared")
     parser.add_argument("--bridge-root", default="/TemiAgent/temi_shared")
     parser.add_argument("--conversation-id", default="conv_temi_live")
@@ -208,6 +219,9 @@ def main() -> int:
         port=args.port,
         vision_host=args.vision_host,
         vision_port=args.vision_port,
+        frame_broadcast_host=args.frame_broadcast_host,
+        frame_broadcast_port=args.frame_broadcast_port,
+        enable_frame_broadcast=not args.disable_frame_broadcast,
         shared_root=Path(args.shared_root),
         bridge_root=args.bridge_root,
         conversation_id=args.conversation_id,

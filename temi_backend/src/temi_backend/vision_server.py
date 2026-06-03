@@ -1,9 +1,10 @@
-"""WebSocket H.264 receiver and rolling vision buffer for TemiAgent."""
+"""WebSocket H.264 receiver, rolling vision buffer, and decoded-frame broadcaster."""
 
 from __future__ import annotations
 
 import asyncio
 import collections
+import json
 import logging
 import struct
 import threading
@@ -61,6 +62,93 @@ class VisionBuffer:
             return {"actual_t": timestamp_ms, "frame": frame.copy()}
 
 
+class JpegFrameBroadcaster:
+    """Broadcast decoded frames to downstream WebSocket subscribers as JPEG messages."""
+
+    def __init__(
+        self,
+        host: str = "0.0.0.0",
+        port: int = 8081,
+        jpeg_quality: int = 80,
+        queue_size: int = 2,
+    ) -> None:
+        """Configure a non-blocking decoded-frame broadcast endpoint.
+
+        Each outbound binary WebSocket message is:
+        - 8 bytes: signed big-endian frame timestamp in milliseconds
+        - 8 bytes: unsigned big-endian sequence number
+        - remaining bytes: JPEG image
+        """
+        self.host = host
+        self.port = port
+        self.jpeg_quality = max(1, min(100, jpeg_quality))
+        self.queue_size = max(1, queue_size)
+        self.clients: set[asyncio.Queue[bytes]] = set()
+        self.sequence = 0
+
+    def encode_frame(self, timestamp_ms: int, frame: np.ndarray) -> bytes:
+        """Encode one frame into the broadcast binary payload format."""
+        self.sequence += 1
+        ok, buffer = cv2.imencode(
+            ".jpg",
+            frame,
+            [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality],
+        )
+        if not ok:
+            raise ValueError("OpenCV failed to encode frame as JPEG.")
+        header = struct.pack(">qQ", int(timestamp_ms), self.sequence)
+        return header + buffer.tobytes()
+
+    def publish(self, timestamp_ms: int, frame: np.ndarray) -> None:
+        """Queue one decoded frame for all subscribers without blocking ingest."""
+        if not self.clients:
+            return
+        try:
+            payload = self.encode_frame(timestamp_ms, frame)
+        except ValueError:
+            LOGGER.exception("failed to encode decoded frame for broadcast")
+            return
+
+        for queue in list(self.clients):
+            if queue.full():
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            try:
+                queue.put_nowait(payload)
+            except asyncio.QueueFull:
+                LOGGER.debug("dropping frame for a slow broadcast subscriber")
+
+    async def stream_handler(self, websocket: Any) -> None:
+        """Send decoded JPEG frames to one downstream subscriber."""
+        queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=self.queue_size)
+        self.clients.add(queue)
+        LOGGER.info("Frame broadcast subscriber connected.")
+        try:
+            await websocket.send(
+                json.dumps(
+                    {
+                        "type": "temi.frame_stream.v1",
+                        "encoding": "jpeg",
+                        "binary_header": "int64_be timestamp_ms + uint64_be sequence",
+                    }
+                )
+            )
+            while True:
+                await websocket.send(await queue.get())
+        except websockets.exceptions.ConnectionClosed:
+            LOGGER.info("Frame broadcast subscriber disconnected.")
+        finally:
+            self.clients.discard(queue)
+
+    async def start(self) -> Any:
+        """Start the decoded-frame broadcast WebSocket server."""
+        server = await websockets.serve(self.stream_handler, self.host, self.port)
+        LOGGER.info("Frame broadcast server listening on ws://%s:%s", self.host, self.port)
+        return server
+
+
 class VisionServer:
     """Receive Temi WebSocket video frames and decode them into a VisionBuffer."""
 
@@ -70,6 +158,7 @@ class VisionServer:
         port: int = 8080,
         buffer: VisionBuffer | None = None,
         rotate_180: bool = True,
+        frame_broadcaster: JpegFrameBroadcaster | None = None,
     ) -> None:
         """Configure the WebSocket listener.
 
@@ -78,11 +167,14 @@ class VisionServer:
             port: Bind port for incoming robot streams.
             buffer: Optional buffer instance, mainly used by tests.
             rotate_180: Rotate decoded frames to compensate for Temi camera orientation.
+            frame_broadcaster: Optional decoded-frame output endpoint for downstream
+                consumers such as abnormal behavior detectors.
         """
         self.host = host
         self.port = port
         self.buffer = buffer or VisionBuffer()
         self.rotate_180 = rotate_180
+        self.frame_broadcaster = frame_broadcaster
 
     def decode_message(self, codec: Any, message: bytes) -> int:
         """Decode one timestamp-prefixed H.264 WebSocket message.
@@ -108,6 +200,8 @@ class VisionServer:
                 if self.rotate_180:
                     image = cv2.rotate(image, cv2.ROTATE_180)
                 self.buffer.push(timestamp_ms, image)
+                if self.frame_broadcaster:
+                    self.frame_broadcaster.publish(timestamp_ms, image)
                 decoded_count += 1
         return decoded_count
 
@@ -131,10 +225,18 @@ class VisionServer:
             LOGGER.info("Vision stream disconnected.")
 
     async def start(self) -> None:
-        """Start the WebSocket server and serve forever."""
-        async with websockets.serve(self.stream_handler, self.host, self.port):
-            LOGGER.info("Vision server listening on ws://%s:%s", self.host, self.port)
+        """Start the ingest WebSocket server and optional broadcast server forever."""
+        vision_server = await websockets.serve(self.stream_handler, self.host, self.port)
+        broadcast_server = await self.frame_broadcaster.start() if self.frame_broadcaster else None
+        try:
+            LOGGER.info("Vision ingest server listening on ws://%s:%s", self.host, self.port)
             await asyncio.Future()
+        finally:
+            vision_server.close()
+            await vision_server.wait_closed()
+            if broadcast_server:
+                broadcast_server.close()
+                await broadcast_server.wait_closed()
 
     def run_in_background(self) -> threading.Thread:
         """Run the WebSocket server in a daemon thread and return the thread."""

@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "event_id": "evt_1780324192224_251f56fe",
+  "timestamp": "2026-06-01T14:30:41+00:00",
+  "home_esi_level": "L1",
+  "risk_reason": "使用者明確要求叫救護車，屬於高風險緊急情況。",
+  "evidence": {
+    "asr_text": "幫我叫救護車",
+    "image_paths": [
+      "/TemiAgent/temi_shared/events/temi-01/evt_1780324192224_251f56fe/frame_t_minus_1000.jpg",
+      "/TemiAgent/temi_shared/events/temi-01/evt_1780324192224_251f56fe/frame_t_minus_500.jpg",
+      "/TemiAgent/temi_shared/events/temi-01/evt_1780324192224_251f56fe/frame_t.jpg"
+    ]
+  },
+  "actions_taken": [
+    "speak",
+    "notify_caregiver_mock",
+    "log_event"
+  ],
+  "notification": {
+    "type": "demo_mock",
+    "target": "caregiver_demo_primary",
+    "message": "使用者明確要求叫救護車，屬於高風險緊急情況。",
+    "status": "mock_sent"
+  }
+}

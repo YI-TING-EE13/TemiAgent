@@ -9,7 +9,8 @@ This is the local version of `docs/operations/temi_streaming_manual.md` for this
 - PC IP: `192.168.50.236`
 - Temi IP: `192.168.50.205`
 - MQTT broker: `tcp://192.168.50.236:1883`
-- Video receiver: `ws://192.168.50.236:8080`
+- Video ingest receiver: `ws://192.168.50.236:8080`
+- Decoded frame broadcast: `ws://192.168.50.236:8081`
 - Android package: `com.robotemi.agent`
 
 ## Current Verification Status
@@ -22,7 +23,8 @@ Verified on this machine:
 - MQTT from Temi to PC: connected to `tcp://192.168.50.236:1883`
 - MQTT command PC to Temi: `temi/action/speak` received and executed
 - Wakeup command: `temi/action/wakeup` triggers `ASR_LISTENING`
-- WebSocket video: Temi connects to `192.168.50.236:8080`
+- WebSocket video ingest: Temi connects to `192.168.50.236:8080`
+- Decoded frame broadcast: downstream consumers can subscribe to `192.168.50.236:8081`
 - Video packets: Temi logs `Video packets sent`
 - Backend keyframes: saved into `/TemiAgent/temi_backend/debug_frames`
 - LMStudio/VLM route: ASR + frames produces a speak action
@@ -152,6 +154,33 @@ Expected video-side log:
 
 ```text
 Vision stream connected.
+```
+
+
+## Decoded Frame Broadcast
+
+Important: `8080` is the Temi upload/input WebSocket. It receives timestamp-prefixed H.264 packets from the Android app and does not automatically fan out decoded frames to other processes. Downstream abnormal-behavior models should subscribe to the decoded-frame broadcast endpoint instead:
+
+```text
+ws://192.168.50.236:8081
+```
+
+Binary message format after the initial JSON hello:
+
+```text
+bytes 0..7    int64 big-endian timestamp_ms
+bytes 8..15   uint64 big-endian sequence
+bytes 16..    JPEG image bytes
+```
+
+Manual receiver:
+
+```bash
+cd /TemiAgent/temi_backend
+uv run python scripts/manual_frame_broadcast_receiver.py \
+  --url ws://192.168.50.236:8081 \
+  --output-dir debug_frames/broadcast \
+  --max-frames 5
 ```
 
 ## Overview Integration Notes

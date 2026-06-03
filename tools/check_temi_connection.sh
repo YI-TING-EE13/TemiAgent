@@ -10,13 +10,14 @@ ip route
 
 echo
 echo "== Local service ports =="
-ss -ltnp | grep -E ':1883|:8080|:5037' || true
+ss -ltnp | grep -E ':1883|:8080|:8081|:5037' || true
 
 echo
 echo "== Temi TCP probes =="
 nc -vz -w 3 "$TEMI_IP" 5555
 nc -vz -w 3 "$PC_IP" 1883
 nc -vz -w 3 "$PC_IP" 8080
+nc -vz -w 3 "$PC_IP" 8081
 
 echo
 echo "== ADB status =="

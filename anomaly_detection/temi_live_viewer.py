@@ -96,28 +96,226 @@ def build_app(args: argparse.Namespace) -> web.Application:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Temi Live Viewer</title>
+  <title>Temi 8081 Frame Viewer</title>
   <style>
-    body {{ margin: 0; background: #101214; color: #eef1f4; font-family: system-ui, sans-serif; }}
+    :root {{
+      color-scheme: dark;
+      --bg: #0e1116;
+      --panel: #171c23;
+      --panel-2: #202732;
+      --text: #edf2f7;
+      --muted: #9aa7b5;
+      --accent: #7dd3fc;
+      --good: #7ee787;
+      --warn: #f2cc60;
+      --bad: #ff7b72;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
     main {{ min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }}
-    header {{ padding: 12px 16px; background: #1b2026; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }}
+    header {{
+      padding: 12px 16px;
+      background: var(--panel);
+      display: grid;
+      gap: 10px;
+      border-bottom: 1px solid #2a3340;
+    }}
+    .topbar {{
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+    }}
     h1 {{ margin: 0; font-size: 16px; font-weight: 650; }}
-    code {{ color: #a5d6ff; }}
-    .stage {{ display: grid; place-items: center; padding: 16px; }}
-    img {{ width: min(100%, 1280px); max-height: calc(100vh - 88px); object-fit: contain; background: #050607; }}
+    label {{ color: var(--muted); font-size: 13px; }}
+    input {{
+      min-width: min(420px, 100%);
+      padding: 7px 9px;
+      border: 1px solid #394454;
+      border-radius: 6px;
+      background: #0b0f14;
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+    }}
+    button {{
+      padding: 7px 10px;
+      border: 1px solid #425063;
+      border-radius: 6px;
+      background: var(--panel-2);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }}
+    button:hover {{ border-color: var(--accent); }}
+    code {{ color: var(--accent); }}
+    .meta {{
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .meta strong {{ color: var(--text); font-weight: 600; }}
+    .stage {{ display: grid; place-items: center; padding: 16px; min-height: 0; }}
+    .frame-wrap {{
+      width: min(100%, 1280px);
+      height: calc(100vh - 128px);
+      min-height: 320px;
+      display: grid;
+      place-items: center;
+      background: #050607;
+      border: 1px solid #242c36;
+    }}
+    img {{
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+    }}
+    .empty {{ color: var(--muted); padding: 20px; text-align: center; }}
+    .ok {{ color: var(--good); }}
+    .warn {{ color: var(--warn); }}
+    .bad {{ color: var(--bad); }}
   </style>
 </head>
 <body>
   <main>
     <header>
-      <h1>Temi Live Viewer</h1>
-      <span>Video input: <code>ws://HOST:{args.port}/</code> or <code>/ws</code></span>
-      <span>Status: <code>/health</code></span>
+      <div class="topbar">
+        <h1>Temi 8081 Frame Viewer</h1>
+        <label for="broadcast-url">Broadcast WebSocket</label>
+        <input id="broadcast-url" autocomplete="off">
+        <button id="connect">Connect</button>
+        <button id="fallback">Use /stream.mjpg</button>
+      </div>
+      <div class="meta">
+        <span>Status: <strong id="status" class="warn">idle</strong></span>
+        <span>Frames: <strong id="frames">0</strong></span>
+        <span>Timestamp: <strong id="timestamp">-</strong></span>
+        <span>Sequence: <strong id="sequence">-</strong></span>
+        <span>Server health: <code>/health</code></span>
+      </div>
     </header>
     <section class="stage">
-      <img src="/stream.mjpg" alt="Waiting for Temi camera stream">
+      <div class="frame-wrap">
+        <img id="frame" alt="Temi decoded frame">
+        <div id="empty" class="empty">Waiting for decoded JPEG frames from ws://HOST:8081</div>
+      </div>
     </section>
   </main>
+  <script>
+    const urlInput = document.getElementById("broadcast-url");
+    const connectButton = document.getElementById("connect");
+    const fallbackButton = document.getElementById("fallback");
+    const statusEl = document.getElementById("status");
+    const framesEl = document.getElementById("frames");
+    const timestampEl = document.getElementById("timestamp");
+    const sequenceEl = document.getElementById("sequence");
+    const img = document.getElementById("frame");
+    const empty = document.getElementById("empty");
+
+    let socket = null;
+    let lastObjectUrl = null;
+    let frameCount = 0;
+
+    function defaultBroadcastUrl() {{
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const host = window.location.hostname || "127.0.0.1";
+      return `${{protocol}}//${{host}}:8081`;
+    }}
+
+    function setStatus(text, className) {{
+      statusEl.textContent = text;
+      statusEl.className = className;
+    }}
+
+    function closeSocket() {{
+      if (socket) {{
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onerror = null;
+        socket.onclose = null;
+        socket.close();
+        socket = null;
+      }}
+    }}
+
+    function showFrameFromBytes(bytes) {{
+      if (bytes.byteLength <= 16) {{
+        return;
+      }}
+      const view = new DataView(bytes);
+      const timestamp = view.getBigInt64(0, false);
+      const sequence = view.getBigUint64(8, false);
+      const jpeg = bytes.slice(16);
+      const blob = new Blob([jpeg], {{ type: "image/jpeg" }});
+      const objectUrl = URL.createObjectURL(blob);
+
+      img.onload = () => {{
+        if (lastObjectUrl) {{
+          URL.revokeObjectURL(lastObjectUrl);
+        }}
+        lastObjectUrl = objectUrl;
+      }};
+      img.src = objectUrl;
+      img.style.display = "block";
+      empty.style.display = "none";
+
+      frameCount += 1;
+      framesEl.textContent = String(frameCount);
+      timestampEl.textContent = String(timestamp);
+      sequenceEl.textContent = String(sequence);
+    }}
+
+    function connect() {{
+      closeSocket();
+      frameCount = 0;
+      framesEl.textContent = "0";
+      timestampEl.textContent = "-";
+      sequenceEl.textContent = "-";
+      setStatus("connecting", "warn");
+
+      const url = urlInput.value.trim() || defaultBroadcastUrl();
+      urlInput.value = url;
+      socket = new WebSocket(url);
+      socket.binaryType = "arraybuffer";
+
+      socket.onopen = () => setStatus("connected", "ok");
+      socket.onerror = () => setStatus("error", "bad");
+      socket.onclose = () => setStatus("closed", "warn");
+      socket.onmessage = (event) => {{
+        if (typeof event.data === "string") {{
+          setStatus("connected", "ok");
+          return;
+        }}
+        showFrameFromBytes(event.data);
+      }};
+    }}
+
+    function useFallbackStream() {{
+      closeSocket();
+      if (lastObjectUrl) {{
+        URL.revokeObjectURL(lastObjectUrl);
+        lastObjectUrl = null;
+      }}
+      img.src = "/stream.mjpg";
+      img.style.display = "block";
+      empty.style.display = "none";
+      setStatus("using /stream.mjpg", "warn");
+    }}
+
+    urlInput.value = defaultBroadcastUrl();
+    connectButton.addEventListener("click", connect);
+    fallbackButton.addEventListener("click", useFallbackStream);
+    connect();
+  </script>
 </body>
 </html>"""
         return web.Response(text=html, content_type="text/html")

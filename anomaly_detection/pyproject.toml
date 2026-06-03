@@ -11,8 +11,14 @@ dependencies = [
     "opencv-python>=4.13.0.92",
 ]
 
+[project.optional-dependencies]
+pose = [
+    "ultralytics>=8.3.0",
+]
+
 [project.scripts]
 temi-live-viewer = "temi_live_viewer:main"
+temi-action-viewer = "temi_action_viewer:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -22,4 +28,4 @@ build-backend = "hatchling.build"
 package = true
 
 [tool.hatch.build.targets.wheel]
-only-include = ["temi_live_viewer.py"]
+only-include = ["temi_live_viewer.py", "temi_action_viewer.py"]

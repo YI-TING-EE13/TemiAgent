@@ -83,19 +83,85 @@ Temi Android camera
 4. 異常模型只輸出結構化 perception event，不直接控制 robot。
 5. HermesTemiBridge 擴充為可接收、驗證與處理 `perception.abnormal` 事件。
 
+
+## 3.1 2026-06-01 問題回報與已採取修正
+
+共同開發者回報：`8080` 是原程式接收 Temi 上傳影像的 WebSocket input，不是對外廣播影像的 HTTP/stream endpoint；資料進到該 process 後不會自動給其他程式旁聽或讀取。這個判斷正確。
+
+已採取修正：
+
+- 保留 `ws://<pc-ip>:8080` 作為 Temi Android 上傳 timestamp-prefixed H.264 packets 的 ingest endpoint。
+- 新增 decoded frame broadcast endpoint：`ws://<pc-ip>:8081`。
+- `VisionServer` decode 出 OpenCV frame 後，仍寫入 `VisionBuffer`，並同步把 JPEG payload 推給 `JpegFrameBroadcaster`。
+- 下游異常行為模型或其他程式應連 `8081`，不要連 `8080` 嘗試旁聽。
+- ASR 三張 snapshot 路線維持不變，避免破壞既有 Hermes 語音互動。
+
+`8081` binary message 格式：
+
+```text
+bytes 0..7    int64 big-endian timestamp_ms
+bytes 8..15   uint64 big-endian sequence
+bytes 16..    JPEG image bytes
+```
+
+手動驗證方式：
+
+```bash
+cd /TemiAgent/temi_backend
+uv run python scripts/manual_frame_broadcast_receiver.py \
+  --url ws://127.0.0.1:8081 \
+  --output-dir debug_frames/broadcast \
+  --max-frames 5
+```
+
+
+## 3.2 2026-06-01 8010 action viewer restart incident
+
+共同開發者回報：重啟 8010 action viewer 時，`pkill` 的 pattern 掃到 shell 自己，導致 8010 服務暫時停止。這類問題通常發生在使用 `pkill -f "some command pattern"` 時，因為 `-f` 會比對完整 command line；執行重啟命令的 shell / wrapper command line 也可能含有同一段 pattern，於是 shell 被誤殺，後續 start command 沒有機會執行。
+
+本次允許操作範圍：只允許處理 port `8010` 的 `temi_action_viewer.py`。不得重啟或終止 MQTT `1883`、Temi video ingest `8080`、decoded frame broadcast `8081`、Hermes resident `8765`、HermesTemiBridge、Discord/gateway 或其他正在運作的服務。
+
+安全處理結果：
+
+- 先確認 `8010` 對應 PID、工作目錄與 command line。
+- 使用 `/health` 確認服務狀態。
+- 重啟時不使用 `pkill`、不使用 process-name pattern。
+- 只針對 `ss -ltnp "sport = :8010"` 找到且已驗證為 `/TemiAgent/anomaly_detection/temi_action_viewer.py` 的精準 PID 發送訊號。
+- `TERM` 未結束時，才對同一個已驗證 PID 使用 `KILL`；不得對 pattern 或整類 Python process 使用 `KILL`。
+- 重啟後確認 `8010 /health` 回 200，並確認 `1883`、`8080`、`8081`、`8765` 仍在 listen。
+
+後續若需重啟 8010，請使用：
+
+```bash
+cd /TemiAgent/anomaly_detection
+./restart_action_viewer_8010.sh
+```
+
+禁止使用：
+
+```bash
+pkill -f temi_action_viewer
+pkill -f 8010
+pkill python
+killall python
+```
+
+若 `8010` 問題無法由上述 script 解決，先回報目前 PID、`/health` 結果、`action_viewer.log` tail 與 `ss -ltnp` 結果，不要擴大重啟範圍。
+
 ## 4. 建議修改後架構
 
 ### 4.1 目標架構
 
 ```text
 Temi Android video stream
+  -> ws://<pc-ip>:8080 VisionServer ingest
   -> VisionServer continuous decoder
-  -> FrameBus / shared rolling buffer
+  -> VisionBuffer + ws://<pc-ip>:8081 decoded JPEG broadcaster
        -> ASR Snapshot Sampler
             -> T-1000/T-500/T images
             -> temi/{robot_id}/asr/final
             -> HermesTemiBridge ASR route
-       -> AbnormalBehaviorWorker
+       -> AbnormalBehaviorWorker subscribes to ws://<pc-ip>:8081
             -> frame sampling / temporal window
             -> abnormal behavior model
             -> evidence frame or clip paths
@@ -323,20 +389,21 @@ FrameConsumer.on_frame(decoded_frame)
 以下行為容易破壞既有架構，請避免：
 
 1. 不要把 raw image binary 放進 MQTT payload。
-2. 不要把異常模型推論寫進 `handle_asr_payload()`。
-3. 不要讓 Hermes 直接 subscribe MQTT 或 publish robot command。
-4. 不要讓異常模型直接控制 Temi、直接發 TTS、直接導航或停止。
-5. 不要修改 ASR event 三張 frame contract 來承載 continuous window。
-6. 不要移除 `VisionBuffer.get_keyframes()` 或改變它的回傳語意。
-7. 不要讓 frame consumer 阻塞 WebSocket decode loop。
-8. 不要無限制保存所有 frame；必須有 retention、sampling、cleanup 策略。
-9. 不要在沒有 cooldown 的情況下對同一異常連續發 command。
-10. 不要把 memory event log 當成可任意覆寫的狀態檔；事件應追加、狀態檔才可更新。
-11. 不要繞過 Bridge action validator。
-12. 不要宣稱第一版具備醫療級診斷或真實緊急通報能力。
-13. 不要在未更新 schema、README、tests 的情況下改 MQTT contract。
-14. 不要在 repo 中提交大量 runtime 影像、個資或未去識別化資料。
-15. 不要破壞 legacy route；它仍是硬體展示與 debug 的重要備援。
+2. 不要把 `8080` 當成對外影像串流 endpoint；`8080` 只給 Temi 上傳 H.264，其他程式要用 `8081` decoded frame broadcast。
+3. 不要把異常模型推論寫進 `handle_asr_payload()`。
+4. 不要讓 Hermes 直接 subscribe MQTT 或 publish robot command。
+5. 不要讓異常模型直接控制 Temi、直接發 TTS、直接導航或停止。
+6. 不要修改 ASR event 三張 frame contract 來承載 continuous window。
+7. 不要移除 `VisionBuffer.get_keyframes()` 或改變它的回傳語意。
+8. 不要讓 frame consumer 阻塞 WebSocket decode loop。
+9. 不要無限制保存所有 frame；必須有 retention、sampling、cleanup 策略。
+10. 不要在沒有 cooldown 的情況下對同一異常連續發 command。
+11. 不要把 memory event log 當成可任意覆寫的狀態檔；事件應追加、狀態檔才可更新。
+12. 不要繞過 Bridge action validator。
+13. 不要宣稱第一版具備醫療級診斷或真實緊急通報能力。
+14. 不要在未更新 schema、README、tests 的情況下改 MQTT contract。
+15. 不要在 repo 中提交大量 runtime 影像、個資或未去識別化資料。
+16. 不要破壞 legacy route；它仍是硬體展示與 debug 的重要備援。
 
 ## 9. 修改後驗證方式
 

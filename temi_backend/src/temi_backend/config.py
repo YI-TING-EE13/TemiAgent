@@ -64,6 +64,10 @@ class AgentConfig:
     mqtt_client_id: str = "temi-backend-brain"
     vision_host: str = "0.0.0.0"
     vision_port: int = 8080
+    enable_frame_broadcast: bool = True
+    frame_broadcast_host: str = "0.0.0.0"
+    frame_broadcast_port: int = 8081
+    frame_broadcast_jpeg_quality: int = 80
     lm_base_url: str = "http://localhost:1234/v1"
     lm_api_key: str = "lm-studio"
     lm_model: str = "local-model"
@@ -80,6 +84,10 @@ class AgentConfig:
             mqtt_client_id=os.getenv("TEMI_MQTT_CLIENT_ID", "temi-backend-brain"),
             vision_host=os.getenv("TEMI_VISION_HOST", "0.0.0.0"),
             vision_port=_env_int("TEMI_VISION_PORT", 8080),
+            enable_frame_broadcast=_env_bool("TEMI_ENABLE_FRAME_BROADCAST", True),
+            frame_broadcast_host=os.getenv("TEMI_FRAME_BROADCAST_HOST", "0.0.0.0"),
+            frame_broadcast_port=_env_int("TEMI_FRAME_BROADCAST_PORT", 8081),
+            frame_broadcast_jpeg_quality=_env_int("TEMI_FRAME_BROADCAST_JPEG_QUALITY", 80),
             lm_base_url=os.getenv("TEMI_LM_BASE_URL", "http://localhost:1234/v1"),
             lm_api_key=os.getenv("TEMI_LM_API_KEY", "lm-studio"),
             lm_model=os.getenv("TEMI_LM_MODEL", "local-model"),

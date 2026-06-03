@@ -15,7 +15,7 @@ from openai import OpenAI
 
 from temi_backend.config import AgentConfig
 from temi_backend.mqtt_bridge import MqttBridge
-from temi_backend.vision_server import VisionServer
+from temi_backend.vision_server import JpegFrameBroadcaster, VisionServer
 
 LOGGER = logging.getLogger(__name__)
 
@@ -107,7 +107,23 @@ class AgentCore:
             router: Optional skill router dependency for tests.
         """
         self.config = config or AgentConfig.from_env()
-        self.vision = vision or VisionServer(self.config.vision_host, self.config.vision_port)
+        if vision:
+            self.vision = vision
+        else:
+            frame_broadcaster = (
+                JpegFrameBroadcaster(
+                    host=self.config.frame_broadcast_host,
+                    port=self.config.frame_broadcast_port,
+                    jpeg_quality=self.config.frame_broadcast_jpeg_quality,
+                )
+                if self.config.enable_frame_broadcast
+                else None
+            )
+            self.vision = VisionServer(
+                self.config.vision_host,
+                self.config.vision_port,
+                frame_broadcaster=frame_broadcaster,
+            )
         self.mqtt = mqtt_bridge or MqttBridge(
             self.config.mqtt_broker,
             self.config.mqtt_port,

@@ -29,6 +29,7 @@
 
 - 接收 Temi Android WebSocket H.264 video stream。
 - 維護 timestamped vision buffer。
+- 將 decoded JPEG frames 廣播到獨立 WebSocket endpoint，供異常行為模型或其他程式持續訂閱。
 - 在 ASR final 時取出 T-1000、T-500、T 三張 keyframes。
 - 呼叫本地 VLM endpoint 取得 action plan。
 - 將 VLM output route 成支援的 Temi MQTT actions。
@@ -41,7 +42,7 @@
 temi_backend/
   src/temi_backend/
     config.py          # runtime env config
-    vision_server.py   # WebSocket H.264 receiver and frame buffer
+    vision_server.py   # WebSocket H.264 receiver, frame buffer, and decoded-frame broadcaster
     mqtt_bridge.py     # legacy MQTT bridge
     agent_core.py      # ASR + vision + VLM orchestration
     cli.py             # package CLI entry
@@ -99,7 +100,8 @@ uv run python main.py
 預設服務：
 
 - MQTT broker：`tcp://<pc-ip>:1883`
-- Video receiver：`ws://<pc-ip>:8080`
+- Video ingest receiver：`ws://<pc-ip>:8080`，只給 Temi Android 上傳 H.264，不是對外影像串流 endpoint。
+- Decoded frame broadcast：`ws://<pc-ip>:8081`，給異常行為模型或其他程式訂閱 JPEG frames。
 - Local VLM：`http://localhost:1234/v1`
 
 ## 重要環境變數
@@ -109,7 +111,11 @@ uv run python main.py
 | `TEMI_MQTT_BROKER` | `127.0.0.1` | MQTT broker host。 |
 | `TEMI_MQTT_PORT` | `1883` | MQTT broker port。 |
 | `TEMI_VISION_HOST` | `0.0.0.0` | WebSocket bind host。 |
-| `TEMI_VISION_PORT` | `8080` | WebSocket bind port。 |
+| `TEMI_VISION_PORT` | `8080` | Temi H.264 WebSocket ingest bind port。 |
+| `TEMI_ENABLE_FRAME_BROADCAST` | `true` | 是否啟用 decoded JPEG frame broadcast。 |
+| `TEMI_FRAME_BROADCAST_HOST` | `0.0.0.0` | Frame broadcast bind host。 |
+| `TEMI_FRAME_BROADCAST_PORT` | `8081` | Frame broadcast bind port。 |
+| `TEMI_FRAME_BROADCAST_JPEG_QUALITY` | `80` | Broadcast JPEG quality。 |
 | `TEMI_LM_BASE_URL` | `http://localhost:1234/v1` | OpenAI-compatible VLM endpoint。 |
 | `TEMI_LM_MODEL` | `local-model` | VLM model name。 |
 | `TEMI_DEBUG_FRAMES_DIR` | `debug_frames` | ASR-aligned snapshots 位置。 |
@@ -121,6 +127,7 @@ uv run python scripts/manual_asr_monitor.py --broker 127.0.0.1 --port 1883
 uv run python scripts/manual_tts.py --broker 127.0.0.1 --text "Temi MQTT test" --language EN_US
 uv run python scripts/manual_navigate.py --broker 127.0.0.1 --target home_base
 uv run python scripts/manual_video_receiver.py --host 0.0.0.0 --port 8080
+uv run python scripts/manual_frame_broadcast_receiver.py --url ws://127.0.0.1:8081 --max-frames 5
 ```
 
 ## 維護注意
@@ -129,3 +136,24 @@ uv run python scripts/manual_video_receiver.py --host 0.0.0.0 --port 8080
 - Overview canonical contract 應優先放在 `hermes_temi_bridge/` 與 `docs/schemas/`，避免 legacy topic 污染新架構。
 - 不要把 canonical command 轉發責任放回 `temi_backend` 或 adapter；這會讓新版 Temi app 與 legacy speak topic 同時觸發 TTS。
 - `debug_frames/` 是 runtime artifact，不應被當成測試 fixture 或權威資料。
+
+
+## Frame broadcast contract
+
+`8080` 是 Temi Android 上傳 H.264 的 input WebSocket。其他程式不能靠連上 `8080` 旁聽 decoded image。
+
+需要持續影像的下游程式請連：
+
+```text
+ws://<pc-ip>:8081
+```
+
+連線後 server 會先送一個 JSON hello message，之後每個 binary WebSocket message 格式如下：
+
+```text
+bytes 0..7    int64 big-endian timestamp_ms
+bytes 8..15   uint64 big-endian sequence
+bytes 16..    JPEG image bytes
+```
+
+此 broadcast endpoint 只提供 decoded frame output，不取代 `VisionBuffer.get_keyframes()`；ASR 對齊三張 snapshot 路線仍維持原 contract。
