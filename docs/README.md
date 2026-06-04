@@ -1,6 +1,6 @@
 # Docs 模組 README
 
-最後更新日期：2026-06-01
+最後更新日期：2026-06-04
 
 ## 本文件維護規則
 
@@ -35,6 +35,7 @@ docs/
 | `operations/temi_streaming_local_runbook.md` | 目前這台機器的 Temi streaming、ADB、實測狀態。 |
 | `operations/temi_streaming_manual.md` | Android/PC 多點廣播開發部署手冊。 |
 | `operations/lmstudio_gpu_selection.md` | LM Studio GPU selection 操作筆記。 |
+| `operations/lmstudio_headless_3gpu_hdd_manual.md` | Headless LM Studio 使用 `/TemiAgent/.lmstudio-data`、預設 `google/gemma-4-31b` 64K context、限制前三張 GPU 的啟動/換模型/debug 手冊。 |
 | `schemas/*.schema.json` | ASR event、Hermes output、command request/result 的文件副本。 |
 | `../.hermes.md` / `../hermes-agent/docker/SOUL.md` | Discord/gateway 讓 Hermes 知道自己是 Temi 居家照護助理、可使用 Temi skills 的 runtime context。 |
 

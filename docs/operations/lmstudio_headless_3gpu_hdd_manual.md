@@ -1,0 +1,826 @@
+# LM Studio Headless 啟動手冊：HDD 專案路徑與指定前三張 GPU
+
+本手冊用於在 **Linux / headless / container-like environment** 中啟動 LM Studio local server，並將 LM Studio 的資料目錄固定在專案 HDD 路徑 `/TemiAgent/.lmstudio-data`，同時限制 LM Studio daemon 與模型 worker 只使用前三張 GPU。
+
+路徑說明：`/TemiAgent` 是 TemiAgent GPU container 內的專案路徑；host workspace 對應路徑是 `/home/yiting/TemiAgent`。
+
+目標架構如下：
+
+```text
+Hermes Agent / Bridge / Skills
+        ↓
+OpenAI-compatible API
+        ↓
+LM Studio local server
+        ↓
+google/gemma-4-31b 或其他 local model
+        ↓
+GPU 0, GPU 1, GPU 2
+```
+
+---
+
+## 1. 適用情境
+
+本手冊適用於以下情況：
+
+- 你沒有 LM Studio GUI，只能使用 Linux CLI。
+- 你希望 LM Studio 的 runtime、model cache、CLI 與相關資料放在 HDD 專案路徑。
+- 你的專案路徑是：
+
+```bash
+/TemiAgent
+```
+
+- LM Studio 的 target dir 是：
+
+```bash
+/TemiAgent/.lmstudio-data
+```
+
+- 你有四張 GPU，但希望 LM Studio 只看到前三張：
+
+```text
+GPU 0
+GPU 1
+GPU 2
+```
+
+並隱藏第 4 張：
+
+```text
+GPU 3
+```
+
+---
+
+## 2. 核心原則
+
+啟動順序很重要。
+
+`CUDA_VISIBLE_DEVICES=0,1,2` 必須套在 **LM Studio daemon 啟動時**，也就是：
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+```
+
+不能只套在：
+
+```bash
+lms load ...
+```
+
+因為 `lms load` 通常只是 client 指令，真正載入模型與管理 GPU 的 process 是 LM Studio daemon / worker。
+
+---
+
+## 3. 預設值與可調參數
+
+目前 TemiAgent 預設使用：
+
+```bash
+export LMSTUDIO_MODEL_ID=google/gemma-4-31b
+export LMSTUDIO_CONTEXT_LENGTH=64000
+export LMSTUDIO_VISIBLE_GPUS=0,1,2
+```
+
+未來若要更換模型或 context window，只要同步調整：
+
+- LM Studio 載入參數：`LMSTUDIO_MODEL_ID`、`LMSTUDIO_CONTEXT_LENGTH`
+- Hermes config：`model.default`、`model.context_length`、`auxiliary.compression.context_length`
+
+如果 LM Studio 因為同名模型已載入而產生 `:2` 這類 suffix，先用 `lms unload --all` 清掉舊 instance，再重新載入，就可以讓預設 identifier 回到 `google/gemma-4-31b`。如果你刻意要同時載入多個同名 instance，則以 `lms ps` 顯示的 exact identifier 為準。
+
+---
+
+## 4. 完整啟動指令
+
+請在 `/TemiAgent` 專案目錄下執行：
+
+```bash
+export LMSTUDIO_PROJECT_ROOT=/TemiAgent
+export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
+export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-google/gemma-4-31b}
+export LMSTUDIO_CONTEXT_LENGTH=${LMSTUDIO_CONTEXT_LENGTH:-64000}
+export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0,1,2}
+export PATH=/TemiAgent/.lmstudio-data/bin:$PATH
+hash -r
+
+lms unload --all
+lms server stop
+lms daemon down
+
+CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
+
+lms server start --port 1234
+
+lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max
+
+lms ps
+```
+
+如果 `lms load` 進入互動選單，選擇要載入的模型，例如：
+
+```text
+google/gemma-4-31b
+```
+
+成功後可能會看到類似訊息：
+
+```text
+Model loaded successfully.
+To use the model in the API/SDK, use the identifier "google/gemma-4-31b".
+```
+
+此時 Hermes Agent 可以使用：
+
+```text
+base_url = http://localhost:1234/v1
+model = google/gemma-4-31b
+api_key = lm-studio
+```
+
+若 Hermes Agent 的自動偵測把 LM Studio local model 判成 4096 context，請在 Hermes config 加上明確 context override。`/root/.hermes/config.yaml` 範例如下：
+
+```yaml
+model:
+  provider: custom
+  base_url: http://localhost:1234/v1
+  default: google/gemma-4-31b
+  context_length: 64000
+auxiliary:
+  compression:
+    context_length: 64000
+```
+
+重點：
+
+- `default` 要使用 `lms load` 成功後顯示的 64K identifier；目前預設是 `google/gemma-4-31b`。
+- `model.context_length` 讓 Hermes main model 通過 64K context guard。
+- `auxiliary.compression.context_length` 讓 Hermes auxiliary compression model 不被同一個 4096 auto-detect 問題擋住。
+
+---
+
+## 5. 指令逐行說明
+
+### 5.1 指定 LM Studio 專案根目錄
+
+```bash
+export LMSTUDIO_PROJECT_ROOT=/TemiAgent
+```
+
+這行指定 LM Studio 的 project root。  
+在目前架構中，`/TemiAgent` 是主要專案目錄。
+
+---
+
+### 5.2 指定 LM Studio target dir
+
+```bash
+export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
+```
+
+這行指定 LM Studio 的資料與 runtime 目錄。  
+因為希望 LM Studio 放在 HDD 上，所以不要使用預設的 `~/.lmstudio` 作為主要資料位置，而是使用：
+
+```bash
+/TemiAgent/.lmstudio-data
+```
+
+這個目錄通常會包含：
+
+- `bin/lms`
+- `llmster`
+- runtime files
+- cache
+- model metadata
+- 其他 LM Studio headless 所需資料
+
+---
+
+### 5.3 將 HDD 版 lms 放到 PATH 最前面
+
+```bash
+export PATH=/TemiAgent/.lmstudio-data/bin:$PATH
+```
+
+這行確保執行 `lms` 時，使用的是 HDD target dir 裡的版本，而不是其他位置的舊版本。
+
+如果不這樣做，可能會發生：
+
+```text
+Invalid passkey for lms CLI client
+```
+
+因為 CLI 和 daemon 不是同一套 LM Studio state。
+
+---
+
+### 5.4 清除 shell 的 command path cache
+
+```bash
+hash -r
+```
+
+Bash 會快取指令位置。  
+修改 `PATH` 後執行 `hash -r`，可以強制 shell 重新尋找 `lms` 的實際位置。
+
+---
+
+### 5.5 卸載目前已載入的模型
+
+```bash
+lms unload --all
+```
+
+這行會卸載所有目前由 LM Studio 載入的模型。  
+如果沒有模型，會出現：
+
+```text
+No models to unload.
+```
+
+這是正常的。
+
+---
+
+### 5.6 停止 LM Studio API server
+
+```bash
+lms server stop
+```
+
+這行停止目前的 LM Studio local server。  
+通常 server 會跑在：
+
+```text
+http://localhost:1234
+```
+
+如果 server 沒有在跑，可能會顯示錯誤或無事可做，通常不影響後續流程。
+
+---
+
+### 5.7 停止 LM Studio daemon
+
+```bash
+lms daemon down
+```
+
+這行停止 `llmster` daemon。  
+這一步非常重要，因為如果 daemon 已經存在，後續再執行：
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+```
+
+可能不會重新套用新的 GPU 可見性設定。
+
+---
+
+### 5.8 用前三張 GPU 啟動 daemon
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+```
+
+這是整份手冊最重要的一行。
+
+`CUDA_VISIBLE_DEVICES=0,1,2` 的意思是：只讓這次啟動的 LM Studio daemon 看到：
+
+```text
+GPU 0
+GPU 1
+GPU 2
+```
+
+因此第 4 張 GPU：
+
+```text
+GPU 3
+```
+
+理論上不會被 LM Studio daemon / worker 使用。
+
+---
+
+### 5.9 啟動 LM Studio server
+
+```bash
+lms server start --port 1234
+```
+
+這行啟動 LM Studio local server，並監聽 port 1234。
+
+Hermes Agent 之後可以透過 OpenAI-compatible API 呼叫：
+
+```text
+http://localhost:1234/v1
+```
+
+例如：
+
+```text
+POST /v1/chat/completions
+GET  /v1/models
+```
+
+---
+
+### 5.10 載入模型
+
+```bash
+lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max
+```
+
+這行載入 local model。
+
+參數說明：
+
+```bash
+--context-length "$LMSTUDIO_CONTEXT_LENGTH"
+```
+
+設定 context window 長度。TemiAgent 目前預設為 64000 tokens。  
+如果 VRAM 不足，可以降低，例如：
+
+```bash
+--context-length 32768
+```
+
+或：
+
+```bash
+--context-length 16384
+```
+
+```bash
+--gpu max
+```
+
+表示盡可能使用 GPU offload。  
+這不是指定哪幾張 GPU，而是指定模型盡量放到 GPU 上。  
+真正指定可見 GPU 的地方是：
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+```
+
+---
+
+## 6. 驗證方式
+
+### 6.0 本機驗證紀錄（2026-06-04）
+
+在 `yiting.TemiAgent_gpu_all` container 內已確認：
+
+- `llmster` daemon 與 `llmworker` process environment 均包含 `CUDA_VISIBLE_DEVICES=0,1,2`。
+- 已執行 `lms unload --all` 後重新載入 `google/gemma-4-31b`，避免同名 instance 產生 `:2` suffix。
+- `lms ps` 顯示：
+  - `google/gemma-4-31b`：context `64000`
+- `POST /v1/chat/completions` 使用 `google/gemma-4-31b` 可成功回覆。
+- 已將 container 內 `/root/.hermes/config.yaml` 修正為 `default: google/gemma-4-31b`、`model.context_length: 64000`、`auxiliary.compression.context_length: 64000`，並先備份為 `/root/.hermes/config.yaml.bak.lmstudio_20260604_0826`。
+- 使用真實 Hermes config 啟動 temporary resident probe 後，Hermes resident `/health` 成功回傳 `status: ok`、`model: google/gemma-4-31b`、`provider: custom`、`base_url: http://localhost:1234/v1`。
+
+因此本手冊的核心操作是正確的：GPU 限制必須套在 daemon 啟動，而不是只套在 `lms load`。
+
+### 6.1 確認目前使用哪個 lms
+
+```bash
+which lms
+readlink -f "$(which lms)"
+lms --version
+```
+
+理想輸出應該類似：
+
+```text
+/TemiAgent/.lmstudio-data/bin/lms
+/TemiAgent/.lmstudio-data/bin/lms
+CLI commit: 0b2a176
+```
+
+重點是 `which lms` 和 `readlink -f` 都應該指向：
+
+```bash
+/TemiAgent/.lmstudio-data/bin/lms
+```
+
+如果指到其他地方，可能會造成 passkey mismatch。
+
+---
+
+### 6.2 確認 daemon 有吃到 CUDA_VISIBLE_DEVICES
+
+```bash
+ps auxeww | grep -i "llmster" | grep -v grep | grep CUDA_VISIBLE_DEVICES
+```
+
+理想上應該看到：
+
+```text
+CUDA_VISIBLE_DEVICES=0,1,2
+```
+
+這表示 LM Studio daemon 是在只看前三張 GPU 的環境下啟動的。
+
+---
+
+### 6.3 確認 server 是否啟動
+
+```bash
+curl http://localhost:1234/v1/models
+```
+
+如果 server 正常運作，應該會回傳目前可用或已載入的模型資訊。
+
+---
+
+### 6.4 測試 Chat Completions API
+
+請將 `model` 改成 `lms load` 成功後顯示的 identifier，例如：
+
+```text
+google/gemma-4-31b
+```
+
+測試指令：
+
+```bash
+curl http://localhost:1234/v1/chat/completions   -H "Content-Type: application/json"   -d '{
+    "model": "google/gemma-4-31b",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say hello in one sentence."
+      }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 64
+  }'
+```
+
+如果有正常回應，代表 OpenAI-compatible API 可用。
+
+---
+
+### 6.5 確認 GPU 使用狀況
+
+```bash
+nvidia-smi
+```
+
+注意：`nvidia-smi` 仍然可能列出四張 GPU，這是正常的。  
+重點不是 GPU 清單有幾張，而是 LM Studio 的 process 是否使用第 4 張 GPU。
+
+更精準的查詢：
+
+```bash
+nvidia-smi --query-compute-apps=pid,process_name,gpu_uuid,used_memory --format=csv
+```
+
+或：
+
+```bash
+nvidia-smi pmon -c 1
+```
+
+檢查 LM Studio 相關 process，例如：
+
+```text
+llmster
+llmworker
+node
+```
+
+是否只出現在 GPU 0、1、2，而不是 GPU 3。
+
+---
+
+## 7. 常見問題與排查
+
+### 問題 1：出現 Invalid passkey for lms CLI client
+
+錯誤訊息：
+
+```text
+Failed to authenticate: Invalid passkey for lms CLI client.
+Please make sure you are using the lms shipped with LM Studio.
+```
+
+常見原因：
+
+- `lms` CLI 和 daemon 不是同一套 LM Studio installation。
+- `PATH` 指到錯誤的 `lms`。
+- `LMSTUDIO_TARGET_DIR` 沒有固定到 `/TemiAgent/.lmstudio-data`。
+- daemon 是在舊環境下先被啟動的。
+
+處理方式：
+
+```bash
+pkill -f llmster
+pkill -f llmworker
+
+export LMSTUDIO_PROJECT_ROOT=/TemiAgent
+export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
+export PATH=/TemiAgent/.lmstudio-data/bin:$PATH
+hash -r
+
+which lms
+readlink -f "$(which lms)"
+lms --version
+
+CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+```
+
+確認 `which lms` 和 `readlink -f` 都指向：
+
+```bash
+/TemiAgent/.lmstudio-data/bin/lms
+```
+
+---
+
+### 問題 2：daemon already running
+
+訊息：
+
+```text
+The daemon is already running
+```
+
+這表示 daemon 已經存在。  
+如果它不是用 `CUDA_VISIBLE_DEVICES=0,1,2` 啟動的，就需要先關掉：
+
+```bash
+lms daemon down
+```
+
+如果還關不掉：
+
+```bash
+pkill -f llmster
+pkill -f llmworker
+```
+
+然後重新啟動：
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+```
+
+---
+
+### 問題 3：`nvidia-smi` 還是看到四張 GPU
+
+這是正常的。
+
+`CUDA_VISIBLE_DEVICES=0,1,2` 限制的是 LM Studio daemon / worker process，不是整台機器。
+
+你應該檢查的是：
+
+```bash
+nvidia-smi
+```
+
+底部 Processes 區塊中，LM Studio 相關 process 是否使用 GPU 3。
+
+---
+
+### 問題 4：模型載入後 Hermes Agent 找不到模型
+
+請確認 `lms load` 完成後顯示的 identifier，例如：
+
+```text
+google/gemma-4-31b
+```
+
+Hermes Agent 裡的 model 應該填：
+
+```text
+google/gemma-4-31b
+```
+
+如果 identifier 變成 `google/gemma-4-31b:2`，通常代表同名模型已經載入過。若你要維持預設 identifier，請先執行：
+
+```bash
+lms unload --all
+lms load google/gemma-4-31b --context-length 64000 --gpu max
+lms ps
+```
+
+若你刻意保留 `:2` instance，Hermes config 也必須填同一個 exact identifier。
+
+base_url 應該是：
+
+```text
+http://localhost:1234/v1
+```
+
+api_key 可以使用 placeholder：
+
+```text
+lm-studio
+```
+
+### 問題 5：Hermes 顯示 context window 只有 4096
+
+Hermes 可能無法從 LM Studio OpenAI-compatible API 正確推得 runtime context。請在 `/root/.hermes/config.yaml` 加上明確整數值：
+
+```yaml
+model:
+  provider: custom
+  base_url: http://localhost:1234/v1
+  default: google/gemma-4-31b
+  context_length: 64000
+auxiliary:
+  compression:
+    context_length: 64000
+```
+
+`model.context_length` 和 `auxiliary.compression.context_length` 都要同步，否則 resident Hermes 可能會在 auxiliary compression 檢查被擋下。
+
+---
+
+## 8. Hermes Agent 建議設定
+
+如果使用 LM Studio OpenAI-compatible API，Hermes Agent 建議設定如下：
+
+```text
+BASE_URL=http://localhost:1234/v1
+MODEL=google/gemma-4-31b
+CONTEXT_LENGTH=64000
+API_KEY=lm-studio
+```
+
+如果程式使用 OpenAI SDK，概念上會類似：
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:1234/v1",
+    api_key="lm-studio"
+)
+
+response = client.chat.completions.create(
+    model="google/gemma-4-31b",
+    messages=[
+        {"role": "user", "content": "Hello"}
+    ]
+)
+```
+
+### 8.1 Hermes resident health probe
+
+重啟後可以用 temporary port 驗證 Hermes 是否能讀取目前模型：
+
+```bash
+cd /TemiAgent
+python3 tools/hermes_resident_server.py \
+  --host 127.0.0.1 \
+  --port 8766 \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md \
+  --skill-path /TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md
+```
+
+另一個 terminal 驗證：
+
+```bash
+curl http://127.0.0.1:8766/health
+```
+
+成功時應看到：
+
+```json
+{"status":"ok","model":"google/gemma-4-31b","provider":"custom","base_url":"http://localhost:1234/v1"}
+```
+
+---
+
+## 9. 固定啟動腳本
+
+專案已提供固定啟動腳本：
+
+```bash
+tools/start_lmstudio_3gpu.sh
+```
+
+預設啟動：
+
+```bash
+cd /TemiAgent
+./tools/start_lmstudio_3gpu.sh
+```
+
+臨時更換模型或 context：
+
+```bash
+cd /TemiAgent
+LMSTUDIO_MODEL_ID=your/model-id LMSTUDIO_CONTEXT_LENGTH=32768 ./tools/start_lmstudio_3gpu.sh
+```
+
+腳本內容等價於：
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+export LMSTUDIO_PROJECT_ROOT=/TemiAgent
+export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
+export LMSTUDIO_MODEL_ID="${LMSTUDIO_MODEL_ID:-google/gemma-4-31b}"
+export LMSTUDIO_CONTEXT_LENGTH="${LMSTUDIO_CONTEXT_LENGTH:-64000}"
+export LMSTUDIO_VISIBLE_GPUS="${LMSTUDIO_VISIBLE_GPUS:-0,1,2}"
+export PATH=/TemiAgent/.lmstudio-data/bin:$PATH
+
+hash -r
+
+echo "[LM Studio] Using lms:"
+which lms
+readlink -f "$(which lms)"
+lms --version
+
+echo "[LM Studio] Unloading existing models..."
+lms unload --all || true
+
+echo "[LM Studio] Stopping server..."
+lms server stop || true
+
+echo "[LM Studio] Stopping daemon..."
+lms daemon down || true
+
+echo "[LM Studio] Starting daemon with GPU ${LMSTUDIO_VISIBLE_GPUS} only..."
+CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
+
+echo "[LM Studio] Verifying daemon CUDA visibility..."
+ps auxeww | grep -i "llmster" | grep -v grep | grep CUDA_VISIBLE_DEVICES || true
+
+echo "[LM Studio] Starting server on port 1234..."
+lms server start --port 1234
+
+echo "[LM Studio] Loading model..."
+lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max
+
+echo "[LM Studio] Current models:"
+lms ps
+curl -s http://localhost:1234/v1/models || true
+
+echo "[LM Studio] Done."
+```
+
+若腳本失去執行權限，可重新設定：
+
+```bash
+chmod +x tools/start_lmstudio_3gpu.sh
+```
+
+---
+
+## 10. 最終啟動流程摘要
+
+最短可用版：
+
+```bash
+export LMSTUDIO_PROJECT_ROOT=/TemiAgent
+export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
+export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-google/gemma-4-31b}
+export LMSTUDIO_CONTEXT_LENGTH=${LMSTUDIO_CONTEXT_LENGTH:-64000}
+export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0,1,2}
+export PATH=/TemiAgent/.lmstudio-data/bin:$PATH
+hash -r
+
+lms unload --all
+lms server stop
+lms daemon down
+
+CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
+
+lms server start --port 1234
+
+lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max
+lms ps
+```
+
+驗證：
+
+```bash
+which lms
+readlink -f "$(which lms)"
+ps auxeww | grep -i "llmster" | grep -v grep | grep CUDA_VISIBLE_DEVICES
+curl http://localhost:1234/v1/models
+curl http://127.0.0.1:8765/health
+nvidia-smi
+```
+
+---
+
+## 11. 注意事項
+
+- `CUDA_VISIBLE_DEVICES=0,1,2` 必須放在 `lms daemon up` 前面。
+- 不要讓 daemon 在未設定 GPU 限制時先自動啟動。
+- `lms load --gpu max` 只代表盡可能使用 GPU offload，不代表指定 GPU index。
+- 真正指定 GPU 可見性的地方是 daemon 啟動環境。
+- `nvidia-smi` 顯示四張 GPU 不代表失敗；要看 LM Studio process 是否佔用 GPU 3。
+- 如果使用 HDD target dir，務必確保 `LMSTUDIO_TARGET_DIR`、`PATH`、`which lms`、`readlink -f "$(which lms)"` 都一致。
