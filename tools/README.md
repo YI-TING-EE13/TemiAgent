@@ -23,6 +23,7 @@
 | `subscribe_cmd_request.sh` | 訂閱 canonical command request，方便觀察 Bridge output。 |
 | `publish_mock_cmd_result.sh` | 發送 mock command result。 |
 | `dispatch_hermes_action_output.py` | 將 Hermes skill action JSON 驗證、包成 `temi/{robot_id}/cmd/request`，並可 publish 到 MQTT，供 Discord/manual TTS 執行使用。 |
+| `capture_temi_live_snapshot.py` | 從 `8081` decoded JPEG broadcast 按需擷取目前畫面，存到 `temi_shared/live_snapshots/`，輸出 Hermes/Skills 可分析的 frame path JSON。 |
 | `start_temi_pc_services.sh` | 啟動 PC 端 Temi legacy services。 |
 | `start_temi_pc_services_background.sh` | 背景啟動 PC 端 services。 |
 | `check_temi_connection.sh` | 檢查 Temi ADB、MQTT、WebSocket 等連線狀態。 |
@@ -44,6 +45,20 @@ python3 tools/demo_case_runner.py --keep-artifacts
 ```
 
 輸出包含三個 case 的 input event、Hermes raw output、parsed output、command request/result、memory snapshot 與 run summary。若指定 `--output-dir logs/demo_cases/<name>`，artifact 會保留在該目錄。
+
+### Active live camera snapshot
+
+當 Hermes/Discord 需要「現在看一下」但當回合沒有 ASR 對齊影像時，可按需擷取目前 decoded camera frame：
+
+```bash
+cd /TemiAgent
+python3 tools/capture_temi_live_snapshot.py \
+  --source-url ws://127.0.0.1:8081 \
+  --robot-id temi-01 \
+  --pretty
+```
+
+輸出會包含 `source_type: live.snapshot`、`request_id`、`frames[].path` 與 `metadata_path`。圖片會存到 `temi_shared/live_snapshots/{robot_id}/{request_id}/`。這個工具只做低頻 snapshot，不取代 ASR 三張 frame route，也不應用於 continuous abnormal detection。
 
 ### Manual Hermes action dispatch
 

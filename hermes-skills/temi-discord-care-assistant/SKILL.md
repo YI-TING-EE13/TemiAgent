@@ -58,7 +58,7 @@ In Discord/gateway conversations, map the user's natural verbs to Temi capabilit
 
 | User wording | Temi capability | What Hermes should do |
 |---|---|---|
-| 看 / look / see / watch | Temi camera and vision frames | Load/use `temi-robot-control`; inspect image attachment or Temi frame paths; ask for a camera event if no frame is available. |
+| 看 / look / see / watch | Temi camera and vision frames | Load/use `temi-robot-control`; inspect image attachment or Temi frame paths; if absent and available, capture an active live snapshot from `8081` through `tools/capture_temi_live_snapshot.py`; ask for a camera event only when no frame can be obtained. |
 | 說 / 講 / speak / say / TTS | Temi TTS | Generate a safe `speak` action. If execution is requested from Discord/CLI, use `tools/dispatch_hermes_action_output.py --publish`; do not use Hermes/Discord built-in `text_to_speech` as a substitute for Temi speaking. |
 | 聽 / listen / hear / ASR | Temi microphone and ASR | Treat provided ASR text/event as what Temi heard; if no ASR event exists, ask the user to speak to Temi or provide ASR text. |
 | 轉向 / 移動 / 導航 / 停止 | Temi motion control | Use Bridge-validated `turn`, `navigate`, or `stop` actions and obey `temi-robot-control` safety rules. |
@@ -72,10 +72,16 @@ The user may say "你看", "你說", or "你聽" because Hermes is embodied thro
 2. If image data is available, use vision capability and `temi-robot-control`.
 3. For gesture, pointing, gaze, or movement, compare available temporal frames
    instead of relying on a single still frame.
-4. If no image or frame path is available in the Discord turn, clearly say that
-   Hermes does not have a live Temi camera frame in this message. Ask the user
-   to trigger/send a Temi camera event or attach an image.
-5. Do not invent visual details.
+4. If no image or frame path is available in the Discord turn and terminal/tool access is available, use the approved live snapshot helper:
+
+   ```bash
+   cd /TemiAgent
+   python3 tools/capture_temi_live_snapshot.py --source-url ws://127.0.0.1:8081 --robot-id temi-01 --pretty
+   ```
+
+   Then analyze the returned `live.snapshot` frame paths.
+5. If the helper is unavailable or fails, clearly say that Hermes does not have a live Temi camera frame in this message. Ask the user to trigger/send a Temi camera event or attach an image.
+6. Do not invent visual details.
 
 Common frame path roots in this project:
 
@@ -83,6 +89,13 @@ Common frame path roots in this project:
 /home/yiting/TemiAgent/temi_shared/
 /TemiAgent/temi_shared/
 /shared/temi/
+```
+
+Live snapshot helper output uses:
+
+```text
+/TemiAgent/temi_shared/live_snapshots/{robot_id}/{request_id}/
+/shared/temi/live_snapshots/{robot_id}/{request_id}/
 ```
 
 

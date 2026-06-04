@@ -82,6 +82,7 @@ Temi Android camera
 3. 讓異常行為模型持續或準持續地接收 frame/window。
 4. 異常模型只輸出結構化 perception event，不直接控制 robot。
 5. HermesTemiBridge 擴充為可接收、驗證與處理 `perception.abnormal` 事件。
+6. 另提供低頻 active snapshot helper，讓 Hermes 在沒有 ASR event 時可按需擷取目前畫面；此能力不取代 continuous abnormal worker。
 
 
 ## 3.1 2026-06-01 問題回報與已採取修正
@@ -161,6 +162,9 @@ Temi Android video stream
             -> T-1000/T-500/T images
             -> temi/{robot_id}/asr/final
             -> HermesTemiBridge ASR route
+       -> ActiveSnapshotHelper subscribes briefly to ws://<pc-ip>:8081
+            -> temi_shared/live_snapshots/{robot_id}/{request_id}/frame_current.jpg
+            -> Hermes on-demand visual analysis
        -> AbnormalBehaviorWorker subscribes to ws://<pc-ip>:8081
             -> frame sampling / temporal window
             -> abnormal behavior model

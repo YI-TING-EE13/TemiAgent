@@ -34,6 +34,7 @@ Temi Android app
 - Temi app 可連到 MQTT broker `192.168.50.236:1883`。
 - Temi app 可透過 WebSocket 將 camera frames 送到 PC `192.168.50.236:8080`。
 - Adapter 可在 ASR final 時取 T-1000、T-500、T 三張 keyframes，寫入 `temi_shared/`，並發布 `temi/temi-01/asr/final`。
+- `tools/capture_temi_live_snapshot.py` 可在沒有 ASR event 時按需從 `8081` 擷取目前畫面，寫入 `temi_shared/live_snapshots/`，讓 Hermes 進行低頻主動視覺分析。
 - Bridge 支援 mock、CLI、resident HTTP 三種 Hermes invocation mode。
 - Bridge 驗證 Hermes JSON-only output、robot-facing actions、`cognitive_state.home_esi_level` 與 `risk_reason`。
 - Bridge 會將通過驗證的 robot actions 發布到 `temi/{robot_id}/cmd/request`。
@@ -59,7 +60,7 @@ Temi Android app
 
 目前不建議把以下責任加入 Bridge：
 
-- 不做 video decode 或 heavy vision inference，避免 ASR handler 變成影像服務。
+- 不做 video decode 或 heavy vision inference，避免 ASR handler 變成影像服務；主動視覺使用受控 snapshot helper，continuous abnormal detection 仍由獨立 worker 處理。
 - 不直接操作 Temi SDK 或 Android app，硬體仍由 app 負責。
 - 不直接讓 Hermes publish MQTT，避免繞過 validation。
 - 不把 legacy compatibility 的 command forwarding 放回 adapter，避免重複 TTS。

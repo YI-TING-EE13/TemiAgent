@@ -23,18 +23,41 @@ Use this skill when Hermes receives Temi frame paths from the Bridge, or when a 
 - "我指的那個是什麼"
 - "桌上那個東西是什麼"
 
-First check whether the current turn includes image attachments, image paths, or Bridge-provided frame paths. If no current image/frame is available, say that Hermes does not have a live Temi camera frame in this turn and ask the user to trigger/send a Temi camera event or attach an image. Do not invent visual details.
+First check whether the current turn includes image attachments, image paths, Bridge-provided frame paths, or live snapshot paths. If no current image/frame is available and the runtime exposes the approved live snapshot helper, capture a current frame from `8081` before answering visual questions. If no snapshot can be captured, say that Hermes does not have a live Temi camera frame in this turn and ask the user to trigger/send a Temi camera event or attach an image. Do not invent visual details.
 
 
 ## Embodied Temi Actions From Gateway
 
 When a Discord/gateway user says "看", "說", or "聽" in a Temi context, route the request to Temi capabilities:
 
-- "看" uses Temi camera frames or attached images.
+- "看" uses Temi camera frames, attached images, Bridge frame paths, or an approved active live snapshot.
 - "說" uses Temi TTS through a validated `speak` action and, for manual execution, the dispatcher tool.
 - "聽" refers to Temi ASR/microphone input; use ASR event text when present and ask for a Temi ASR event when absent.
 
 Robot-facing execution still requires Bridge validation or `tools/dispatch_hermes_action_output.py --publish`; do not assume that returning JSON in chat makes Temi act.
+
+## Active Live Snapshot
+
+If the current task needs visual information but the turn does not include ASR-synchronized frames or an image attachment, Hermes may use the controlled live snapshot helper when terminal/tool access is available:
+
+```bash
+cd /TemiAgent
+python3 tools/capture_temi_live_snapshot.py \
+  --source-url ws://127.0.0.1:8081 \
+  --robot-id temi-01 \
+  --pretty
+```
+
+The helper captures low-frequency current JPEG frame(s) from the decoded `8081` broadcast, saves them under `temi_shared/live_snapshots/{robot_id}/{request_id}/`, and returns JSON with `source_type: live.snapshot` plus frame paths. Use those returned paths as visual evidence for environment observation, object confirmation, user state checks, or other immediate visual tasks.
+
+Rules for live snapshots:
+
+- Prefer image attachments and Bridge/ASR frame paths when they are already present.
+- Use live snapshot only on demand; do not create a continuous Hermes vision loop.
+- Do not connect to `8080`; it is Temi video ingest, not a consumer stream. Use `8081` decoded JPEG broadcast only through the helper.
+- If the helper fails or no frame is available, say that no current Temi camera frame is available and ask the user to trigger/send a camera event or attach an image.
+- After analyzing the snapshot, robot-facing responses still require Bridge validation or the approved dispatcher path.
+
 
 ## Expected Input
 
@@ -95,7 +118,7 @@ Read `references/safety_rules.md` when safety, ambiguity, motion, or unsupported
 
 ## Visual Reasoning
 
-Use the three frames as short temporal context:
+Use available visual frames as short temporal context. For ASR-triggered events, use the three synchronized frames:
 
 - `t_minus_1000` shows context about one second before speech ended.
 - `t_minus_500` may capture gestures, pointing, gaze, or object movement.

@@ -83,7 +83,7 @@ Discord gateway 不一定會走 `tools/hermes_resident_server.py` 的 `--skill-p
 - `hermes-agent/docker/SOUL.md`：新 Docker/gateway profile 的預設身份。
 - `hermes-agent/skills/temi-discord-care-assistant/`：可被 skills index 搜尋的 Discord/gesture/camera 路由 skill。
 
-使用者在 Discord 說「看我的手勢」、「看一下相機」、「我指的是什麼」時，Hermes 應先找圖片附件、`temi_shared/` path 或 Bridge frame paths；有影像才分析，沒有影像就請使用者觸發/傳送 Temi camera event 或附圖，不要虛構畫面。若使用者要求 Temi 立刻 TTS，Hermes 不應只把 action JSON 貼回聊天；需透過 `tools/dispatch_hermes_action_output.py --publish` 或 ASR/Bridge 路徑送到 `cmd/request`。
+使用者在 Discord 說「看我的手勢」、「看一下相機」、「我指的是什麼」時，Hermes 應先找圖片附件、`temi_shared/` path 或 Bridge frame paths；若沒有影像且可使用工具，透過 `tools/capture_temi_live_snapshot.py` 從 `8081` 擷取目前畫面後再分析。若仍無法取得影像，就請使用者觸發/傳送 Temi camera event 或附圖，不要虛構畫面。若使用者要求 Temi 立刻 TTS，Hermes 不應只把 action JSON 貼回聊天；需透過 `tools/dispatch_hermes_action_output.py --publish` 或 ASR/Bridge 路徑送到 `cmd/request`。
 
 ## 記憶分層
 

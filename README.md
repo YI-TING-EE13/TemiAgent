@@ -104,13 +104,13 @@ User speaks to Temi
 - `temi-home-esi`：Home-ESI Lite 風險分級。
 - `temi-discord-care-assistant`：Discord/gateway 對話入口提示，負責把「看手勢、看相機、我指的是什麼」等自然語句導向 Temi robot/care skills。
 
-Hermes 透過 Discord 對話時，身份與專案上下文由 `hermes-agent/docker/SOUL.md`、`/TemiAgent/.hermes.md` 與 gateway 的 `$HERMES_HOME/SOUL.md` 決定。若使用者請 Hermes 看手勢或相機畫面，Hermes 應先檢查 Discord 圖片附件、`temi_shared/` 圖片路徑或 Bridge frame paths；有影像時使用 vision 與 `temi-robot-control`，沒有影像時要求使用者觸發/傳送 Temi camera event 或附圖。若 Discord/CLI 只產生 Hermes action JSON 而沒有 ASR/Bridge invocation，可用 `tools/dispatch_hermes_action_output.py --publish` 將 JSON 驗證並包成 `temi/{robot_id}/cmd/request`。
+Hermes 透過 Discord 對話時，身份與專案上下文由 `hermes-agent/docker/SOUL.md`、`/TemiAgent/.hermes.md` 與 gateway 的 `$HERMES_HOME/SOUL.md` 決定。若使用者請 Hermes 看手勢或相機畫面，Hermes 應先檢查 Discord 圖片附件、`temi_shared/` 圖片路徑或 Bridge frame paths；有影像時使用 vision 與 `temi-robot-control`。若沒有影像且目前 runtime 可用工具，Hermes 可透過 `tools/capture_temi_live_snapshot.py` 從 `8081` decoded JPEG broadcast 按需擷取目前畫面，再用回傳的 `live.snapshot` frame paths 分析；若仍無法取得影像，才要求使用者觸發/傳送 Temi camera event 或附圖。若 Discord/CLI 只產生 Hermes action JSON 而沒有 ASR/Bridge invocation，可用 `tools/dispatch_hermes_action_output.py --publish` 將 JSON 驗證並包成 `temi/{robot_id}/cmd/request`。
 
 
 
 ### Temi embodied capability mapping
 
-在 Discord/gateway 中，Hermes 應把使用者說的「看、說、聽」理解為 Temi 身上的能力：看 = camera/vision frames，說 = Temi TTS，聽 = Temi ASR/microphone。若需要讓 Temi 實際說話，不能只回覆 action JSON，必須經 ASR/Bridge route 或 `tools/dispatch_hermes_action_output.py --publish` 發成 `temi/{robot_id}/cmd/request`。
+在 Discord/gateway 中，Hermes 應把使用者說的「看、說、聽」理解為 Temi 身上的能力：看 = camera/vision frames，且可在沒有 ASR frame 時用 `tools/capture_temi_live_snapshot.py` 低頻擷取目前畫面；說 = Temi TTS；聽 = Temi ASR/microphone。若需要讓 Temi 實際說話，不能只回覆 action JSON，必須經 ASR/Bridge route 或 `tools/dispatch_hermes_action_output.py --publish` 發成 `temi/{robot_id}/cmd/request`。
 
 ## 常用指令
 
