@@ -60,7 +60,7 @@
 | 智慧行程管理 | Reminder tool / MCP resource + daily state |
 | 隱私保護資料庫 | 本地 event log、影像路徑、必要時去識別化，避免雲端裸傳個資 |
 | 資料檢索 | MCP resources / memory tools / structured log retrieval |
-| 緊急通報機制 | Home-ESI Lite policy skill + notify/log/ask actions |
+| 緊急通報機制 | Home-ESI v2 decision-tree policy skill + notify/log/ask actions |
 | 個人健康報告 | event log + daily summary + report generator |
 | 知識圖譜 | 不做傳統 KG，改用 structured memory + retrieval + skills |
 
@@ -174,9 +174,9 @@ memory/
 
 目的：做照護風險分級。
 
-第一年不需要完整醫療分診，但要有 Home-ESI Lite。
+第一年不需要完整醫療分診，但要有 Home-ESI v2 decision-tree policy。
 
-Home-ESI Lite 的全名是 **Home Emergency Severity Index Lite**，中文可稱為「居家版簡化急診嚴重度分級」。它是本計畫為居家照護情境自訂的風險分級規則，概念參考醫療急診常見的 **Emergency Severity Index, ESI**，但不是正式醫療分診系統，也不能取代醫師、護理師或 119 的判斷。它的用途是讓 Hermes 在 Demo 中能用一致、可解釋的方式判斷「現在應該一般回應、主動關懷，還是進入緊急通報流程」。
+Home-ESI v2 延續 **Home Emergency Severity Index Lite**（居家版簡化急診嚴重度分級）的 demo 定位，並改為明確 decision-tree policy。它是本計畫為居家照護情境自訂的風險分級規則，概念參考醫療急診常見的 **Emergency Severity Index, ESI**，但不是正式醫療分診系統，也不能取代醫師、護理師或 119 的判斷。它的用途是讓 Hermes 在 Demo 中能用一致、可解釋的方式判斷「現在應該一般回應、主動關懷，還是進入緊急通報流程」。
 
 | 等級 | 意義 | 行動 |
 |---|---|---|
@@ -185,7 +185,7 @@ Home-ESI Lite 的全名是 **Home Emergency Severity Index Lite**，中文可稱
 | L3 | 輕度事件或一般提醒 | 一般回應、紀錄、必要時安排提醒 |
 | Normal | 無照護風險 | 正常對話或執行安全 action |
 
-請把 Home-ESI Lite 規則做成 skill reference 或 MCP tool，不要只寫在 prompt 裡。Hermes 應該可以明確輸出：
+請把 Home-ESI v2 decision-tree 規則做成 self-contained skill，並保留完整 reference 供審查；不要只寫在 Bridge prompt 裡。Hermes 應該可以明確輸出：
 
 ```json
 {
@@ -361,7 +361,7 @@ summary.generate_daily_summary
 Skill 需加入：
 
 1. 居家照護助理角色定義。
-2. Home-ESI Lite 分級規則。
+2. Home-ESI v2 decision-tree 分級規則。
 3. 記憶讀寫規則。
 4. JSON-only output contract。
 5. 安全規則：不直接下醫療診斷、不自行宣稱已通知真實 119，Demo 一律使用 mock notify。

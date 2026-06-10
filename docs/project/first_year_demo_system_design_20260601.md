@@ -26,7 +26,7 @@ Temi Android app
 - Temi app 負責硬體能力：聽、看、說、移動。
 - `tools/temi_overview_adapter.py` 只負責 ASR 與 camera compatibility，將 legacy ASR 和 camera frames 轉成 canonical ASR event。
 - HermesTemiBridge 是安全邊界，負責 schema validation、image path validation、Hermes invocation、action validation、memory/demo side effects 與 command dispatch。
-- Hermes Agent 負責照護情境理解、Home-ESI Lite 風險判斷與 action planning。
+- Hermes Agent 負責照護情境理解、Home-ESI v2 decision-tree 風險判斷與 action planning。
 - MQTT 只傳輕量 JSON；影像檔放在 `temi_shared/events/...`，MQTT payload 只放 path。
 
 ## 已實作功能

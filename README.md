@@ -101,7 +101,7 @@ User speaks to Temi
 
 - `temi-robot-control`：robot action contract 與安全限制。
 - `temi-care-memory`：structured care memory 讀寫規則。
-- `temi-home-esi`：Home-ESI Lite 風險分級。
+- `temi-home-esi`：Home-ESI v2 decision-tree 風險分級，主 `SKILL.md` 自含核心決策樹，reference 保留完整審查版。
 - `temi-discord-care-assistant`：Discord/gateway 對話入口提示，負責把「看手勢、看相機、我指的是什麼」等自然語句導向 Temi robot/care skills。
 
 Hermes 透過 Discord 對話時，身份與專案上下文由 `hermes-agent/docker/SOUL.md`、`/TemiAgent/.hermes.md` 與 gateway 的 `$HERMES_HOME/SOUL.md` 決定。若使用者請 Hermes 看手勢或相機畫面，Hermes 應先檢查 Discord 圖片附件、`temi_shared/` 圖片路徑或 Bridge frame paths；有影像時使用 vision 與 `temi-robot-control`。若沒有影像且目前 runtime 可用工具，Hermes 可透過 `tools/capture_temi_live_snapshot.py` 從 `8081` decoded JPEG broadcast 按需擷取目前畫面，再用回傳的 `live.snapshot` frame paths 分析；若仍無法取得影像，才要求使用者觸發/傳送 Temi camera event 或附圖。若 Discord/CLI 只產生 Hermes action JSON 而沒有 ASR/Bridge invocation，可用 `tools/dispatch_hermes_action_output.py --publish` 將 JSON 驗證並包成 `temi/{robot_id}/cmd/request`。

@@ -56,7 +56,7 @@
 |---|---|---|
 | `temi-robot-control` | Robot action contract | Temi 可執行 action、JSON-only output、安全動作限制 |
 | `temi-care-memory` | 照護記憶操作規則 | structured care memory、Hermes memory/provider 同步、提醒與事件資料流 |
-| `temi-home-esi` | 風險分級規則 | Home-ESI Lite 的 `Normal/L3/L2/L1` 判斷與行動優先序 |
+| `temi-home-esi` | 風險分級規則 | Home-ESI v2 decision-tree 的 `Normal/L3/L2/L1` 判斷、升降級規則與 Bridge-valid action 優先序 |
 | `temi-discord-care-assistant` | Discord/gateway 入口提示 | 讓 Hermes 在 Discord 遇到手勢、相機、指物、照護語句時知道要載入 Temi skills |
 
 Skill 路徑規劃：
@@ -230,6 +230,7 @@ python3 tools/hermes_resident_server.py \
 
 - 2026-05-31：新增第一年度 Demo P0-P5 階段任務文件；完成 P1 structured memory demo state，男性 persona 設定為 `王先生`。
 - 2026-05-31：完成 P2 最小實作，Bridge 支援 Home-ESI schema validation 與四個 memory/demo actions。
+- 2026-06-10：`temi-home-esi` 升級為 Home-ESI v2 decision-tree policy；主 `SKILL.md` 自含 resident preload 所需核心規則，`references/home_esi_lite.md` 保留 legacy path 與完整審查版。
 - 2026-05-31：完成 P3 deterministic Demo case runner，可產生提醒、不適 L2、疑似跌倒 L1 三個案例 artifacts。
 - 2026-05-31：整理 P5 展示素材，新增 Demo runbook、端到端串接操作手冊、scenario script 與 acceptance checklist；P4 Navigation 本輪先跳過。
 - 2026-05-30：補上目前實作狀態；確認整合底座已通過 container 內測試，照護記憶與 Demo actions 留待下一階段。

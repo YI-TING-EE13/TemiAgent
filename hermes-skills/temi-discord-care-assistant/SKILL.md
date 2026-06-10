@@ -25,8 +25,8 @@ Load or follow these skills depending on the request:
   safe JSON-only robot action planning.
 - `temi-care-memory`: resident profile context, reminders, daily state, event
   logs, summaries, and Bridge-managed care memory actions.
-- `temi-home-esi`: Home-ESI Lite risk classification for `Normal`, `L3`, `L2`,
-  and `L1`.
+- `temi-home-esi`: Home-ESI v2 decision-tree risk classification for
+  `Normal`, `L3`, `L2`, and `L1`.
 
 When in doubt, load `temi-robot-control` first for camera or robot-action
 requests, then add `temi-care-memory` or `temi-home-esi` if the request involves

@@ -119,7 +119,7 @@ uv run python /TemiAgent/tools/temi_overview_adapter.py \
 
 ## 風險聲明
 
-- Home-ESI Lite 是 Demo 用風險分級規則，不是正式醫療分診。
+- Home-ESI v2 decision-tree 是 Demo 用風險分級規則，不是正式醫療分診。
 - `notify_caregiver_mock` 只做 mock notification，不代表真實通報家屬或 119。
 - `memory/` 內資料為合成 persona，不含真實個資。
 - 第一年度 Demo 強調可展示、可解釋、可擴充，不宣稱醫療級產品化。

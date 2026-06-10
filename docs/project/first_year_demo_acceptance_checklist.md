@@ -58,7 +58,7 @@ git diff --cached --check: ok
 
 - [ ] 能說明為何第一年不做大型知識圖譜，改用 structured memory。
 - [ ] 能說明 Hermes 不直接控制硬體，Bridge 是安全邊界。
-- [ ] 能說明 Home-ESI Lite 是 Demo risk policy，不是醫療分診。
+- [ ] 能說明 Home-ESI v2 decision-tree 是 Demo risk policy，不是醫療分診。
 - [ ] 能展示 `memory/profile.json` 中男性 persona `王先生`。
 - [ ] 能展示 event log / abnormal event / summary artifact。
 

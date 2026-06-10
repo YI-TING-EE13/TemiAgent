@@ -1,6 +1,6 @@
 # Hermes Temi Skills 模組 README
 
-最後更新日期：2026-05-19
+最後更新日期：2026-06-10
 
 ## 本文件維護規則
 
@@ -25,7 +25,7 @@ hermes-agent/skills/temi-discord-care-assistant/
 |---|---|---|
 | `temi-robot-control` | Robot action contract | JSON-only output、安全 robot actions、MQTT/action schema、範例。 |
 | `temi-care-memory` | 照護記憶規則 | profile、daily state、reminders、event log、summary 的讀寫邊界。 |
-| `temi-home-esi` | 風險分級規則 | Home-ESI Lite `Normal/L3/L2/L1` 判斷與行動優先序。 |
+| `temi-home-esi` | 風險分級規則 | Home-ESI v2 decision-tree `Normal/L3/L2/L1` 判斷、升降級規則與 Bridge-valid action 優先序。 |
 | `temi-discord-care-assistant` | Discord/gateway 入口 | 讓 Hermes 在 Discord 遇到手勢、相機、指物或照護語句時載入 Temi skills。 |
 
 ## 與其他模組的關係
@@ -54,7 +54,7 @@ hermes-skills/
     references/structured_memory_contract.md
   temi-home-esi/
     SKILL.md
-    references/home_esi_lite.md
+    references/home_esi_lite.md  # legacy path; content is Home-ESI v2 detailed reference
   temi-discord-care-assistant/
     SKILL.md
     references/discord_temi_context.md
@@ -73,7 +73,7 @@ python3 tools/hermes_resident_server.py \
   --skill-path /TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md
 ```
 
-順序很重要：`temi-robot-control` 應先載入，作為 action contract；照護記憶與 Home-ESI policy 接在後面補充認知規則；`temi-discord-care-assistant` 最後補上 Discord/gateway 的相機、手勢與 skill routing 線索。
+順序很重要：`temi-robot-control` 應先載入，作為 action contract；照護記憶與 Home-ESI v2 decision-tree policy 接在後面補充認知規則；`temi-discord-care-assistant` 最後補上 Discord/gateway 的相機、手勢與 skill routing 線索。
 
 ## 同步檢查
 
