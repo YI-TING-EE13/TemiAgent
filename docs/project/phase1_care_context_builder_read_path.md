@@ -41,6 +41,7 @@ Implementation anchors:
 `HermesRequest.care_context` is optional. If care context is disabled or unavailable, the Bridge can still invoke Hermes using the existing event prompt.
 
 For deterministic demo and regression validation, see `docs/project/phase1_care_context_demo_package.md` and `tools/phase1_care_context_demo_runner.py`.
+For architecture/report material drafting, see `docs/project/p2_structured_memory_phase1_report_materials.md`.
 
 ## Memory Authority
 
