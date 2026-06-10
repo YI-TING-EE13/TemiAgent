@@ -11,7 +11,7 @@ from typing import Any
 from .action_validator import ActionValidationError, validate_action_output
 from .command_dispatcher import build_command_request, fallback_command
 from .config import BridgeConfig
-from .event_models import ASRFinalEvent, EventValidationError
+from .event_models import ASRFinalEvent, EventValidationError, PerceptionAbnormalEvent
 from .hermes_client import (
     HermesClient,
     HttpHermesClient,
@@ -63,6 +63,7 @@ class HermesTemiBridgeService:
     def start(self) -> None:
         """Start the MQTT runtime and block forever."""
         self.mqtt_client.set_asr_handler(self.handle_asr_payload)
+        self.mqtt_client.set_abnormal_handler(self.handle_abnormal_payload)
         self.mqtt_client.set_result_handler(self.handle_command_result)
         self.mqtt_client.connect()
         self.mqtt_client.loop_forever()
@@ -195,6 +196,139 @@ class HermesTemiBridgeService:
             return self._fail_with_fallback(
                 event_id, robot_id, "unexpected_error", FALLBACKS["generic"], {"error": str(exc)}
             )
+
+    def handle_abnormal_payload(self, topic: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Handle one abnormal perception event payload from MQTT."""
+        event_id = str(payload.get("event_id") or "unknown_event")
+        robot_id = str(payload.get("robot_id") or _robot_id_from_topic(topic) or "unknown_robot")
+        try:
+            event = PerceptionAbnormalEvent.from_payload(payload, self.config.robot_id_allowlist)
+            if self.event_cache.seen(event.event_id):
+                self.event_logger.write(
+                    event.event_id,
+                    "duplicate_event_ignored",
+                    {"status": "ignored", "reason": "duplicate_event_id"},
+                )
+                return {"status": "ignored", "reason": "duplicate_event_id"}
+
+            self.event_logger.write(
+                event.event_id,
+                "abnormal_event_received",
+                {
+                    "event_id": event.event_id,
+                    "robot_id": event.robot_id,
+                    "action_name": event.action_name,
+                    "reason": event.reason,
+                    "image_paths": [frame.path for frame in event.frames],
+                },
+            )
+
+            for frame in event.frames:
+                validate_image_file(frame.path, self.config.max_image_size_mb)
+            translated_frames = translate_frames(
+                event.frames,
+                self.config.temi_shared_bridge_path,
+                self.config.temi_shared_hermes_path,
+            )
+            hermes_request = HermesRequest(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                conversation_id=None,
+                language="zh-TW",
+                asr_text="",
+                frames=translated_frames,
+                source_type="perception.abnormal",
+                abnormal_action_name=event.action_name,
+                abnormal_reason=event.reason,
+            )
+            self.event_logger.write(event.event_id, "hermes_invocation_start", {})
+            hermes_response = self.hermes_client.invoke(hermes_request)
+            raw_path = self.event_logger.write(
+                event.event_id,
+                "hermes_invocation_end",
+                {
+                    "hermes_latency_ms": hermes_response.latency_ms,
+                    "raw_hermes_output": hermes_response.raw_output,
+                },
+            )
+            parsed_output = parse_hermes_output(hermes_response.raw_output)
+            validated_output = validate_action_output(
+                parsed_output,
+                expected_event_id=event.event_id,
+                expected_robot_id=event.robot_id,
+                max_actions=self.config.max_actions_per_event,
+            )
+            memory_results = []
+            if validated_output.memory_actions:
+                memory_results = self.memory_store.execute(
+                    validated_output,
+                    EventContext(
+                        asr_text="",
+                        image_paths=[frame.path for frame in event.frames],
+                        conversation_id=None,
+                    ),
+                )
+            command = None
+            if validated_output.robot_actions:
+                command = build_command_request(validated_output)
+                self.mqtt_client.publish_command(event.robot_id, command)
+            self.event_cache.mark_seen(event.event_id)
+            self.event_logger.write(
+                event.event_id,
+                "event_completed",
+                {
+                    "source_type": "perception.abnormal",
+                    "validated_actions": validated_output.actions,
+                    "robot_actions": validated_output.robot_actions,
+                    "memory_action_results": memory_results,
+                    "published_command_id": command["command_id"] if command else None,
+                    "raw_hermes_output_path": str(raw_path),
+                },
+            )
+            result = {"status": "success", "memory_action_results": memory_results}
+            if command:
+                result["command_id"] = command["command_id"]
+            return result
+        except EventValidationError as exc:
+            return self._fail_with_fallback(event_id, robot_id, exc.reason, FALLBACKS["generic"], exc.details)
+        except ImageValidationError as exc:
+            return self._fail_with_fallback(
+                event_id,
+                robot_id,
+                exc.reason,
+                FALLBACKS["missing_image"],
+                {"missing_path": exc.path},
+            )
+        except HermesTimeoutError:
+            return self._fail_with_fallback(
+                event_id, robot_id, "hermes_timeout", FALLBACKS["hermes_timeout"]
+            )
+        except HermesOutputError as exc:
+            return self._fail_with_fallback(
+                event_id,
+                robot_id,
+                exc.reason,
+                FALLBACKS["invalid_hermes_json"],
+                {"raw_output": exc.raw_output},
+            )
+        except ActionValidationError as exc:
+            return self._fail_with_fallback(
+                event_id, robot_id, exc.reason, FALLBACKS["unsafe_action"], exc.details
+            )
+        except MemoryActionError as exc:
+            return self._fail_with_fallback(
+                event_id, robot_id, exc.reason, FALLBACKS["generic"], exc.details
+            )
+        except HermesInvocationError as exc:
+            return self._fail_with_fallback(
+                event_id, robot_id, "hermes_invocation_failed", FALLBACKS["generic"], {"error": str(exc)}
+            )
+        except Exception as exc:  # pragma: no cover - last-resort service protection
+            LOGGER.exception("unexpected failure while handling abnormal event")
+            return self._fail_with_fallback(
+                event_id, robot_id, "unexpected_error", FALLBACKS["generic"], {"error": str(exc)}
+            )
+
 
     def handle_command_result(self, topic: str, payload: dict[str, Any]) -> None:
         """Persist command result notifications for later inspection."""

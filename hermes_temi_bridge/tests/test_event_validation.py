@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 from hermes_temi_bridge.config import BridgeConfig
-from hermes_temi_bridge.event_models import ASRFinalEvent, EventValidationError
+from hermes_temi_bridge.event_models import ASRFinalEvent, EventValidationError, PerceptionAbnormalEvent
 from hermes_temi_bridge.hermes_client import HermesResponse
 from hermes_temi_bridge.idempotency import TTLProcessedEventCache
 from hermes_temi_bridge.image_resolver import ImageValidationError, validate_image_file
@@ -39,6 +39,33 @@ def create_images_for_payload(payload):
         path.write_bytes(b"fake-jpeg")
 
 
+def make_abnormal_payload(bridge_root: Path, event_id: str = "evt_abnormal_001"):
+    frame_paths = []
+    event_dir = bridge_root / "abnormal_events" / "temi-01" / event_id
+    event_dir.mkdir(parents=True, exist_ok=True)
+    for index in range(8):
+        path = event_dir / f"frame_{index:03d}.jpg"
+        path.write_bytes(b"fake-jpeg")
+        frame_paths.append(path.as_posix())
+    return {
+        "schema_version": "1.0",
+        "event_id": event_id,
+        "robot_id": "temi-01",
+        "type": "perception.abnormal",
+        "timestamp_ms": 1778499000200,
+        "observation": {
+            "action_name": "fights",
+            "reason": "Two people are striking each other across multiple frames.",
+        },
+        "evidence": {
+            "frame_paths": frame_paths,
+        },
+        "context": {
+            "source": "temi_video_action_tester",
+        },
+    }
+
+
 class MockMqtt:
     def __init__(self):
         self.published = []
@@ -64,6 +91,23 @@ class EventValidationTests(unittest.TestCase):
         self.assertEqual(event.event_id, "evt_20260511_000001")
         self.assertEqual(event.asr_text, "幫我看看桌上的東西是什麼")
         self.assertEqual({frame.name for frame in event.frames}, {"t_minus_1000", "t_minus_500", "t"})
+
+    def test_valid_abnormal_event_should_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = make_abnormal_payload(Path(tmp) / "temi_shared")
+            event = PerceptionAbnormalEvent.from_payload(payload, ("temi-01",))
+
+            self.assertEqual(event.event_id, "evt_abnormal_001")
+            self.assertEqual(event.action_name, "fights")
+            self.assertIn("striking", event.reason)
+            self.assertEqual(len(event.frames), 8)
+
+    def test_abnormal_event_missing_reason_should_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = make_abnormal_payload(Path(tmp) / "temi_shared")
+            del payload["observation"]["reason"]
+            with self.assertRaisesRegex(EventValidationError, "missing_reason"):
+                PerceptionAbnormalEvent.from_payload(payload, ("temi-01",))
 
     def test_missing_event_id_should_fail(self):
         payload = load_fixture("asr_final_valid.json")
@@ -107,6 +151,88 @@ class EventValidationTests(unittest.TestCase):
             self.assertEqual(first["status"], "success")
             self.assertEqual(second, {"status": "ignored", "reason": "duplicate_event_id"})
             self.assertEqual(len(mqtt.published), 1)
+
+    def test_abnormal_event_invokes_hermes_and_publishes_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bridge_root = root / "temi_shared"
+            payload = make_abnormal_payload(bridge_root)
+            hermes_raw = (FIXTURES / "hermes_output_valid_speak.json").read_text(encoding="utf-8")
+            hermes_raw = hermes_raw.replace("evt_20260511_000001", payload["event_id"])
+            mqtt = MockMqtt()
+            hermes = MockHermes(hermes_raw)
+            config = BridgeConfig(
+                temi_shared_bridge_path=bridge_root.as_posix(),
+                temi_shared_hermes_path="/shared/temi",
+                log_dir=(root / "logs").as_posix(),
+            )
+            service = HermesTemiBridgeService(
+                config,
+                mqtt,
+                hermes,
+                TTLProcessedEventCache(600),
+                EventJsonlLogger(root / "logs"),
+            )
+
+            result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", copy.deepcopy(payload))
+
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(len(hermes.requests), 1)
+            self.assertEqual(hermes.requests[0].source_type, "perception.abnormal")
+            self.assertEqual(hermes.requests[0].abnormal_action_name, "fights")
+            self.assertIn("striking", hermes.requests[0].abnormal_reason)
+            self.assertEqual(len(mqtt.published), 1)
+
+    def test_abnormal_event_duplicate_should_be_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bridge_root = root / "temi_shared"
+            payload = make_abnormal_payload(bridge_root)
+            hermes_raw = (FIXTURES / "hermes_output_valid_speak.json").read_text(encoding="utf-8")
+            hermes_raw = hermes_raw.replace("evt_20260511_000001", payload["event_id"])
+            mqtt = MockMqtt()
+            service = HermesTemiBridgeService(
+                BridgeConfig(
+                    temi_shared_bridge_path=bridge_root.as_posix(),
+                    temi_shared_hermes_path="/shared/temi",
+                    log_dir=(root / "logs").as_posix(),
+                ),
+                mqtt,
+                MockHermes(hermes_raw),
+                TTLProcessedEventCache(600),
+                EventJsonlLogger(root / "logs"),
+            )
+
+            first = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", copy.deepcopy(payload))
+            second = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", copy.deepcopy(payload))
+
+            self.assertEqual(first["status"], "success")
+            self.assertEqual(second, {"status": "ignored", "reason": "duplicate_event_id"})
+            self.assertEqual(len(mqtt.published), 1)
+
+    def test_abnormal_event_missing_image_should_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bridge_root = root / "temi_shared"
+            payload = make_abnormal_payload(bridge_root)
+            Path(payload["evidence"]["frame_paths"][0]).unlink()
+            mqtt = MockMqtt()
+            service = HermesTemiBridgeService(
+                BridgeConfig(
+                    temi_shared_bridge_path=bridge_root.as_posix(),
+                    temi_shared_hermes_path="/shared/temi",
+                    log_dir=(root / "logs").as_posix(),
+                ),
+                mqtt,
+                MockHermes("{}"),
+                TTLProcessedEventCache(600),
+                EventJsonlLogger(root / "logs"),
+            )
+
+            result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", payload)
+
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["reason"], "missing_image")
 
 
 if __name__ == "__main__":

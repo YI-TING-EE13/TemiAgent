@@ -35,11 +35,16 @@ class TemiMqttClient:
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
         self._asr_handler: Callable[[str, dict[str, Any]], None] | None = None
+        self._abnormal_handler: Callable[[str, dict[str, Any]], None] | None = None
         self._result_handler: Callable[[str, dict[str, Any]], None] | None = None
 
     def set_asr_handler(self, handler: Callable[[str, dict[str, Any]], None]) -> None:
         """Register the callback for canonical ASR final events."""
         self._asr_handler = handler
+
+    def set_abnormal_handler(self, handler: Callable[[str, dict[str, Any]], None]) -> None:
+        """Register the callback for abnormal perception events."""
+        self._abnormal_handler = handler
 
     def set_result_handler(self, handler: Callable[[str, dict[str, Any]], None]) -> None:
         """Register the callback for command result events."""
@@ -70,6 +75,7 @@ class TemiMqttClient:
             return
         LOGGER.info("connected to MQTT broker")
         client.subscribe("temi/+/asr/final", qos=1)
+        client.subscribe("temi/+/perception/abnormal", qos=1)
         client.subscribe("temi/+/cmd/result", qos=1)
 
     def _on_message(self, client, userdata, msg) -> None:
@@ -84,6 +90,8 @@ class TemiMqttClient:
             return
         if msg.topic.endswith("/asr/final") and self._asr_handler:
             self._asr_handler(msg.topic, payload)
+        elif msg.topic.endswith("/perception/abnormal") and self._abnormal_handler:
+            self._abnormal_handler(msg.topic, payload)
         elif msg.topic.endswith("/cmd/result") and self._result_handler:
             self._result_handler(msg.topic, payload)
 

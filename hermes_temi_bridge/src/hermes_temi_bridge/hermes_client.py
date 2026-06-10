@@ -41,6 +41,9 @@ class HermesRequest:
     language: str
     asr_text: str
     frames: list[dict[str, str | int | None]]
+    source_type: str = "asr.final"
+    abnormal_action_name: str | None = None
+    abnormal_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -196,6 +199,13 @@ def _build_command(cli_command: str, prompt: str) -> list[str]:
 
 
 def build_prompt(request: HermesRequest) -> str:
+    """Build the deterministic prompt sent to Hermes for one event."""
+    if request.source_type == "perception.abnormal":
+        return build_abnormal_prompt(request)
+    return build_asr_prompt(request)
+
+
+def build_asr_prompt(request: HermesRequest) -> str:
     """Build the deterministic prompt sent to Hermes for one ASR event."""
     frame_lines = []
     order = {"t_minus_1000": 1, "t_minus_500": 2, "t": 3}
@@ -226,6 +236,86 @@ Instructions:
 - Infer the user's intent.
 - If visual understanding is needed, use the image paths as the visual input references.
 - Decide safe Temi robot actions.
+- Output ONLY valid JSON.
+- Do not output Markdown.
+- Do not include explanations outside JSON.
+- Do not execute shell commands directly.
+- Do not invent unavailable robot capabilities.
+- If uncertain, ask a clarification question through a speak or ask_clarification action.
+- Include cognitive_state.home_esi_level and cognitive_state.risk_reason for every response.
+- Use memory actions when the event should be recorded or summarized; memory actions are handled by the Bridge and are not sent to Temi.
+
+Allowed action types:
+- speak
+- ask_clarification
+- turn
+- navigate
+- stop
+- noop
+- log_event
+- mark_reminder_done
+- generate_summary
+- notify_caregiver_mock
+
+Required output JSON schema:
+{{
+  "schema_version": "1.0",
+  "event_id": "{request.event_id}",
+  "robot_id": "{request.robot_id}",
+  "confidence": 0.0,
+  "cognitive_state": {{
+    "intent": "brief intent",
+    "home_esi_level": "Normal|L1|L2|L3",
+    "risk_reason": "brief reason for the risk level",
+    "next_step": "brief next step"
+  }},
+  "reasoning_summary": "brief non-sensitive summary",
+  "actions": [
+    {{
+      "action_id": "act_001",
+      "type": "speak",
+      "text": "response text",
+      "language": "{request.language}"
+    }}
+  ]
+}}
+
+Every action object MUST include action_id. Use act_001, act_002, and so on.
+"""
+
+
+def build_abnormal_prompt(request: HermesRequest) -> str:
+    """Build the deterministic prompt sent to Hermes for one abnormal perception event."""
+    frame_lines = []
+    for index, frame in enumerate(request.frames, start=1):
+        frame_lines.append(f"{index}. {frame['name']}:\n   {frame['hermes_path']}")
+    frames_text = "\n".join(frame_lines) or "No evidence frames were provided."
+    action_name = request.abnormal_action_name or "unknown"
+    reason = request.abnormal_reason or ""
+    return f"""You are controlling a Temi robot through the temi-robot-control skill.
+
+Use the installed skill: /temi-robot-control
+
+Task source:
+- source_type: perception.abnormal
+- robot_id: {request.robot_id}
+- event_id: {request.event_id}
+- conversation_id: {request.conversation_id or ""}
+- user language: {request.language}
+
+Abnormal vision model observation:
+- action_name: {action_name}
+- model_reason: {reason}
+
+Evidence frames:
+{frames_text}
+
+Instructions:
+- Treat this as a low-frequency abnormal perception event, not an ASR event.
+- Use the model observation and evidence frame paths to judge care risk.
+- If visual understanding is needed, use the image paths as visual input references.
+- Decide safe Temi robot actions.
+- Do not directly control hardware outside the allowed action schema.
 - Output ONLY valid JSON.
 - Do not output Markdown.
 - Do not include explanations outside JSON.

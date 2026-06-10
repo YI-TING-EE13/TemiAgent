@@ -96,6 +96,60 @@ class ASRFinalEvent:
         )
 
 
+@dataclass(frozen=True)
+class PerceptionAbnormalEvent:
+    """Canonical abnormal perception event consumed by HermesTemiBridge."""
+
+    schema_version: str
+    event_id: str
+    robot_id: str
+    timestamp_ms: int | None
+    action_name: str
+    reason: str
+    frames: tuple[VisionFrame, ...]
+    raw: dict[str, Any]
+
+    @classmethod
+    def from_payload(
+        cls, payload: dict[str, Any], robot_id_allowlist: tuple[str, ...] = ()
+    ) -> "PerceptionAbnormalEvent":
+        """Parse and validate a raw MQTT payload into a PerceptionAbnormalEvent."""
+        if payload.get("schema_version") != SUPPORTED_SCHEMA_VERSION:
+            raise EventValidationError("unsupported_schema_version")
+        if payload.get("type") != "perception.abnormal":
+            raise EventValidationError("unsupported_event_type")
+
+        event_id = _required_string(payload, "event_id")
+        robot_id = _required_string(payload, "robot_id")
+        if robot_id_allowlist and robot_id not in robot_id_allowlist:
+            raise EventValidationError("robot_not_allowed", {"robot_id": robot_id})
+
+        observation = payload.get("observation")
+        if not isinstance(observation, dict):
+            raise EventValidationError("missing_observation")
+        action_name = _required_string(observation, "action_name")
+        reason = _required_string(observation, "reason")
+
+        evidence = payload.get("evidence")
+        if not isinstance(evidence, dict):
+            raise EventValidationError("missing_evidence")
+        frame_paths = evidence.get("frame_paths")
+        if not isinstance(frame_paths, list) or not frame_paths:
+            raise EventValidationError("missing_frame_paths")
+        frames = tuple(_parse_abnormal_frame(index, path) for index, path in enumerate(frame_paths))
+
+        return cls(
+            schema_version=SUPPORTED_SCHEMA_VERSION,
+            event_id=event_id,
+            robot_id=robot_id,
+            timestamp_ms=_optional_int(payload, "timestamp_ms"),
+            action_name=action_name,
+            reason=reason,
+            frames=frames,
+            raw=payload,
+        )
+
+
 def _required_string(payload: dict[str, Any], key: str) -> str:
     """Read a required non-empty string field from a payload."""
     value = payload.get(key)
@@ -137,4 +191,16 @@ def _parse_frame(payload: Any) -> VisionFrame:
         ts_ms=_optional_int(payload, "ts_ms"),
         path=path.strip(),
         mime_type=_optional_string(payload, "mime_type"),
+    )
+
+
+def _parse_abnormal_frame(index: int, path: Any) -> VisionFrame:
+    """Parse one abnormal evidence frame path."""
+    if not isinstance(path, str) or not path.strip():
+        raise EventValidationError("missing_frame_path", {"frame_index": index})
+    return VisionFrame(
+        name=f"frame_{index:03d}",
+        ts_ms=None,
+        path=path.strip(),
+        mime_type="image/jpeg",
     )
