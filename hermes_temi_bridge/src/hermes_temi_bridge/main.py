@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .action_validator import ActionValidationError, validate_action_output
+from .care_context_builder import CareContextBuilder
 from .command_dispatcher import build_command_request, fallback_command
 from .config import BridgeConfig
 from .event_models import ASRFinalEvent, EventValidationError, PerceptionAbnormalEvent
@@ -51,6 +52,7 @@ class HermesTemiBridgeService:
         event_cache: TTLProcessedEventCache | None = None,
         event_logger: EventJsonlLogger | None = None,
         memory_store: StructuredMemoryStore | None = None,
+        care_context_builder: CareContextBuilder | None = None,
     ):
         """Create a Bridge service with injectable clients for tests."""
         self.config = config
@@ -59,6 +61,17 @@ class HermesTemiBridgeService:
         self.event_cache = event_cache or TTLProcessedEventCache(config.event_dedup_ttl_seconds)
         self.event_logger = event_logger or EventJsonlLogger(config.log_dir)
         self.memory_store = memory_store or StructuredMemoryStore(config.memory_dir)
+        self.care_context_builder = (
+            care_context_builder
+            if care_context_builder is not None
+            else CareContextBuilder(
+                config.memory_dir,
+                max_events=config.care_context_max_events,
+                max_chars=config.care_context_max_chars,
+            )
+            if config.care_context_enabled
+            else None
+        )
 
     def start(self) -> None:
         """Start the MQTT runtime and block forever."""
@@ -101,6 +114,13 @@ class HermesTemiBridgeService:
                 self.config.temi_shared_bridge_path,
                 self.config.temi_shared_hermes_path,
             )
+            care_context = self._build_care_context(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                source="asr.final",
+                asr_text=event.asr_text,
+                image_paths=[frame.path for frame in event.frames],
+            )
             hermes_request = HermesRequest(
                 event_id=event.event_id,
                 robot_id=event.robot_id,
@@ -108,6 +128,7 @@ class HermesTemiBridgeService:
                 language=event.language,
                 asr_text=event.asr_text,
                 frames=translated_frames,
+                care_context=care_context,
             )
             self.event_logger.write(event.event_id, "hermes_invocation_start", {})
             hermes_response = self.hermes_client.invoke(hermes_request)
@@ -230,6 +251,13 @@ class HermesTemiBridgeService:
                 self.config.temi_shared_bridge_path,
                 self.config.temi_shared_hermes_path,
             )
+            care_context = self._build_care_context(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                source="perception.abnormal",
+                asr_text="",
+                image_paths=[frame.path for frame in event.frames],
+            )
             hermes_request = HermesRequest(
                 event_id=event.event_id,
                 robot_id=event.robot_id,
@@ -237,6 +265,7 @@ class HermesTemiBridgeService:
                 language="zh-TW",
                 asr_text="",
                 frames=translated_frames,
+                care_context=care_context,
                 source_type="perception.abnormal",
                 abnormal_action_name=event.action_name,
                 abnormal_reason=event.reason,
@@ -329,6 +358,26 @@ class HermesTemiBridgeService:
                 event_id, robot_id, "unexpected_error", FALLBACKS["generic"], {"error": str(exc)}
             )
 
+
+    def _build_care_context(
+        self,
+        *,
+        event_id: str,
+        robot_id: str,
+        source: str,
+        asr_text: str | None,
+        image_paths: list[str],
+    ) -> dict[str, Any] | None:
+        """Build structured care context if the read path is enabled."""
+        if self.care_context_builder is None:
+            return None
+        return self.care_context_builder.build_for_event(
+            event_id=event_id,
+            robot_id=robot_id,
+            source=source,
+            asr_text=asr_text,
+            image_paths=image_paths,
+        )
 
     def handle_command_result(self, topic: str, payload: dict[str, Any]) -> None:
         """Persist command result notifications for later inspection."""

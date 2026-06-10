@@ -66,6 +66,73 @@ def make_abnormal_payload(bridge_root: Path, event_id: str = "evt_abnormal_001")
     }
 
 
+def write_seed_memory(memory_root: Path):
+    memory_root.mkdir(parents=True, exist_ok=True)
+    (memory_root / "profile.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "user_id": "elder_demo_001",
+                "preferred_name": "王先生",
+                "gender": "male",
+                "language": "zh-TW",
+                "care_preferences": {"speak_style": "溫和、簡短、清楚"},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (memory_root / "reminders.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "reminders": [
+                    {
+                        "reminder_id": "rem_morning_medication",
+                        "type": "medication",
+                        "title": "早餐後服藥",
+                        "time": "08:30",
+                        "status": "active",
+                        "requires_confirmation": True,
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (memory_root / "daily_state.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "date": "2026-06-10",
+                "risk_state": "normal",
+                "active_reminders": ["rem_morning_medication"],
+                "recent_event_ids": ["evt_prior_l2"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    with (memory_root / "event_log.jsonl").open("w", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "event_id": "evt_prior_l2",
+                    "timestamp": "2026-06-10T08:00:00+00:00",
+                    "source": "hermes_temi_bridge",
+                    "asr_text": "我有點不舒服",
+                    "perception": {"intent": "report_discomfort"},
+                    "risk": {"home_esi_level": "L2", "reason": "使用者表示不舒服，需要追問。"},
+                    "actions_taken": ["ask_clarification", "log_event"],
+                    "outcome": "waiting_for_user_response",
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+
+
 class MockMqtt:
     def __init__(self):
         self.published = []
@@ -233,6 +300,106 @@ class EventValidationTests(unittest.TestCase):
 
             self.assertEqual(result["status"], "failed")
             self.assertEqual(result["reason"], "missing_image")
+
+
+    def test_asr_event_builds_care_context_before_hermes_invocation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bridge_root = root / "temi_shared"
+            memory_root = root / "memory"
+            write_seed_memory(memory_root)
+            payload = rewrite_frame_paths(load_fixture("asr_final_valid.json"), bridge_root)
+            payload["asr"]["text"] = "我又不舒服"
+            create_images_for_payload(payload)
+            hermes_raw = (FIXTURES / "hermes_output_valid_speak.json").read_text(encoding="utf-8")
+            mqtt = MockMqtt()
+            hermes = MockHermes(hermes_raw)
+            service = HermesTemiBridgeService(
+                BridgeConfig(
+                    temi_shared_bridge_path=bridge_root.as_posix(),
+                    temi_shared_hermes_path="/shared/temi",
+                    log_dir=(root / "logs").as_posix(),
+                    memory_dir=memory_root.as_posix(),
+                ),
+                mqtt,
+                hermes,
+                TTLProcessedEventCache(600),
+                EventJsonlLogger(root / "logs"),
+            )
+
+            result = service.handle_asr_payload("temi/temi-01/asr/final", copy.deepcopy(payload))
+
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(len(hermes.requests), 1)
+            care_context = hermes.requests[0].care_context
+            self.assertIsNotNone(care_context)
+            self.assertEqual(care_context["resident"]["display_name"], "王先生")
+            self.assertEqual(care_context["active_reminders"][0]["reminder_id"], "rem_morning_medication")
+            self.assertEqual(care_context["relevant_events"][0]["event_id"], "evt_prior_l2")
+
+    def test_abnormal_event_builds_care_context_before_hermes_invocation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bridge_root = root / "temi_shared"
+            memory_root = root / "memory"
+            write_seed_memory(memory_root)
+            payload = make_abnormal_payload(bridge_root)
+            hermes_raw = (FIXTURES / "hermes_output_valid_speak.json").read_text(encoding="utf-8")
+            hermes_raw = hermes_raw.replace("evt_20260511_000001", payload["event_id"])
+            mqtt = MockMqtt()
+            hermes = MockHermes(hermes_raw)
+            service = HermesTemiBridgeService(
+                BridgeConfig(
+                    temi_shared_bridge_path=bridge_root.as_posix(),
+                    temi_shared_hermes_path="/shared/temi",
+                    log_dir=(root / "logs").as_posix(),
+                    memory_dir=memory_root.as_posix(),
+                ),
+                mqtt,
+                hermes,
+                TTLProcessedEventCache(600),
+                EventJsonlLogger(root / "logs"),
+            )
+
+            result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", copy.deepcopy(payload))
+
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(hermes.requests[0].care_context["event"]["source"], "perception.abnormal")
+            self.assertEqual(hermes.requests[0].care_context["resident"]["display_name"], "王先生")
+
+    def test_memory_actions_are_not_published_to_mqtt_with_care_context_enabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bridge_root = root / "temi_shared"
+            memory_root = root / "memory"
+            write_seed_memory(memory_root)
+            payload = rewrite_frame_paths(load_fixture("asr_final_valid.json"), bridge_root)
+            payload["asr"]["text"] = "我吃完藥了"
+            create_images_for_payload(payload)
+            hermes_raw = (FIXTURES / "hermes_output_valid_memory_actions.json").read_text(encoding="utf-8")
+            mqtt = MockMqtt()
+            hermes = MockHermes(hermes_raw)
+            service = HermesTemiBridgeService(
+                BridgeConfig(
+                    temi_shared_bridge_path=bridge_root.as_posix(),
+                    temi_shared_hermes_path="/shared/temi",
+                    log_dir=(root / "logs").as_posix(),
+                    memory_dir=memory_root.as_posix(),
+                ),
+                mqtt,
+                hermes,
+                TTLProcessedEventCache(600),
+                EventJsonlLogger(root / "logs"),
+            )
+
+            result = service.handle_asr_payload("temi/temi-01/asr/final", copy.deepcopy(payload))
+
+            self.assertEqual(result["status"], "success")
+            self.assertEqual([item["type"] for item in result["memory_action_results"]], ["mark_reminder_done", "log_event"])
+            self.assertEqual(len(mqtt.published), 1)
+            published_actions = mqtt.published[0][1]["actions"]
+            self.assertEqual([action["type"] for action in published_actions], ["speak"])
+            self.assertIsNotNone(hermes.requests[0].care_context)
 
 
 if __name__ == "__main__":

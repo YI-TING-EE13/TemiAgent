@@ -30,6 +30,16 @@ def _get_int(values: dict[str, str], name: str, default: int) -> int:
         raise ValueError(f"{name} must be an integer, got {raw!r}") from exc
 
 
+def _get_bool(values: dict[str, str], name: str, default: bool) -> bool:
+    """Read a boolean config value from the environment or env file."""
+    raw = os.getenv(name, values.get(name, str(default))).strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean, got {raw!r}")
+
+
 def _get_csv(values: dict[str, str], name: str, default: list[str]) -> list[str]:
     """Read a comma-separated config value from the environment or env file."""
     raw = os.getenv(name, values.get(name, ""))
@@ -60,6 +70,9 @@ class BridgeConfig:
     log_level: str = "INFO"
     log_dir: str = "logs/events"
     memory_dir: str = "memory"
+    care_context_enabled: bool = True
+    care_context_max_events: int = 5
+    care_context_max_chars: int = 4000
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> "BridgeConfig":
@@ -111,4 +124,13 @@ class BridgeConfig:
             log_level=os.getenv("LOG_LEVEL", values.get("LOG_LEVEL", cls.log_level)),
             log_dir=os.getenv("LOG_DIR", values.get("LOG_DIR", cls.log_dir)),
             memory_dir=os.getenv("MEMORY_DIR", values.get("MEMORY_DIR", cls.memory_dir)),
+            care_context_enabled=_get_bool(
+                values, "CARE_CONTEXT_ENABLED", cls.care_context_enabled
+            ),
+            care_context_max_events=_get_int(
+                values, "CARE_CONTEXT_MAX_EVENTS", cls.care_context_max_events
+            ),
+            care_context_max_chars=_get_int(
+                values, "CARE_CONTEXT_MAX_CHARS", cls.care_context_max_chars
+            ),
         )

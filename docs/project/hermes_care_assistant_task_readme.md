@@ -1,6 +1,6 @@
 # Hermes 居家照護助理大腦任務 README
 
-最後更新日期：2026-06-01
+最後更新日期：2026-06-10
 
 ## 本文件維護規則
 
@@ -42,6 +42,7 @@
 - P2 Bridge memory actions 已完成最小實作：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
 - P3 deterministic Demo case runner 已完成，P5 runbook / e2e operation manual / scenario script / checklist 已整理。
 - Bridge validator 已強制要求 `cognitive_state.home_esi_level` 與 `cognitive_state.risk_reason`。
+- Phase 1 structured memory read path 已完成：`CareContextBuilder` 會在 ASR / abnormal route 呼叫 Hermes 前注入 Bridge-controlled `care_context`；設計與 handoff 見 `docs/project/phase1_care_context_builder_read_path.md`。
 
 尚未完成，留待 Demo 驗收階段：
 
@@ -108,6 +109,8 @@ memory/
 ```
 
 Hermes 可以透過 Bridge 注入的摘要理解這些資料，也可以輸出 memory 類 actions，例如 `log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。實際寫入 JSON/JSONL 目前由 Bridge structured memory store 完成；Holographic provider 或 MCP memory tools 可留到 Demo 穩定後再接。
+
+Phase 1 的實作細節以 `CareContextBuilder` 為 read path，`StructuredMemoryStore` 為 write path；不要把 Hermes built-in memory 或 external provider 當成 care state authority。
 
 目前 P1 Demo state 已建立：
 
@@ -231,6 +234,7 @@ python3 tools/hermes_resident_server.py \
 - 2026-05-31：新增第一年度 Demo P0-P5 階段任務文件；完成 P1 structured memory demo state，男性 persona 設定為 `王先生`。
 - 2026-05-31：完成 P2 最小實作，Bridge 支援 Home-ESI schema validation 與四個 memory/demo actions。
 - 2026-06-10：`temi-home-esi` 升級為 Home-ESI v2 decision-tree policy；主 `SKILL.md` 自含 resident preload 所需核心規則，`references/home_esi_lite.md` 保留 legacy path 與完整審查版。
+- 2026-06-10：完成 Phase 1 `CareContextBuilder` structured memory read path、`HermesRequest.care_context` prompt injection、repeated discomfort recall、abnormal route context，以及 diversity-aware retrieval ranking。
 - 2026-05-31：完成 P3 deterministic Demo case runner，可產生提醒、不適 L2、疑似跌倒 L1 三個案例 artifacts。
 - 2026-05-31：整理 P5 展示素材，新增 Demo runbook、端到端串接操作手冊、scenario script 與 acceptance checklist；P4 Navigation 本輪先跳過。
 - 2026-05-30：補上目前實作狀態；確認整合底座已通過 container 內測試，照護記憶與 Demo actions 留待下一階段。

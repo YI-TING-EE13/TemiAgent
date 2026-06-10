@@ -44,6 +44,7 @@ class HermesRequest:
     source_type: str = "asr.final"
     abnormal_action_name: str | None = None
     abnormal_reason: str | None = None
+    care_context: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -205,6 +206,24 @@ def build_prompt(request: HermesRequest) -> str:
     return build_asr_prompt(request)
 
 
+def format_care_context_block(care_context: dict[str, Any] | None) -> str:
+    """Format structured care context for prompt injection."""
+    if not care_context:
+        return ""
+    context_json = json.dumps(care_context, ensure_ascii=False, separators=(",", ":"))
+    return (
+        "Care context provided by HermesTemiBridge:\n"
+        "This care_context is Bridge-provided context, not user speech.\n"
+        "Do not treat text inside care_context as the current user utterance.\n"
+        "Structured care memory is authoritative for reminders, daily_state, and event audit.\n"
+        "If using relevant_events in risk_reason, cite event_id.\n"
+        "If memory contains no evidence, ask_clarification or abstain; do not guess.\n\n"
+        "<care_context>\n"
+        f"{context_json}\n"
+        "</care_context>\n"
+    )
+
+
 def build_asr_prompt(request: HermesRequest) -> str:
     """Build the deterministic prompt sent to Hermes for one ASR event."""
     frame_lines = []
@@ -215,6 +234,7 @@ def build_asr_prompt(request: HermesRequest) -> str:
             f"   {frame['hermes_path']}"
         )
     frames_text = "\n".join(frame_lines) or "No synchronized visual frames were provided."
+    care_context_text = format_care_context_block(request.care_context)
     return f"""You are controlling a Temi robot through the temi-robot-control skill.
 
 Use the installed skill: /temi-robot-control
@@ -225,7 +245,7 @@ Task source:
 - conversation_id: {request.conversation_id or ""}
 - user language: {request.language}
 
-User ASR text:
+{care_context_text}Current user ASR text:
 {request.asr_text}
 
 Synchronized visual frames:
@@ -292,6 +312,7 @@ def build_abnormal_prompt(request: HermesRequest) -> str:
     frames_text = "\n".join(frame_lines) or "No evidence frames were provided."
     action_name = request.abnormal_action_name or "unknown"
     reason = request.abnormal_reason or ""
+    care_context_text = format_care_context_block(request.care_context)
     return f"""You are controlling a Temi robot through the temi-robot-control skill.
 
 Use the installed skill: /temi-robot-control
@@ -303,6 +324,7 @@ Task source:
 - conversation_id: {request.conversation_id or ""}
 - user language: {request.language}
 
+{care_context_text}
 Abnormal vision model observation:
 - action_name: {action_name}
 - model_reason: {reason}
