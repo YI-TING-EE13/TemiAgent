@@ -61,22 +61,26 @@ cd /TemiAgent
 | Model identifier | `google/gemma-4-31b` |
 | Context length | `64000` |
 | LM Studio data dir | `/TemiAgent/.lmstudio-data` |
-| LM Studio visible GPUs | `0,1,2` |
+| LM Studio visible GPUs | `0` by default; override with `0,1` or `0,1,2` |
 
 未來如果要更換模型或 context length，優先改環境變數，不要硬改多個服務檔：
 
 ```bash
-export LMSTUDIO_MODEL_ID='google/gemma-4-31b'
+export LMSTUDIO_MODEL_ID='gemma-4-31b-it-qat'
+export LMSTUDIO_API_IDENTIFIER='google/gemma-4-31b'
 export LMSTUDIO_CONTEXT_LENGTH='64000'
+export MODEL_LOAD_ID='gemma-4-31b-it-qat'
 export MODEL_IDENTIFIER='google/gemma-4-31b'
 export CONTEXT_LENGTH='64000'
 ```
 
 用途與參數：
 
-- `LMSTUDIO_MODEL_ID`：LM Studio 要載入的模型 identifier。
+- `LMSTUDIO_MODEL_ID`：LM Studio 要載入的模型權重 key，例如 `gemma-4-31b-it-qat`。
+- `LMSTUDIO_API_IDENTIFIER`：LM Studio API/Hermes 使用的模型名稱，例如 `google/gemma-4-31b`。
 - `LMSTUDIO_CONTEXT_LENGTH`：LM Studio 載入模型時使用的 context length。
-- `MODEL_IDENTIFIER`：一鍵測試腳本驗證時期待看到的模型 identifier。
+- `MODEL_LOAD_ID`：一鍵測試腳本重啟 LM Studio 時要載入的模型權重 key。
+- `MODEL_IDENTIFIER`：一鍵測試腳本驗證時期待看到的 API model identifier。
 - `CONTEXT_LENGTH`：一鍵測試腳本驗證時期待看到的 context length。
 
 ## 3. 手動測試流程
@@ -104,17 +108,19 @@ TEMI_IP=192.168.50.205 PC_IP=192.168.50.236 ./tools/check_temi_connection.sh
 
 ```bash
 cd /TemiAgent
-LMSTUDIO_MODEL_ID='google/gemma-4-31b' \
+LMSTUDIO_MODEL_ID='gemma-4-31b-it-qat' \
+LMSTUDIO_API_IDENTIFIER='google/gemma-4-31b' \
 LMSTUDIO_CONTEXT_LENGTH='64000' \
-LMSTUDIO_VISIBLE_GPUS='0,1,2' \
+LMSTUDIO_VISIBLE_GPUS='0' \
 ./tools/start_lmstudio_3gpu.sh
 ```
 
 用途與參數：
 
-- `LMSTUDIO_MODEL_ID`：要載入的模型 identifier。
+- `LMSTUDIO_MODEL_ID`：要載入的模型權重 key，例如 `gemma-4-31b-it-qat`。
+- `LMSTUDIO_API_IDENTIFIER`：API/Hermes 使用的模型名稱，例如 `google/gemma-4-31b`。
 - `LMSTUDIO_CONTEXT_LENGTH`：模型 context length，目前預設 `64000`。
-- `LMSTUDIO_VISIBLE_GPUS`：LM Studio daemon 可見 GPU，目前只開 `0,1,2`。
+- `LMSTUDIO_VISIBLE_GPUS`：LM Studio daemon 可見 GPU，預設單卡 `0`；可改 `0,1` 或 `0,1,2` 測試多卡。
 - `start_lmstudio_3gpu.sh`：卸載既有模型、停止 server/daemon、用指定 GPU 重啟 daemon、啟動 OpenAI-compatible API server、載入模型。
 
 正常結果：
@@ -297,7 +303,7 @@ cd /TemiAgent/anomaly_detection
 用途與參數：
 
 - 啟動 action viewer HTTP UI/API on `8010`。
-- 同時啟動 llama-server on `8011`，預設使用 GPU `3`，避免和 LM Studio 的 `0,1,2` 打架。
+- 同時啟動 llama-server on `8011`，預設使用 GPU `3`，避免和 LM Studio 目前使用的 GPU 組合打架；預設 LM Studio 用 GPU `0`，action viewer 用 GPU `3`。
 - 預設讀取 `ws://127.0.0.1:8081` 的 frame broadcast。
 
 正常結果：
@@ -441,8 +447,8 @@ RESTART_LMSTUDIO=0 ./tools/validate_temi_e2e_stack.sh
 # 只做服務與健康檢查，不跑 unit/mock/live 測試
 RUN_UNIT_TESTS=0 RUN_LIVE_E2E=0 ./tools/validate_temi_e2e_stack.sh
 
-# 更換預設模型與 context length 驗證期待值
-MODEL_IDENTIFIER='google/gemma-4-31b' CONTEXT_LENGTH='64000' ./tools/validate_temi_e2e_stack.sh
+# 更換載入權重、API identifier、context length 與 GPU 組合
+MODEL_LOAD_ID='gemma-4-31b-it-qat' MODEL_IDENTIFIER='google/gemma-4-31b' CONTEXT_LENGTH='64000' LMSTUDIO_VISIBLE_GPUS='0' ./tools/validate_temi_e2e_stack.sh
 
 # Temi 或 PC IP 改變時
 PC_IP=192.168.50.236 TEMI_IP=192.168.50.205 ./tools/validate_temi_e2e_stack.sh

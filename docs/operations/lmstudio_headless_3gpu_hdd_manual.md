@@ -1,8 +1,9 @@
-# LM Studio Headless 啟動手冊：HDD 專案路徑與指定前三張 GPU
+# LM Studio Headless 啟動手冊：HDD 專案路徑與指定 GPU 組合
 
-本手冊用於在 **Linux / headless / container-like environment** 中啟動 LM Studio local server，並將 LM Studio 的資料目錄固定在專案 HDD 路徑 `/TemiAgent/.lmstudio-data`，同時限制 LM Studio daemon 與模型 worker 只使用前三張 GPU。
+本手冊用於在 **Linux / headless / container-like environment** 中啟動 LM Studio local server，並將 LM Studio 的資料目錄固定在專案 HDD 路徑 `/TemiAgent/.lmstudio-data`，同時用 LMSTUDIO_VISIBLE_GPUS 控制 LM Studio daemon 與模型 worker 使用單卡、雙卡或三卡。
 
 路徑說明：`/TemiAgent` 是 TemiAgent GPU container 內的專案路徑；host workspace 對應路徑是 `/home/yiting/TemiAgent`。
+目前預設：載入 QAT GGUF 權重 `gemma-4-31b-it-qat`，並用 `--identifier google/gemma-4-31b` 保持 Hermes / Bridge 既有 API model 名稱相容。下載命令：`lms get https://huggingface.co/google/gemma-4-31B-it-qat-q4_0-gguf --gguf -y`。
 
 目標架構如下：
 
@@ -13,9 +14,9 @@ OpenAI-compatible API
         ↓
 LM Studio local server
         ↓
-google/gemma-4-31b 或其他 local model
+QAT 權重 gemma-4-31b-it-qat，API identifier google/gemma-4-31b
         ↓
-GPU 0, GPU 1, GPU 2
+GPU 組合由 LMSTUDIO_VISIBLE_GPUS 指定，預設 GPU 0
 ```
 
 ---
@@ -38,19 +39,15 @@ GPU 0, GPU 1, GPU 2
 /TemiAgent/.lmstudio-data
 ```
 
-- 你有四張 GPU，但希望 LM Studio 只看到前三張：
+- 你有四張 GPU，但希望用 `LMSTUDIO_VISIBLE_GPUS` 控制 LM Studio 使用哪幾張，例如：
 
 ```text
-GPU 0
-GPU 1
-GPU 2
+單卡：GPU 0
+雙卡：GPU 0, GPU 1
+三卡：GPU 0, GPU 1, GPU 2
 ```
 
-並隱藏第 4 張：
-
-```text
-GPU 3
-```
+未列入 `LMSTUDIO_VISIBLE_GPUS` 的 GPU 會留給其他服務，例如 GPU 3 給 action viewer/llama.cpp。
 
 ---
 
@@ -58,10 +55,12 @@ GPU 3
 
 啟動順序很重要。
 
-`CUDA_VISIBLE_DEVICES=0,1,2` 必須套在 **LM Studio daemon 啟動時**，也就是：
+`CUDA_VISIBLE_DEVICES` 必須套在 **LM Studio daemon 啟動時**，也就是：
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+CUDA_VISIBLE_DEVICES=0 lms daemon up     # 單卡
+CUDA_VISIBLE_DEVICES=0,1 lms daemon up   # 雙卡
+CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up # 三卡
 ```
 
 不能只套在：
@@ -79,14 +78,15 @@ lms load ...
 目前 TemiAgent 預設使用：
 
 ```bash
-export LMSTUDIO_MODEL_ID=google/gemma-4-31b
+export LMSTUDIO_MODEL_ID=gemma-4-31b-it-qat
+export LMSTUDIO_API_IDENTIFIER=google/gemma-4-31b
 export LMSTUDIO_CONTEXT_LENGTH=64000
-export LMSTUDIO_VISIBLE_GPUS=0,1,2
+export LMSTUDIO_VISIBLE_GPUS=0
 ```
 
 未來若要更換模型或 context window，只要同步調整：
 
-- LM Studio 載入參數：`LMSTUDIO_MODEL_ID`、`LMSTUDIO_CONTEXT_LENGTH`
+- LM Studio 載入參數：`LMSTUDIO_MODEL_ID`、`LMSTUDIO_API_IDENTIFIER`、`LMSTUDIO_CONTEXT_LENGTH`、`LMSTUDIO_VISIBLE_GPUS`
 - Hermes config：`model.default`、`model.context_length`、`auxiliary.compression.context_length`
 
 如果 LM Studio 因為同名模型已載入而產生 `:2` 這類 suffix，先用 `lms unload --all` 清掉舊 instance，再重新載入，就可以讓預設 identifier 回到 `google/gemma-4-31b`。如果你刻意要同時載入多個同名 instance，則以 `lms ps` 顯示的 exact identifier 為準。
@@ -100,9 +100,10 @@ export LMSTUDIO_VISIBLE_GPUS=0,1,2
 ```bash
 export LMSTUDIO_PROJECT_ROOT=/TemiAgent
 export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
-export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-google/gemma-4-31b}
+export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-gemma-4-31b-it-qat}
+export LMSTUDIO_API_IDENTIFIER=${LMSTUDIO_API_IDENTIFIER:-google/gemma-4-31b}
 export LMSTUDIO_CONTEXT_LENGTH=${LMSTUDIO_CONTEXT_LENGTH:-64000}
-export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0,1,2}
+export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0}
 export PATH=/TemiAgent/.lmstudio-data/bin:$PATH
 hash -r
 
@@ -114,7 +115,7 @@ CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
 
 lms server start --port 1234
 
-lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max
+lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max --identifier "$LMSTUDIO_API_IDENTIFIER"
 
 lms ps
 ```
@@ -122,7 +123,7 @@ lms ps
 如果 `lms load` 進入互動選單，選擇要載入的模型，例如：
 
 ```text
-google/gemma-4-31b
+gemma-4-31b-it-qat
 ```
 
 成功後可能會看到類似訊息：
@@ -271,36 +272,22 @@ lms daemon down
 這一步非常重要，因為如果 daemon 已經存在，後續再執行：
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
 ```
 
 可能不會重新套用新的 GPU 可見性設定。
 
 ---
 
-### 5.8 用前三張 GPU 啟動 daemon
+### 5.8 用指定 GPU 組合啟動 daemon
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
 ```
 
 這是整份手冊最重要的一行。
 
-`CUDA_VISIBLE_DEVICES=0,1,2` 的意思是：只讓這次啟動的 LM Studio daemon 看到：
-
-```text
-GPU 0
-GPU 1
-GPU 2
-```
-
-因此第 4 張 GPU：
-
-```text
-GPU 3
-```
-
-理論上不會被 LM Studio daemon / worker 使用。
+`LMSTUDIO_VISIBLE_GPUS=0` 時只讓 LM Studio daemon 看到 GPU 0；`0,1` 代表 GPU 0 與 GPU 1；`0,1,2` 代表前三張 GPU。未列入的 GPU 理論上不會被 LM Studio daemon / worker 使用。
 
 ---
 
@@ -330,7 +317,7 @@ GET  /v1/models
 ### 5.10 載入模型
 
 ```bash
-lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max
+lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max --identifier "$LMSTUDIO_API_IDENTIFIER"
 ```
 
 這行載入 local model。
@@ -363,7 +350,7 @@ lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu 
 真正指定可見 GPU 的地方是：
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
 ```
 
 ---
@@ -530,7 +517,7 @@ which lms
 readlink -f "$(which lms)"
 lms --version
 
-CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
 ```
 
 確認 `which lms` 和 `readlink -f` 都指向：
@@ -566,7 +553,7 @@ pkill -f llmworker
 然後重新啟動：
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1,2 lms daemon up
+CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
 ```
 
 ---
@@ -730,9 +717,10 @@ set -euo pipefail
 
 export LMSTUDIO_PROJECT_ROOT=/TemiAgent
 export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
-export LMSTUDIO_MODEL_ID="${LMSTUDIO_MODEL_ID:-google/gemma-4-31b}"
+export LMSTUDIO_MODEL_ID="${LMSTUDIO_MODEL_ID:-gemma-4-31b-it-qat}"
+export LMSTUDIO_API_IDENTIFIER="${LMSTUDIO_API_IDENTIFIER:-google/gemma-4-31b}"
 export LMSTUDIO_CONTEXT_LENGTH="${LMSTUDIO_CONTEXT_LENGTH:-64000}"
-export LMSTUDIO_VISIBLE_GPUS="${LMSTUDIO_VISIBLE_GPUS:-0,1,2}"
+export LMSTUDIO_VISIBLE_GPUS="${LMSTUDIO_VISIBLE_GPUS:-0}"
 export PATH=/TemiAgent/.lmstudio-data/bin:$PATH
 
 hash -r
@@ -761,7 +749,7 @@ echo "[LM Studio] Starting server on port 1234..."
 lms server start --port 1234
 
 echo "[LM Studio] Loading model..."
-lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max
+lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max --identifier "$LMSTUDIO_API_IDENTIFIER"
 
 echo "[LM Studio] Current models:"
 lms ps
@@ -785,9 +773,10 @@ chmod +x tools/start_lmstudio_3gpu.sh
 ```bash
 export LMSTUDIO_PROJECT_ROOT=/TemiAgent
 export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
-export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-google/gemma-4-31b}
+export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-gemma-4-31b-it-qat}
+export LMSTUDIO_API_IDENTIFIER=${LMSTUDIO_API_IDENTIFIER:-google/gemma-4-31b}
 export LMSTUDIO_CONTEXT_LENGTH=${LMSTUDIO_CONTEXT_LENGTH:-64000}
-export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0,1,2}
+export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0}
 export PATH=/TemiAgent/.lmstudio-data/bin:$PATH
 hash -r
 
@@ -799,7 +788,7 @@ CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
 
 lms server start --port 1234
 
-lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max
+lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max --identifier "$LMSTUDIO_API_IDENTIFIER"
 lms ps
 ```
 
@@ -818,9 +807,52 @@ nvidia-smi
 
 ## 11. 注意事項
 
-- `CUDA_VISIBLE_DEVICES=0,1,2` 必須放在 `lms daemon up` 前面。
+- `CUDA_VISIBLE_DEVICES` 或 `LMSTUDIO_VISIBLE_GPUS` 必須放在 `lms daemon up` 前面；目前建議預設是單卡 `0`。
 - 不要讓 daemon 在未設定 GPU 限制時先自動啟動。
 - `lms load --gpu max` 只代表盡可能使用 GPU offload，不代表指定 GPU index。
 - 真正指定 GPU 可見性的地方是 daemon 啟動環境。
-- `nvidia-smi` 顯示四張 GPU 不代表失敗；要看 LM Studio process 是否佔用 GPU 3。
+- `nvidia-smi` 顯示四張 GPU 不代表失敗；要看 LM Studio process 是否只佔用 `LMSTUDIO_VISIBLE_GPUS` 指定的 GPU。
 - 如果使用 HDD target dir，務必確保 `LMSTUDIO_TARGET_DIR`、`PATH`、`which lms`、`readlink -f "$(which lms)"` 都一致。
+
+
+---
+
+## 13. 最新版本資訊：QAT 單卡/雙卡/三卡測試（2026-06-10）
+
+本次更新後，TemiAgent 的 LM Studio 預設啟動參數如下：
+
+```bash
+LMSTUDIO_MODEL_ID=gemma-4-31b-it-qat
+LMSTUDIO_API_IDENTIFIER=google/gemma-4-31b
+LMSTUDIO_CONTEXT_LENGTH=64000
+LMSTUDIO_VISIBLE_GPUS=0
+```
+
+`tools/start_lmstudio_3gpu.sh` 雖保留原檔名以維持相容，但目前可用 `LMSTUDIO_VISIBLE_GPUS` 控制單卡、雙卡或三卡：
+
+```bash
+# 單卡，建議預設
+LMSTUDIO_VISIBLE_GPUS=0 ./tools/start_lmstudio_3gpu.sh
+
+# 雙卡
+LMSTUDIO_VISIBLE_GPUS=0,1 ./tools/start_lmstudio_3gpu.sh
+
+# 三卡
+LMSTUDIO_VISIBLE_GPUS=0,1,2 ./tools/start_lmstudio_3gpu.sh
+```
+
+模型載入指令使用 `--gpu max`，並可用 `lms log stream --stats --json` 的 `numGpuLayers: -1` 確認全層 GPU offload。實測時，單卡 GPU 0 載入後 VRAM 約 26.5 GiB，GPU 1/2 幾乎空閒；雙卡約分攤到 GPU 0/1 各 14 GiB；三卡約分攤到 GPU 0/1/2 各 9-11 GiB。
+
+固定測速 prompt：
+
+```bash
+lms chat google/gemma-4-31b --stats -p "Generate exactly 220 short bullet points about safe home-care robot behaviors. Use plain English. Do not include an introduction or conclusion."
+```
+
+| GPU setting | Tokens/s | Result |
+| --- | ---: | --- |
+| 單卡 `0` | 63.00, 63.27 | 建議預設；`numGpuLayers=-1` |
+| 雙卡 `0,1` | 62.73, 63.58 | 與單卡幾乎相同 |
+| 三卡 `0,1,2` | 63.37 | 與單卡幾乎相同，但佔用三張卡 |
+
+結論：目前 QAT 31B 模型在單張 32 GiB GPU 上即可保持約 63 token/s，且可保留 GPU 1/2 給其他服務或測試。若未來 context、parallel 或模型版本增加導致 VRAM 壓力上升，再切到雙卡或三卡。

@@ -34,8 +34,8 @@ docs/
 | `operations/temi_integration_runbook.md` | 從 unit test 到 mock E2E、真 Hermes、硬體檢查的整合 runbook。 |
 | `operations/temi_streaming_local_runbook.md` | 目前這台機器的 Temi streaming、ADB、實測狀態。 |
 | `operations/temi_streaming_manual.md` | Android/PC 多點廣播開發部署手冊。 |
-| `operations/lmstudio_gpu_selection.md` | LM Studio GPU selection 操作筆記。 |
-| `operations/lmstudio_headless_3gpu_hdd_manual.md` | Headless LM Studio 使用 `/TemiAgent/.lmstudio-data`、預設 `google/gemma-4-31b` 64K context、限制前三張 GPU 的啟動/換模型/debug 手冊。 |
+| `operations/lmstudio_gpu_selection.md` | LM Studio GPU selection 操作筆記；包含 TemiAgent 單卡、雙卡、三卡 QAT 實測。 |
+| `operations/lmstudio_headless_3gpu_hdd_manual.md` | Headless LM Studio 使用 `/TemiAgent/.lmstudio-data`、預設 QAT `gemma-4-31b-it-qat` 權重、API identifier `google/gemma-4-31b`、64K context、支援單卡、雙卡、三卡 GPU 組合的啟動/換模型/debug 手冊。 |
 | `operations/temi_e2e_stack_validation_manual.md` | TemiAgent 全服務重啟、LM Studio/Hermes/Bridge/MQTT/Temi/action viewer 健康檢查、mock 與真機端到端驗證操作手冊；包含一鍵測試腳本說明。 |
 | `schemas/*.schema.json` | ASR event、Hermes output、command request/result 的文件副本。 |
 | `../.hermes.md` / `../hermes-agent/docker/SOUL.md` | Discord/gateway 讓 Hermes 知道自己是 Temi 居家照護助理、可使用 Temi skills 的 runtime context。 |
