@@ -1,6 +1,6 @@
 # 第一年度 Demo Runbook
 
-最後更新日期：2026-06-01
+最後更新日期：2026-06-12
 
 ## 目的
 
@@ -47,6 +47,79 @@ python3 tools/demo_case_runner.py --keep-artifacts
 - `e2e_test_runner.py` 回 `status: ok`。
 - `demo_case_runner.py` 三個 case 都是 `status: success`。
 - `run_summary.json` 內有 L3 reminder、L2 discomfort、L1 possible fall 的 final memory state。
+
+## 正式 Demo 錄影
+
+錄影操作同樣在 `yiting.TemiAgent_gpu_all` container 內執行，並從 `/TemiAgent` 啟動。2026-06-12 實測結果：`adb shell screenrecord` 使用 Temi 原生 `1200x1920` 解析度會出現 `Unable to get output buffers (err=-38)` 並產生 0 byte 檔案；指定較低解析度可用。正式 Demo 優先使用 `scrcpy` headless 錄影，穩定性較好，也沒有 Android `screenrecord` 常見的 180 秒單段限制。
+
+### 錄影前確認
+
+```bash
+docker exec -it yiting.TemiAgent_gpu_all bash
+cd /TemiAgent
+
+adb connect 192.168.50.205:5555
+adb devices -l
+scrcpy --version
+mkdir -p logs/demo_recordings
+```
+
+通過條件：
+
+- `adb devices -l` 看到 `192.168.50.205:5555 device`。
+- `scrcpy --version` 可顯示版本；目前 container 內實測版本為 `scrcpy 1.25`。
+- Temi 是 Android 6.0.1；此路線視為畫面錄影，不保證音訊。
+
+### 建議正式錄影指令
+
+```bash
+cd /TemiAgent
+scrcpy --serial 192.168.50.205:5555 \
+  --no-display \
+  --no-control \
+  --max-size 1280 \
+  --bit-rate 2M \
+  --record "logs/demo_recordings/temi-demo-$(date +%Y%m%d_%H%M%S).mp4"
+```
+
+用途：
+
+- `--no-display`：不在 container 內開視窗，只錄影；適合 headless demo workstation。
+- `--no-control`：只鏡像/錄影，不從電腦控制 Temi。
+- `--max-size 1280`：避免 Temi 原生解析度觸發 encoder 失敗。
+- `--bit-rate 2M`：Demo 記錄畫質與檔案大小的折衷值。
+- `--record`：輸出 MP4 到 `logs/demo_recordings/`。
+
+停止錄影時按 `Ctrl+C`。`scrcpy` 正常結束時會印出 `Recording complete to mp4 file: ...`。錄影後確認：
+
+```bash
+ls -lh logs/demo_recordings/temi-demo-*.mp4
+```
+
+若要做 8 秒短測：
+
+```bash
+timeout 8s scrcpy --serial 192.168.50.205:5555 \
+  --no-display \
+  --no-control \
+  --max-size 1280 \
+  --bit-rate 2M \
+  --record "logs/demo_recordings/temi-scrcpy-test-$(date +%Y%m%d_%H%M%S).mp4"
+```
+
+`timeout` 回傳 124 屬於預期，表示時間到後停止錄影；只要 MP4 檔案非 0 byte 即可。
+
+### ADB fallback 錄影
+
+若 `scrcpy` 當天不可用，改用 Android 內建 `screenrecord`，但務必指定較低解析度：
+
+```bash
+cd /TemiAgent
+adb shell screenrecord --size 720x1280 --bit-rate 2000000 /sdcard/temi-demo.mp4
+adb pull /sdcard/temi-demo.mp4 logs/demo_recordings/
+```
+
+停止時按 `Ctrl+C`。不要直接用未指定解析度的 `adb shell screenrecord /sdcard/temi-demo.mp4`，因為 Temi 原生解析度已實測會讓 encoder 失敗。
 
 ## 現場服務啟動順序
 

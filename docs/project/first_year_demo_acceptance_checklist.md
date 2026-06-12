@@ -1,6 +1,6 @@
 # 第一年度 Demo 驗收 Checklist
 
-最後更新日期：2026-05-31
+最後更新日期：2026-06-12
 
 ## 驗收狀態摘要
 
@@ -43,6 +43,9 @@ git diff --cached --check: ok
 - [ ] LM Studio 或 Hermes resident mode 已啟動。
 - [ ] Resident Hermes preload 包含 `temi-robot-control`、`temi-care-memory`、`temi-home-esi`、`temi-discord-care-assistant`。
 - [ ] Bridge 使用正確 `MEMORY_DIR`。
+- [ ] `scrcpy --version` 可用，且 `adb devices -l` 看到 Temi。
+- [ ] 正式錄影目錄 `logs/demo_recordings/` 已建立。
+- [ ] 已做短錄影測試，MP4 非 0 byte；若改用 ADB fallback，必須指定 `--size 720x1280`。
 
 ### Deterministic artifacts
 
@@ -98,4 +101,5 @@ cases/*/memory_state_after.json
 memory/event_log.jsonl
 memory/abnormal_events/*.json
 memory/summaries/*.md
+logs/demo_recordings/temi-demo-*.mp4
 ```
