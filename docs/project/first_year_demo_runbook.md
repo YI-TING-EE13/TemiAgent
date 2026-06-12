@@ -53,7 +53,7 @@ adb connect 192.168.50.205:5555
 adb devices -l
 ```
 
-最低通過條件：LM Studio 有 `google/gemma-4-31b`、Hermes health OK、Action viewer OK、Discord gateway connected、ADB 看到 `192.168.50.205:5555 device`。
+最低通過條件：LM Studio 有 `google/gemma-4-31b`、Hermes health OK、Action viewer OK 且 `abnormal_cooldown_seconds = 180.0`、Discord gateway connected、ADB 看到 `192.168.50.205:5555 device`。
 
 ### 4. 開始正式錄影
 
@@ -127,6 +127,7 @@ python3 tools/demo_case_runner.py --keep-artifacts
 | Temi 沒說話 | 先跑 `manual_tts.py` 確認 TTS 回路 | E2E 第四部分 |
 | Hermes 很慢 | 確認 resident mode，先預熱，必要時切 artifacts | E2E Terminal 5 |
 | 錄影失敗 | scrcpy 檔案太小就改 ADB `--bugreport --size 720x1280` | E2E 第二部分 |
+| 跌倒後 Hermes 一直被呼叫 | 確認 Action viewer health 內 `abnormal_cooldown_seconds=180.0` | E2E Terminal 8 |
 | Real route 延遲過高 | 展示 `tools/demo_case_runner.py --keep-artifacts` 輸出的 artifacts | 情境腳本 Artifact 展示方式 |
 
 ## 展示順序建議

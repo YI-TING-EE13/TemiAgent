@@ -1,18 +1,18 @@
-# Temi Anomaly Detection Stream Viewer
+# Temi 異常偵測串流 Viewer
 
-This folder is an isolated `uv` project for testing continuous Temi camera intake.
+這個資料夾是一個獨立的 `uv` 專案，用來測試 Temi camera 的持續影像接收。
 
-The viewer provides a browser page on port `8000`.
+viewer 會在 `8000` port 提供瀏覽器頁面。
 
-The browser page can connect directly to the decoded JPEG frame broadcast endpoint:
+瀏覽器頁面可以直接連到已解碼 JPEG frame 的 broadcast endpoint：
 
 ```text
 ws://<pc-ip>:8081
 ```
 
-It can also still accept Temi's timestamp-prefixed H.264 WebSocket stream and expose a browser MJPEG preview on the same HTTP port.
+它也仍可接收 Temi timestamp-prefixed H.264 WebSocket stream，並在同一個 HTTP port 提供瀏覽器可看的 MJPEG preview。
 
-## Run
+## 執行
 
 ```bash
 cd /TemiAgent/anomaly_detection
@@ -20,19 +20,19 @@ uv sync
 uv run temi-live-viewer --host 0.0.0.0 --port 8000
 ```
 
-Open:
+開啟：
 
 ```text
 http://127.0.0.1:8000/
 ```
 
-By default, the page connects to:
+預設情況下，頁面會連到：
 
 ```text
 ws://<same-host-as-page>:8081
 ```
 
-The page decodes the `8081` binary frame format in JavaScript:
+頁面會用 JavaScript 解碼 `8081` 的 binary frame 格式：
 
 ```text
 bytes 0..7    int64 big-endian timestamp_ms
@@ -40,9 +40,9 @@ bytes 8..15   uint64 big-endian sequence
 bytes 16..    JPEG image bytes
 ```
 
-`8081` must be provided by the TemiAgent `JpegFrameBroadcaster`; it is not an HTTP page.
+`8081` 必須由 TemiAgent 的 `JpegFrameBroadcaster` 提供；它不是 HTTP 頁面。
 
-Point Temi's video WebSocket target to one of:
+Temi 的 video WebSocket target 可以指到以下其中之一：
 
 ```text
 ws://<container-or-host-ip>:8000/
@@ -51,25 +51,25 @@ ws://<container-or-host-ip>:8000/ws
 
 ## Endpoints
 
-- `/` browser page for `8081` decoded JPEG broadcast, and WebSocket intake when the request is a WebSocket upgrade.
-- `/ws` explicit WebSocket intake path.
-- `/stream.mjpg` MJPEG stream for the browser.
-- `/snapshot.jpg` latest frame as JPEG.
-- `/health` JSON status.
+- `/`：瀏覽器頁面，用於觀看 `8081` decoded JPEG broadcast；當 request 是 WebSocket upgrade 時也可作為 WebSocket intake。
+- `/ws`：明確的 WebSocket intake path。
+- `/stream.mjpg`：瀏覽器用 MJPEG stream。
+- `/snapshot.jpg`：最新 frame 的 JPEG。
+- `/health`：JSON 狀態。
 
-## Action prediction viewer
+## 動作預測 Viewer
 
-`temi_action_viewer.py` reads decoded JPEG frames from `8081`, samples eight frames, optionally draws YOLO pose skeletons for model input, sends the frames to a llama.cpp multimodal server, and overlays the predicted visible human action in the top-left corner.
+`temi_action_viewer.py` 會從 `8081` 讀取 decoded JPEG frames，取樣八張影像，可選擇先畫 YOLO pose skeleton 作為模型輸入，再送到 llama.cpp multimodal server，最後把目前可見人體動作預測疊在畫面左上角。
 
-Sampling policy:
+取樣策略：
 
-- Three frames from the previous three one-second windows.
-- Five frames from the latest one-second window.
-- Total: eight chronological frames per prediction.
-- The current second is sampled uniformly at inference time.
-- The completed-second history representative is the second sampled frame when available, otherwise the first frame.
+- 前三個一秒區間各取一張 frame。
+- 最新一秒區間取五張 frame。
+- 每次預測總共八張依時間排序的 frames。
+- 當前秒會在推論時均勻取樣。
+- 已完成秒的 history 代表幀，若可取樣數量足夠，使用第二張 sampled frame；否則使用第一張。
 
-Run:
+執行：
 
 ```bash
 cd /TemiAgent/anomaly_detection
@@ -82,65 +82,222 @@ cd /TemiAgent/anomaly_detection
   --mmproj-path /TemiAgent/.lmstudio-data/models/lmstudio-community/gemma-4-E4B-finetuned-GGUF/local_unsloth_gemma4.BF16-mmproj.gguf
 ```
 
-By default the action viewer expects `llama-server` at:
+action viewer 預設期待 `llama-server` 位於：
 
 ```text
 /TemiAgent/anomaly_detection/third_party/llama.cpp/build/bin/llama-server
 ```
 
-If the binary is missing, the browser viewer still starts and `/health` reports `llama_server_ready: false` with the missing path. To connect to an already running llama.cpp server instead of letting the viewer start one, pass:
+如果 binary 不存在，瀏覽器 viewer 仍會啟動，`/health` 會回報 `llama_server_ready: false` 並顯示缺少的路徑。若要連到已經在跑的 llama.cpp server，而不是由 viewer 啟動，請傳入：
 
 ```bash
 --llama-api-base-url http://127.0.0.1:8011/v1
 ```
 
-YOLO pose preprocessing is controlled by:
+YOLO pose 前處理由以下參數控制：
 
 ```bash
 --pose-mode auto --pose-model yolo26x-pose.pt --pose-device 0
 ```
 
-`auto` uses skeleton overlays only when `ultralytics` and the pose model file are available. `on` fails fast if either is missing. `off` sends raw frames.
-`--pose-device 0` forces YOLO pose inference onto GPU 0; use `cpu` only for debugging.
+`auto` 會在 `ultralytics` 和 pose model 檔案都可用時套用 skeleton overlay。`on` 會在 dependency 或模型檔缺失時 fail fast。`off` 會送原始 frames。
+`--pose-device 0` 會強制 YOLO pose inference 使用 GPU 0；只有 debug 時才建議用 `cpu`。
 
-Open:
+managed llama.cpp server 可以指定到特定實體 GPU，而不影響整個 viewer process：
+
+```bash
+--llama-cuda-visible-devices 3
+```
+
+專用 restart script 目前預設：
+
+```text
+LLAMA_CUDA_VISIBLE_DEVICES=3
+POSE_DEVICE=3
+```
+
+也就是說，透過 `restart_action_viewer_8010.sh` 啟動時，finetuned Gemma 4 E4B Q8 llama.cpp server 和 YOLO pose 預設都會使用 GPU 3。
+
+開啟：
 
 ```text
 http://127.0.0.1:8010/
 ```
 
-Endpoints:
+Endpoints：
 
-- `/` browser page with prediction overlay stream.
-- `/stream.mjpg` MJPEG stream with overlay.
-- `/snapshot.jpg` latest overlay frame.
-- `/health` JSON status.
+- `/`：帶 prediction overlay 的瀏覽器頁面。
+- `/stream.mjpg`：帶 overlay 的 MJPEG stream。
+- `/snapshot.jpg`：最新 overlay frame。
+- `/health`：JSON 狀態。
 
-The model prompt asks for exactly:
+模型 prompt 要求模型精確輸出：
 
 ```text
-action_name:...
-reason:...
+Action: ...
+Evidence/Reason: ...
 ```
 
-The parser also accepts the reference format `Action:` and `Evidence/Reason:`.
+parser 也相容舊格式 `action_name:` 和 `reason:`。
 
-## Notes
+當 `Action` 是 `falls down`、`lies on the floor` 或 `fights` 其中之一時，viewer 可以把原始八張 evidence frames 存到 `/TemiAgent/temi_shared/abnormal_events/{robot_id}/{event_id}/`，並發布 structured event 到：
 
-- MQTT is not used for image bytes.
-- The server keeps only the latest JPEG frame in memory.
-- This is a test viewer, not the final abnormal behavior model pipeline.
+```text
+temi/{robot_id}/perception/abnormal
+```
 
+MQTT payload 只包含 JSON metadata 和 frame paths。不包含 image bytes、confidence、confidence_source 或 severity。
 
-## Safe restart for 8010
+在把 abnormal event 丟給 Bridge/Hermes 之前，viewer/tester 預設會先發布一個 canonical `speak` command 到：
 
-Do not restart this service with `pkill -f` or broad process-name patterns. A pattern such as `pkill -f "temi_action_viewer.py ..."` can match the shell that is running the restart command, causing the shell to kill itself before the service is relaunched.
+```text
+temi/{robot_id}/cmd/request
+```
 
-Use the dedicated restart script instead:
+讓 Temi 立即說出簡短預警。預設文字依 action 類別而定：
+
+- `falls down`：`我偵測到可能有人跌倒了，已將過程發送給 Discord。`
+- `lies on the floor`：`我偵測到有人可能躺在地上，已將過程發送給 Discord。`
+- `fights`：`我偵測到可能有肢體衝突，請注意安全，已將過程發送給 Discord。`
+
+pre-alert speak 由以下參數控制：
+
+```bash
+--pre-alert-speak enabled \
+--pre-alert-language zh-TW
+```
+
+若只想發布 abnormal event / Discord，不想讓 Temi 先說話，可使用：
+
+```bash
+--pre-alert-speak disabled
+```
+
+pre-alert speak 發送失敗不會停止 abnormal event 或 Discord 通知；event result 會記錄 `pre_alert_speak_error`。
+
+為了避免同一次跌倒或躺地狀態讓 Bridge/Hermes 被連續呼叫，action viewer 有 abnormal event cooldown。`restart_action_viewer_8010.sh` 正式 Demo 預設為 180 秒，也就是第一次緊急狀態發布後，3 分鐘內不會再發布新的 abnormal event；畫面 overlay 和模型推論仍會繼續更新。若要臨時調整：
+
+```bash
+cd /TemiAgent/anomaly_detection
+ABNORMAL_COOLDOWN_SECONDS=300 ./restart_action_viewer_8010.sh
+```
+
+這個 cooldown 是全域 emergency cooldown，不依 action 類別分開計算；因此 `falls down` 和 `lies on the floor` 在 3 分鐘內互相切換時，也不會重複觸發 Hermes。
+
+Discord 通知也作為 best-effort side channel 支援。當 abnormal event 建立時，viewer/tester 可以透過以下檔案設定的 webhook 發送訊息和 evidence frame 附件：
+
+```text
+/TemiAgent/anomaly_detection/.env
+```
+
+預期環境變數名稱是：
+
+```text
+DISCORD_WEBHOOK_URL
+```
+
+Discord 通知由以下參數控制：
+
+```bash
+--discord-notify enabled \
+--discord-env-path /TemiAgent/anomaly_detection/.env \
+--discord-max-files 8
+```
+
+MQTT 和 Discord 發布彼此獨立。若 MQTT 不可用，event result 會記錄 `mqtt_error`，並仍會嘗試 Discord 通知。若 Discord 失敗，event result 會記錄 `discord_error`，不會停止 viewer/tester。
+
+## 影片動作測試工具
+
+`temi_video_action_tester.py` 會在本機影片檔上執行同一套八幀推論策略：
+
+- 前三個已完成秒：每秒一張代表幀。
+- 當前秒：五張均勻取樣 frames。
+- 模型輸入在進 llama.cpp inference 前，會先經過同一個 YOLO pose renderer 前處理。
+- evidence files 會從原始影片 frames 儲存，不是 pose overlay。
+
+不發布 MQTT 的 dry run：
+
+```bash
+cd /TemiAgent/anomaly_detection
+.venv/bin/python temi_video_action_tester.py \
+  --video /path/to/video.mp4 \
+  --no-publish \
+  --output-jsonl /tmp/temi_video_predictions.jsonl
+```
+
+發布 abnormal detections 給 Bridge/Hermes：
+
+```bash
+cd /TemiAgent/anomaly_detection
+.venv/bin/python temi_video_action_tester.py \
+  --video /path/to/video.mp4 \
+  --publish \
+  --robot-id temi-01 \
+  --mqtt-broker 127.0.0.1 \
+  --mqtt-port 1883
+```
+
+若只是單一 alert smoke test，可以在第一個 abnormal window 後停止，避免一支短 fall video 連續送出多筆 Discord/MQTT 通知：
+
+```bash
+cd /TemiAgent/anomaly_detection
+.venv/bin/python temi_video_action_tester.py \
+  --video /path/to/video.mp4 \
+  --publish \
+  --stop-after-first-alert \
+  --output-jsonl /tmp/temi_video_predictions.jsonl
+```
+
+發布後的 JSONL result 會依照 side effect 成功或失敗情況，包含 `published_event.mqtt`、`published_event.mqtt_error`、`published_event.discord` 或 `published_event.discord_error`。
+
+完整 Bridge/Hermes route 需要以下 companion services：
+
+- `1883` 上的 MQTT broker。
+- `8080` 和 `8081` 上的 `tools/temi_overview_adapter.py`。
+- `8765` 上的 Hermes resident server。
+- HTTP mode 的 `hermes_temi_bridge`。
+
+若只測 Discord 通知，MQTT 可以是關閉狀態；tester 會在記錄 `mqtt_error` 後繼續執行。
+
+## 注意事項
+
+- MQTT 不用於傳送 image bytes。
+- server 在記憶體中只保留最新 JPEG frame。
+- 這是測試 viewer，不是最終版異常行為模型 pipeline。
+
+## 8010 安全重啟
+
+不要用 `pkill -f` 或寬鬆的 process-name pattern 重啟這個服務。像 `pkill -f "temi_action_viewer.py ..."` 這類 pattern 可能會 match 到正在執行 restart command 的 shell，導致 shell 在服務重新啟動前先殺掉自己。
+
+請改用專用 restart script：
 
 ```bash
 cd /TemiAgent/anomaly_detection
 ./restart_action_viewer_8010.sh
 ```
 
-The script only inspects the process currently listening on port `8010`, verifies that the PID is running `temi_action_viewer.py` from `/TemiAgent/anomaly_detection`, then stops that exact PID and starts a fresh viewer. It does not touch MQTT, 8080 ingest, 8081 frame broadcast, Hermes resident server, Bridge, or the 8000 live viewer.
+這個 script 只會檢查目前 listen 在 `8010` port 的 process，確認該 PID 是從 `/TemiAgent/anomaly_detection` 執行的 `temi_action_viewer.py`，然後只停止該 PID 並啟動新的 viewer。它不會碰 MQTT、8080 ingest、8081 frame broadcast、Hermes resident server、Bridge，或 8000 live viewer。
+
+正式 Demo 預設 `ABNORMAL_COOLDOWN_SECONDS=180`。重啟後可以用以下指令確認：
+
+```bash
+curl -sS http://127.0.0.1:8010/health | grep abnormal_cooldown_seconds
+```
+
+## 一鍵關閉 anomaly_detection 服務
+
+若要只關閉 `/TemiAgent/anomaly_detection` 目前管理的 action viewer 服務，使用：
+
+```bash
+cd /TemiAgent/anomaly_detection
+./stop_action_viewer_8010.sh
+```
+
+這個 script 會：
+
+- 停止 listen 在 `8010` 的 `temi_action_viewer.py`。
+- 停止該 viewer 啟動的 managed `llama-server` child。
+- 若 `8011` 仍有 anomaly_detection 的 managed llama-server，也會安全停止。
+- 移除 stale `action_viewer.pid`。
+
+它只會停止經過路徑與 command line 驗證的 anomaly_detection process；不會停止 MQTT `1883`、Temi ingest `8080`、decoded frame broadcast `8081`、Hermes resident `8765`、HermesTemiBridge、Discord/gateway，或其他模組服務。

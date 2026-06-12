@@ -11,12 +11,14 @@ MMPROJ_PATH="${MMPROJ_PATH:-/TemiAgent/.lmstudio-data/models/lmstudio-community/
 LLAMA_SERVER="${LLAMA_SERVER:-/TemiAgent/anomaly_detection/third_party/llama.cpp/build/bin/llama-server}"
 LLAMA_API_BASE_URL="${LLAMA_API_BASE_URL:-}"
 LLAMA_SERVER_PORT="${LLAMA_SERVER_PORT:-8011}"
+LLAMA_CUDA_VISIBLE_DEVICES="${LLAMA_CUDA_VISIBLE_DEVICES:-3}"
 POSE_MODE="${POSE_MODE:-auto}"
 POSE_MODEL="${POSE_MODEL:-yolo26x-pose.pt}"
-POSE_DEVICE="${POSE_DEVICE:-0}"
+POSE_DEVICE="${POSE_DEVICE:-3}"
 YOLO_CONFIG_DIR="${YOLO_CONFIG_DIR:-/tmp/Ultralytics}"
 MAX_OUTPUT_TOKENS="${MAX_OUTPUT_TOKENS:-96}"
 INFERENCE_INTERVAL="${INFERENCE_INTERVAL:-4}"
+ABNORMAL_COOLDOWN_SECONDS="${ABNORMAL_COOLDOWN_SECONDS:-180}"
 STARTUP_WAIT_SECONDS="${STARTUP_WAIT_SECONDS:-12}"
 LOG_FILE="$ROOT/action_viewer.log"
 PID_FILE="$ROOT/action_viewer.pid"
@@ -61,11 +63,13 @@ setsid .venv/bin/python ./temi_action_viewer.py \
   --llama-server "$LLAMA_SERVER" \
   --llama-api-base-url "$LLAMA_API_BASE_URL" \
   --llama-server-port "$LLAMA_SERVER_PORT" \
+  --llama-cuda-visible-devices "$LLAMA_CUDA_VISIBLE_DEVICES" \
   --pose-mode "$POSE_MODE" \
   --pose-model "$POSE_MODEL" \
   --pose-device "$POSE_DEVICE" \
   --max-output-tokens "$MAX_OUTPUT_TOKENS" \
   --inference-interval "$INFERENCE_INTERVAL" \
+  --abnormal-cooldown-seconds "$ABNORMAL_COOLDOWN_SECONDS" \
   > "$LOG_FILE" 2>&1 < /dev/null &
 new_pid="$!"
 echo "$new_pid" > "$PID_FILE"

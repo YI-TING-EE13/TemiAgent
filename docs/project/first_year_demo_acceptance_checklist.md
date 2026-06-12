@@ -22,7 +22,7 @@
 - [ ] `lms ps` 顯示 `google/gemma-4-31b`，context 是 `64000`。
 - [ ] `curl http://127.0.0.1:1234/v1/models` 可看到模型。
 - [ ] `curl http://127.0.0.1:8765/health` 回 `status: ok`。
-- [ ] `curl http://127.0.0.1:8010/health` 回 OK。
+- [ ] `curl http://127.0.0.1:8010/health` 回 OK，且 `abnormal_cooldown_seconds = 180.0`。
 - [ ] MQTT broker `1883` listening。
 - [ ] Overview adapter `8080` listening，且沒有 legacy backend 搶 port。
 - [ ] Temi App 已啟動並能送出 ASR。

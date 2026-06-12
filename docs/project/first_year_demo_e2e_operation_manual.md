@@ -150,7 +150,7 @@ LMSTUDIO_VISIBLE_GPUS=0 \
 | Hermes resident | 常駐 Hermes HTTP worker | `hermes_resident.log` |
 | HermesTemiBridge | 驗證 Hermes JSON output 並 dispatch command | `bridge.log` |
 | Hermes Discord gateway | 讓 Hermes 在 Discord 在線上，處理 gateway skill | `hermes_gateway.log`、`gateway_state.json` |
-| Action viewer | Demo UI / camera-action viewer | `action_viewer.log` |
+| Action viewer | Demo UI / camera-action viewer；abnormal event 預設 180 秒全域 cooldown，避免跌倒後連續呼叫 Hermes | `action_viewer.log` |
 
 若不需要 Discord，可加 `START_GATEWAY=0` 跳過 gateway；正式 Demo 建議保留 `START_GATEWAY=1`，避免 Discord 看不到 Hermes 在線上。
 
@@ -473,6 +473,13 @@ python3 -m json.tool /root/.hermes/gateway_state.json | grep -A8 '"discord"'
 cd /TemiAgent/anomaly_detection
 ./restart_action_viewer_8010.sh
 curl -sS http://127.0.0.1:8010/health
+```
+
+正式 Demo 預設會以 `ABNORMAL_COOLDOWN_SECONDS=180` 啟動；第一次 `falls down`、`lies on the floor` 或 `fights` abnormal event 發布後，3 分鐘內不再重複發布給 Bridge/Hermes。若要臨時改成 5 分鐘：
+
+```bash
+cd /TemiAgent/anomaly_detection
+ABNORMAL_COOLDOWN_SECONDS=300 ./restart_action_viewer_8010.sh
 ```
 
 若 UI 沒畫面，先確認 `8010` health、`action_viewer.log`、Temi logcat 是否有 `Video packets sent`。

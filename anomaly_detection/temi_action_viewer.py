@@ -22,6 +22,7 @@ from typing import Any
 
 import cv2
 import numpy as np
+import requests
 from aiohttp import ClientSession, WSMsgType, web
 
 
@@ -37,18 +38,27 @@ DEFAULT_MMPROJ_PATH = (
 )
 DEFAULT_LLAMA_SERVER_PATH = "/TemiAgent/anomaly_detection/third_party/llama.cpp/build/bin/llama-server"
 TARGET_ACTIONS = [
-    "person_blows_nose_or_sneezes",
-    "person_cleans",
-    "person_does_no_action",
-    "person_eats",
-    "person_falls_down",
-    "person_fights",
-    "person_lies_on_the_floor",
-    "person_sits_down",
-    "person_stands_up",
-    "person_walks",
-    "person_watches_tv",
+    "blows nose or sneezes",
+    "cleans",
+    "does no action",
+    "eats",
+    "falls down",
+    "fights",
+    "lies on the floor",
+    "sits down",
+    "stands up",
+    "walks",
+    "watches tv",
 ]
+ALERT_ACTIONS = {"falls down", "fights", "lies on the floor"}
+PRE_ALERT_SPEAK_TEXT = {
+    "falls down": "我偵測到可能有人跌倒了，已將過程發送給 Discord。",
+    "lies on the floor": "我偵測到有人可能躺在地上，已將過程發送給 Discord。",
+    "fights": "我偵測到可能有肢體衝突，請注意安全，已將過程發送給 Discord。",
+}
+DEFAULT_DISCORD_ENV_PATH = "/TemiAgent/anomaly_detection/.env"
+DISCORD_WEBHOOK_ENV_VAR = "DISCORD_WEBHOOK_URL"
+DISCORD_USERNAME = "HABD-Agent"
 
 
 @dataclass(frozen=True)
@@ -75,6 +85,29 @@ class InferenceTiming:
     total_ms: float
 
 
+@dataclass(frozen=True)
+class ParsedAction:
+    """Structured action result parsed from the model response."""
+
+    action_name: str
+    reason: str
+    raw_response: str
+
+    def to_overlay_text(self) -> str:
+        """Format the parsed action for the viewer overlay."""
+        if self.reason:
+            return f"Action: {self.action_name}\nEvidence/Reason: {self.reason}"
+        return f"Action: {self.action_name}"
+
+    def to_dict(self) -> dict[str, str]:
+        """Return the parsed action fields for health checks and events."""
+        return {
+            "action_name": self.action_name,
+            "reason": self.reason,
+            "raw_response": self.raw_response,
+        }
+
+
 @dataclass
 class ActionState:
     """Shared state for frame display and action prediction."""
@@ -86,6 +119,7 @@ class ActionState:
     current_second_key: int | None = None
     latest_frame: BufferedFrame | None = None
     latest_prediction: str = "waiting for prediction"
+    latest_action: ParsedAction | None = None
     prediction_age: float | None = None
     prediction_count: int = 0
     total_inference_ms: float = 0.0
@@ -98,6 +132,9 @@ class ActionState:
     source_connected: bool = False
     source_error: str | None = None
     inference_error: str | None = None
+    latest_abnormal_event: dict[str, Any] | None = None
+    abnormal_publish_count: int = 0
+    abnormal_publish_error: str | None = None
     backend_status: dict[str, Any] = field(default_factory=dict)
     pose_status: dict[str, Any] = field(default_factory=dict)
 
@@ -203,13 +240,18 @@ class ActionState:
 
     async def set_prediction(
         self,
-        prediction: str,
+        prediction: str | ParsedAction,
         error: str | None = None,
         timing: InferenceTiming | None = None,
     ) -> None:
         """Update the current action label."""
         async with self.condition:
-            self.latest_prediction = prediction.strip() or "unknown action"
+            if isinstance(prediction, ParsedAction):
+                self.latest_action = prediction
+                self.latest_prediction = prediction.to_overlay_text().strip() or "unknown action"
+            else:
+                self.latest_action = None
+                self.latest_prediction = prediction.strip() or "unknown action"
             self.prediction_age = time.time()
             if timing is not None:
                 self.prediction_count += 1
@@ -221,6 +263,19 @@ class ActionState:
             self.inference_error = error
             self.condition.notify_all()
 
+    async def set_abnormal_publish_status(
+        self,
+        event: dict[str, Any] | None,
+        error: str | None = None,
+    ) -> None:
+        """Record the latest abnormal event publishing status."""
+        async with self.condition:
+            if event is not None:
+                self.latest_abnormal_event = event
+                self.abnormal_publish_count += 1
+            self.abnormal_publish_error = error
+            self.condition.notify_all()
+
     async def snapshot(self, history_seconds: int = 3, current_second_samples: int = 5) -> dict[str, Any]:
         """Return a shallow state snapshot."""
         async with self.condition:
@@ -228,6 +283,7 @@ class ActionState:
                 "latest_frame": self.latest_frame,
                 "frames": list(self.frames),
                 "latest_prediction": self.latest_prediction,
+                "latest_action": None if self.latest_action is None else self.latest_action.to_dict(),
                 "prediction_age": self.prediction_age,
                 "prediction_count": self.prediction_count,
                 "average_inference_ms": (
@@ -252,6 +308,9 @@ class ActionState:
                 "source_connected": self.source_connected,
                 "source_error": self.source_error,
                 "inference_error": self.inference_error,
+                "latest_abnormal_event": self.latest_abnormal_event,
+                "abnormal_publish_count": self.abnormal_publish_count,
+                "abnormal_publish_error": self.abnormal_publish_error,
                 "backend_status": dict(self.backend_status),
                 "pose_status": dict(self.pose_status),
             }
@@ -486,8 +545,8 @@ def build_llamacpp_payload(
                 "Analyze the sequence of video frames and identify the action taking place.\n"
                 f"The target action categories to detect are: {target_actions}.\n\n"
                 "Respond in the exact following format and nothing else:\n"
-                "action_name:<one target action category, or No person visible>\n"
-                "reason:<brief visual evidence>\n"
+                "Action: <one target action category, or No person visible>\n"
+                "Evidence/Reason: <brief visual evidence>\n"
             ),
         }
     ]
@@ -503,8 +562,8 @@ def build_llamacpp_payload(
                 "role": "system",
                 "content": (
                     "You are a strict human action classifier. "
-                    "Return only two lines: action_name:... and reason:... "
-                    "Your response must begin with action_name:. "
+                    "Return only two lines: Action:... and Evidence/Reason:... "
+                    "Your response must begin with Action:. "
                     "Do not reason aloud. Do not include markdown."
                 ),
             },
@@ -544,7 +603,7 @@ async def call_llamacpp(
     current_second_samples: int,
     inference_jpeg_quality: int,
     inference_long_side: int,
-) -> tuple[str, InferenceTiming]:
+) -> tuple[ParsedAction | str, InferenceTiming]:
     """Call llama.cpp's OpenAI-compatible chat completions endpoint."""
     url = api_base.rstrip("/") + "/chat/completions"
     total_start = time.perf_counter()
@@ -579,7 +638,7 @@ async def call_llamacpp(
     choice = data["choices"][0]
     content = str(choice["message"].get("content") or "").strip()
     if content:
-        prediction = normalize_action_response(content)
+        prediction = parse_action_response(content)
     elif choice.get("finish_reason") == "length":
         prediction = "Output truncated"
     else:
@@ -651,6 +710,10 @@ class LlamaCppBackend:
         if not Path(self.args.mmproj_path).exists():
             self.error = f"mmproj not found: {self.args.mmproj_path}"
             return
+        if await self._health_ready_once():
+            self.ready = True
+            self.error = None
+            return
 
         command = [
             executable,
@@ -681,10 +744,19 @@ class LlamaCppBackend:
             "1",
         ]
         LOGGER.info("starting llama.cpp server: %s", " ".join(command))
+        env = None
+        if self.args.llama_cuda_visible_devices:
+            env = os.environ.copy()
+            env["CUDA_VISIBLE_DEVICES"] = self.args.llama_cuda_visible_devices
+            LOGGER.info(
+                "starting llama.cpp server with CUDA_VISIBLE_DEVICES=%s",
+                self.args.llama_cuda_visible_devices,
+            )
         self.process = await asyncio.create_subprocess_exec(
             *command,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.STDOUT,
+            env=env,
         )
         await self._wait_until_ready()
 
@@ -716,6 +788,15 @@ class LlamaCppBackend:
                 await asyncio.sleep(0.5)
         self.error = f"llama-server not ready after {self.args.llama_startup_timeout:.1f}s"
 
+    async def _health_ready_once(self) -> bool:
+        """Return whether an existing llama-server is already ready."""
+        try:
+            async with ClientSession() as session:
+                async with session.get(self.health_url, timeout=1) as response:
+                    return response.status < 500
+        except Exception:
+            return False
+
     async def stop(self) -> None:
         """Stop a managed llama.cpp server."""
         if self.process is None:
@@ -728,8 +809,8 @@ class LlamaCppBackend:
             await self.process.wait()
 
 
-def normalize_action_response(content: str) -> str:
-    """Normalize model output into a stable action_name/reason block."""
+def parse_action_response(content: str) -> ParsedAction:
+    """Parse the model's Action/Evidence response into structured fields."""
     action_name = ""
     reason = ""
     lowered = content.lower()
@@ -744,22 +825,326 @@ def normalize_action_response(content: str) -> str:
         elif normalized_key in {"reason", "evidence/reason", "evidence", "evidence_reason"} and not reason:
             reason = _clean_field_value(value)
     if not action_name:
-        action_name = _clean_field_value(_extract_field_after_marker(content, "action_name:"))
-    if not action_name:
         action_name = _clean_field_value(_extract_field_after_marker(content, "Action:"))
-    if not reason:
-        reason = _clean_field_value(_extract_field_after_marker(content, "reason:"))
+    if not action_name:
+        action_name = _clean_field_value(_extract_field_after_marker(content, "action_name:"))
     if not reason:
         reason = _clean_field_value(_extract_field_after_marker(content, "Evidence/Reason:"))
+    if not reason:
+        reason = _clean_field_value(_extract_field_after_marker(content, "reason:"))
     if not action_name and "no person" in lowered:
         action_name = "No person visible"
-    if action_name.lower() == "no person visible":
-        reason = "No person is visible in the frames"
-    if action_name:
-        if reason:
-            return f"action_name:{action_name}\nreason:{reason}"
-        return f"action_name:{action_name}\nreason:No reason provided"
-    return content
+    if not action_name:
+        action_name = _clean_field_value(content) or "unknown action"
+    return ParsedAction(action_name=action_name, reason=reason, raw_response=content)
+
+
+def normalize_action_response(content: str) -> str:
+    """Normalize model output for legacy callers and overlay tests."""
+    return parse_action_response(content).to_overlay_text()
+
+
+def normalize_action_name(action_name: str) -> str:
+    """Normalize action labels for allowlist comparisons."""
+    normalized = action_name.strip().lower().replace("_", " ")
+    if normalized.startswith("person "):
+        normalized = normalized[len("person ") :]
+    return " ".join(normalized.split())
+
+
+def should_publish_abnormal_event(action: ParsedAction) -> bool:
+    """Return whether the parsed action should produce an abnormal event."""
+    return normalize_action_name(action.action_name) in ALERT_ACTIONS
+
+
+def abnormal_cooldown_elapsed(last_published_at: float, now: float, cooldown_seconds: float) -> bool:
+    """Return whether a new global abnormal event may be published."""
+    if last_published_at <= 0.0:
+        return True
+    return now - last_published_at >= max(0.0, cooldown_seconds)
+
+
+def build_abnormal_event(
+    action: ParsedAction,
+    frame_paths: list[str],
+    event_id: str | None = None,
+    robot_id: str = "temi-01",
+    timestamp_ms: int | None = None,
+    source: str = "temi_action_viewer",
+) -> dict[str, Any]:
+    """Build the minimal abnormal event payload from parsed model output."""
+    now_ms = int(time.time() * 1000)
+    return {
+        "schema_version": "1.0",
+        "event_id": event_id or f"evt_abnormal_{now_ms}",
+        "robot_id": robot_id,
+        "type": "perception.abnormal",
+        "timestamp_ms": timestamp_ms if timestamp_ms is not None else now_ms,
+        "observation": {
+            "action_name": action.action_name,
+            "reason": action.reason,
+        },
+        "evidence": {
+            "frame_paths": frame_paths,
+        },
+        "context": {
+            "source": source,
+        },
+    }
+
+
+def save_abnormal_evidence_frames(
+    frames: list[BufferedFrame],
+    shared_root: str,
+    robot_id: str,
+    event_id: str,
+) -> list[str]:
+    """Persist original JPEG frames for an abnormal event and return their paths."""
+    event_dir = Path(shared_root) / "abnormal_events" / robot_id / event_id
+    event_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for index, frame in enumerate(frames):
+        path = event_dir / f"frame_{index:03d}.jpg"
+        path.write_bytes(frame.jpeg)
+        paths.append(path.as_posix())
+    return paths
+
+
+def publish_abnormal_event_mqtt(
+    event: dict[str, Any],
+    broker: str,
+    port: int,
+    topic: str,
+) -> None:
+    """Publish one abnormal event with mosquitto_pub."""
+    message = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+    subprocess.run(
+        ["mosquitto_pub", "-h", broker, "-p", str(port), "-t", topic, "-m", message],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def build_pre_alert_speak_command(
+    action: ParsedAction,
+    event_id: str,
+    robot_id: str,
+    language: str = "zh-TW",
+    created_at_ms: int | None = None,
+) -> dict[str, Any]:
+    """Build a canonical speak command for immediate abnormal pre-alerts."""
+    now_ms = created_at_ms if created_at_ms is not None else int(time.time() * 1000)
+    normalized_action = normalize_action_name(action.action_name)
+    text = PRE_ALERT_SPEAK_TEXT.get(
+        normalized_action,
+        "我偵測到可能有異常狀況，已將過程發送給 Discord。",
+    )
+    return {
+        "schema_version": "1.0",
+        "command_id": f"cmd_prealert_{event_id}_{now_ms}",
+        "event_id": event_id,
+        "robot_id": robot_id,
+        "source": "temi_action_viewer_pre_alert",
+        "created_at_ms": now_ms,
+        "actions": [
+            {
+                "action_id": "pre_alert_speak",
+                "type": "speak",
+                "text": text,
+                "language": language,
+            }
+        ],
+    }
+
+
+def publish_pre_alert_speak(
+    command: dict[str, Any],
+    broker: str,
+    port: int,
+    robot_id: str,
+) -> str:
+    """Publish one canonical pre-alert speak command and return the topic."""
+    topic = f"temi/{robot_id}/cmd/request"
+    message = json.dumps(command, ensure_ascii=False, separators=(",", ":"))
+    subprocess.run(
+        ["mosquitto_pub", "-h", broker, "-p", str(port), "-t", topic, "-m", message],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return topic
+
+
+def maybe_publish_pre_alert_speak(
+    action: ParsedAction,
+    event_id: str,
+    args: argparse.Namespace,
+) -> dict[str, Any] | None:
+    """Publish an immediate speak warning before sending the event to Hermes."""
+    if getattr(args, "pre_alert_speak", "disabled") == "disabled":
+        return None
+    command = build_pre_alert_speak_command(
+        action,
+        event_id,
+        args.robot_id,
+        getattr(args, "pre_alert_language", "zh-TW"),
+    )
+    topic = publish_pre_alert_speak(command, args.mqtt_broker, args.mqtt_port, args.robot_id)
+    return {"topic": topic, "payload": command}
+
+
+def format_publish_error(exc: Exception) -> str:
+    """Return a concise publish error without echoing the full MQTT payload."""
+    if isinstance(exc, subprocess.CalledProcessError):
+        detail = (exc.stderr or exc.stdout or "").strip()
+        if detail:
+            return f"{exc.cmd[0]} exited with {exc.returncode}: {detail}"
+        return f"{exc.cmd[0]} exited with {exc.returncode}"
+    return str(exc)
+
+
+def notify_discord_webhook(
+    message: str,
+    file_paths: list[str],
+    env_path: str,
+    max_files: int,
+) -> dict[str, Any]:
+    """Send an abnormal event notification to Discord using a webhook from .env."""
+    webhook_url = load_env_value(env_path, DISCORD_WEBHOOK_ENV_VAR)
+    if not webhook_url:
+        raise RuntimeError(f"missing {DISCORD_WEBHOOK_ENV_VAR} in {env_path}")
+    paths = [Path(path) for path in file_paths[: max(0, max_files)]]
+    for path in paths:
+        if not path.is_file():
+            raise FileNotFoundError(path)
+
+    payload = {"username": DISCORD_USERNAME, "content": message.strip()}
+    if paths:
+        with contextlib.ExitStack() as stack:
+            files = {
+                f"files[{index}]": (path.name, stack.enter_context(path.open("rb")))
+                for index, path in enumerate(paths)
+            }
+            response = requests.post(
+                webhook_url,
+                data={"payload_json": json.dumps(payload, ensure_ascii=False)},
+                files=files,
+                timeout=60,
+            )
+    else:
+        response = requests.post(
+            webhook_url,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=15,
+        )
+    if response.status_code not in (200, 204):
+        raise RuntimeError(f"discord webhook failed: {response.status_code} {response.text}")
+    return {
+        "status_code": response.status_code,
+        "file_count": len(paths),
+    }
+
+
+def load_env_value(env_path: str, key: str) -> str:
+    """Read one KEY=value from the process environment or a simple .env file."""
+    value = os.getenv(key)
+    if value:
+        return value
+    path = Path(env_path)
+    if not path.exists():
+        return ""
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, raw_value = line.split("=", 1)
+        if name.strip() == key:
+            return raw_value.strip().strip('"').strip("'")
+    return ""
+
+
+def build_discord_abnormal_message(event: dict[str, Any], topic: str) -> str:
+    """Build a compact Discord message for one abnormal perception event."""
+    observation = event.get("observation") if isinstance(event.get("observation"), dict) else {}
+    action_name = str(observation.get("action_name") or "")
+    reason = str(observation.get("reason") or "")
+    return textwrap.dedent(
+        f"""\
+        Temi abnormal event detected
+        robot_id: {event.get("robot_id", "")}
+        event_id: {event.get("event_id", "")}
+        mqtt_topic: {topic}
+        action: {action_name}
+        reason: {reason}
+        """
+    ).strip()
+
+
+def maybe_notify_discord(event: dict[str, Any], topic: str, args: argparse.Namespace) -> dict[str, Any] | None:
+    """Send a best-effort Discord notification for an abnormal event."""
+    if getattr(args, "discord_notify", "disabled") == "disabled":
+        return None
+    frame_paths = []
+    evidence = event.get("evidence")
+    if isinstance(evidence, dict):
+        raw_paths = evidence.get("frame_paths")
+        if isinstance(raw_paths, list):
+            frame_paths = [path for path in raw_paths if isinstance(path, str)]
+    message = build_discord_abnormal_message(event, topic)
+    return notify_discord_webhook(
+        message,
+        frame_paths,
+        getattr(args, "discord_env_path", DEFAULT_DISCORD_ENV_PATH),
+        getattr(args, "discord_max_files", 8),
+    )
+
+
+def maybe_publish_abnormal_event(
+    action: ParsedAction,
+    frames: list[BufferedFrame],
+    args: argparse.Namespace,
+) -> dict[str, Any] | None:
+    """Persist and publish an abnormal event if publishing is enabled."""
+    if args.abnormal_publish == "disabled":
+        return None
+    if not should_publish_abnormal_event(action):
+        return None
+    event_id = f"evt_abnormal_{int(time.time() * 1000)}"
+    frame_paths = save_abnormal_evidence_frames(frames, args.shared_root, args.robot_id, event_id)
+    event = build_abnormal_event(
+        action,
+        frame_paths,
+        event_id=event_id,
+        robot_id=args.robot_id,
+        source=args.abnormal_source,
+    )
+    topic = f"temi/{args.robot_id}/perception/abnormal"
+    published_event: dict[str, Any] = {"topic": topic, "payload": event}
+    try:
+        pre_alert = maybe_publish_pre_alert_speak(action, event_id, args)
+        if pre_alert is not None:
+            published_event["pre_alert_speak"] = pre_alert
+    except Exception as exc:
+        pre_alert_error = format_publish_error(exc)
+        LOGGER.warning("failed to publish pre-alert speak command: %s", pre_alert_error)
+        published_event["pre_alert_speak_error"] = pre_alert_error
+    try:
+        publish_abnormal_event_mqtt(event, args.mqtt_broker, args.mqtt_port, topic)
+        published_event["mqtt"] = {"status": "ok"}
+    except Exception as exc:
+        mqtt_error = format_publish_error(exc)
+        LOGGER.warning("failed to publish abnormal event to MQTT: %s", mqtt_error)
+        published_event["mqtt_error"] = mqtt_error
+    try:
+        discord = maybe_notify_discord(event, topic, args)
+        if discord is not None:
+            published_event["discord"] = discord
+    except Exception as exc:
+        LOGGER.exception("failed to send abnormal event Discord notification")
+        published_event["discord_error"] = str(exc)
+    return published_event
 
 
 def _extract_field_after_marker(content: str, marker: str) -> str:
@@ -833,6 +1218,7 @@ async def inference_loop(
     pose_preprocessor: PosePreprocessor,
 ) -> None:
     """Classify the visible human action whenever a fresh 8-frame batch is ready."""
+    last_abnormal_published_at = 0.0
     async with ClientSession() as session:
         while True:
             if not backend.ready:
@@ -865,6 +1251,18 @@ async def inference_loop(
                 )
                 await state.set_prediction(prediction, None, timing)
                 LOGGER.info("prediction: %s timings_ms=%s", prediction, timing)
+                if isinstance(prediction, ParsedAction) and should_publish_abnormal_event(prediction):
+                    now = time.time()
+                    if abnormal_cooldown_elapsed(last_abnormal_published_at, now, args.abnormal_cooldown_seconds):
+                        try:
+                            published_event = maybe_publish_abnormal_event(prediction, frames, args)
+                            if published_event is not None:
+                                last_abnormal_published_at = now
+                                await state.set_abnormal_publish_status(published_event, None)
+                                LOGGER.info("published abnormal event to %s", published_event["topic"])
+                        except Exception as exc:
+                            LOGGER.exception("failed to publish abnormal event")
+                            await state.set_abnormal_publish_status(None, str(exc))
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -1018,6 +1416,15 @@ def build_app(args: argparse.Namespace) -> web.Application:
                 **snapshot_data["pose_status"],
                 "model": args.model,
                 "latest_prediction": snapshot_data["latest_prediction"],
+                "latest_action": snapshot_data["latest_action"],
+                "latest_abnormal_event": snapshot_data["latest_abnormal_event"],
+                "abnormal_publish_count": snapshot_data["abnormal_publish_count"],
+                "abnormal_publish_error": snapshot_data["abnormal_publish_error"],
+                "abnormal_publish": args.abnormal_publish,
+                "abnormal_cooldown_seconds": args.abnormal_cooldown_seconds,
+                "discord_notify": args.discord_notify,
+                "discord_env_path": args.discord_env_path,
+                "discord_max_files": args.discord_max_files,
                 "prediction_count": snapshot_data["prediction_count"],
                 "prediction_age_ms": prediction_age_ms,
                 "average_inference_ms": snapshot_data["average_inference_ms"],
@@ -1059,6 +1466,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--llama-ctx-size", type=int, default=8192)
     parser.add_argument("--llama-threads", type=int, default=8)
     parser.add_argument("--llama-gpu-layers", default="all")
+    parser.add_argument(
+        "--llama-cuda-visible-devices",
+        default="",
+        help="CUDA_VISIBLE_DEVICES applied only to managed llama-server, e.g. 3.",
+    )
     parser.add_argument("--llama-startup-timeout", type=float, default=30.0)
     parser.add_argument("--pose-mode", choices=["auto", "on", "off"], default="auto")
     parser.add_argument("--pose-model", default="yolo26x-pose.pt")
@@ -1078,6 +1490,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reconnect-seconds", type=float, default=2.0)
     parser.add_argument("--jpeg-quality", type=int, default=82)
     parser.add_argument("--max-message-mb", type=int, default=8)
+    parser.add_argument("--robot-id", default="temi-01")
+    parser.add_argument("--mqtt-broker", default="127.0.0.1")
+    parser.add_argument("--mqtt-port", type=int, default=1883)
+    parser.add_argument("--abnormal-publish", choices=["enabled", "disabled"], default="enabled")
+    parser.add_argument("--abnormal-cooldown-seconds", type=float, default=30.0)
+    parser.add_argument("--abnormal-source", default="temi_action_viewer")
+    parser.add_argument("--shared-root", default="/TemiAgent/temi_shared")
+    parser.add_argument("--discord-notify", choices=["enabled", "disabled"], default="enabled")
+    parser.add_argument("--discord-env-path", default=DEFAULT_DISCORD_ENV_PATH)
+    parser.add_argument("--discord-max-files", type=int, default=8)
+    parser.add_argument("--pre-alert-speak", choices=["enabled", "disabled"], default="enabled")
+    parser.add_argument("--pre-alert-language", default="zh-TW")
     parser.add_argument("--log-level", default="INFO")
     return parser.parse_args()
 
