@@ -1,6 +1,6 @@
 # HermesTemiBridge 模組 README
 
-最後更新日期：2026-06-01
+最後更新日期：2026-06-12
 
 ## 本文件維護規則
 
@@ -20,6 +20,16 @@ Temi Android + ASR/camera-only Overview Adapter
   -> MQTT temi/{robot_id}/cmd/result
 ```
 
+Continuous vision abnormal events use the same Bridge safety boundary:
+
+```text
+Temi Action Viewer / Video Action Tester
+  -> MQTT temi/{robot_id}/perception/abnormal
+  -> HermesTemiBridge
+  -> Hermes CLI / Resident HTTP / Mock Hermes
+  -> validated temi/{robot_id}/cmd/request
+```
+
 ## 對外關係
 
 | 關聯模組 | 關係 |
@@ -34,9 +44,10 @@ Temi Android + ASR/camera-only Overview Adapter
 ## 核心職責
 
 - 連線到 MQTT broker。
-- Subscribe `temi/+/asr/final` 與 `temi/+/cmd/result`。
+- Subscribe `temi/+/asr/final`、`temi/+/perception/abnormal` 與 `temi/+/cmd/result`。
 - 驗證 ASR event schema 與 robot allowlist。
 - 驗證三張影像存在、大小合理，且位於 shared root 內。
+- 驗證 abnormal event 內的 evidence frame paths 存在、大小合理，且位於 shared root 內。
 - 將 `/var/lib/temi_shared/...` 轉成 Hermes 可讀的 `/shared/temi/...` 或本機等價路徑。
 - 建立 Hermes prompt。
 - 支援 `mock`、`cli`、`http` 三種 Hermes invocation mode。
@@ -57,6 +68,7 @@ Temi Android + ASR/camera-only Overview Adapter
 - Robot-facing actions：`speak`、`ask_clarification`、`turn`、`navigate`、`stop`、`noop`。
 - Bridge-internal memory/demo actions：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
 - 只有 robot-facing actions 會 publish 到 `temi/{robot_id}/cmd/request`；memory/demo actions 只寫入 `MEMORY_DIR`。
+- Abnormal perception events currently carry only `observation.action_name`, `observation.reason`, and `evidence.frame_paths`; they do not carry model confidence, confidence_source, or severity.
 
 ## Bridge 設計檢視
 
@@ -80,7 +92,7 @@ hermes_temi_bridge/
   src/hermes_temi_bridge/
     main.py                 # CLI 入口與 runtime wiring
     mqtt_client.py          # MQTT subscribe/publish
-    event_models.py         # ASR event parsing/validation
+    event_models.py         # ASR and abnormal event parsing/validation
     image_resolver.py       # shared path validation and translation
     hermes_client.py        # mock/cli/http Hermes invocation
     action_validator.py     # Hermes action contract validation
@@ -91,6 +103,47 @@ hermes_temi_bridge/
 ```
 
 ## 常用模式
+
+### Abnormal perception route
+
+Bridge accepts abnormal perception events on:
+
+```text
+temi/{robot_id}/perception/abnormal
+```
+
+Expected payload shape:
+
+```json
+{
+  "schema_version": "1.0",
+  "event_id": "evt_abnormal_...",
+  "robot_id": "temi-01",
+  "type": "perception.abnormal",
+  "timestamp_ms": 1780000000000,
+  "observation": {
+    "action_name": "falls down",
+    "reason": "The person transitions from sitting to lying flat on the floor."
+  },
+  "evidence": {
+    "frame_paths": [
+      "/TemiAgent/temi_shared/abnormal_events/temi-01/evt_abnormal_.../frame_000.jpg"
+    ]
+  },
+  "context": {
+    "source": "temi_action_viewer"
+  }
+}
+```
+
+Bridge validates that every evidence path is under `TEMI_SHARED_BRIDGE_PATH`, exists, is readable, and is below `MAX_IMAGE_SIZE_MB`. The Hermes prompt receives:
+
+- `source_type: perception.abnormal`
+- `action_name`
+- model `reason`
+- translated evidence frame paths
+
+The Bridge still requires Hermes to return the normal validated JSON action plan before any robot command is published. The perception event itself must not include image bytes, confidence, confidence_source, or severity.
 
 ### Mock mode
 
@@ -148,7 +201,81 @@ uv run --extra mqtt hermes-temi-bridge --env-file .env.example
 | `HERMES_HTTP_URL` | HTTP mode endpoint。 |
 | `HERMES_TIMEOUT_SECONDS` | 呼叫 Hermes 的 timeout。 |
 | `LOG_DIR` | event JSONL 與 debug logs 位置。 |
+| `TRACE_ENABLED` | 是否啟用 Bridge event trace，預設 `true`。 |
+| `DEBUG_TRACE_FULL` | 是否保存 full prompt、full care_context、full raw Hermes output，預設 `false`。 |
+| `TRACE_INCLUDE_ASR_TEXT` | 摘要模式是否保存完整 ASR text，預設 `true`；設為 `false` 時只保留 excerpt/hash/length。 |
+| `TRACE_RUN_ID` | 手動指定 run id；空值時自動產生。 |
+| `TRACE_MAX_FIELD_CHARS` | excerpt 最大字元數，預設 `2000`。 |
 | `MEMORY_DIR` | structured memory root，預設 `memory`。 |
+
+## Trace log schema
+
+Bridge writes append-only JSONL traces to:
+
+```text
+{LOG_DIR}/{event_id}.jsonl
+{LOG_DIR}/_index.jsonl
+```
+
+`_index.jsonl` is append-only. The same `event_id` may have `started`、`completed`、`failed`、`ignored` records. Treat it as an audit index, not the only source of operational status: a duplicate attempt can append `ignored` after the original event already completed. The CLI viewer resolves summary status from the event timeline: `event_failed` wins, then `event_completed`, and `duplicate_event_ignored` is counted as `duplicate_attempts` without overwriting `failed` or `completed`.
+
+Trace record fields:
+
+```text
+schema_version, timestamp, run_id, seq, level, component,
+event_id, robot_id, source_type, record_type, stage, status,
+duration_ms, payload
+```
+
+Fixed stage enum:
+
+```text
+event_received
+input_validated
+care_context_built
+hermes_request_prepared
+hermes_invocation_finished
+hermes_output_validated
+memory_actions_completed
+command_request_published
+command_result_received
+event_completed
+event_failed
+duplicate_event_ignored
+```
+
+`seq` is monotonic within each event timeline. `duration_ms` on a stage record means that stage's duration; `event_completed.payload.total_duration_ms` is the whole event duration. `command_result_received` may arrive later and is appended to the same event timeline.
+
+All payloads pass through the shared sanitizer in `logging_utils.py`. Hashes use SHA-256. Excerpts use `TRACE_MAX_FIELD_CHARS` and include `truncated=true|false`. Summary mode records prompt/raw output/care context only as length/hash/excerpt; full debug mode is required to store full prompt, full care_context, and full raw Hermes output. Image bytes are never stored; traces only record paths, frame metadata, and validation result.
+
+Failure records include `failed_stage`、`error_code`、`error_message`、`fallback_generated`、`fallback_command_published`、`fallback_command_id` even when a fallback is not produced. The Bridge only records Hermes' explicit JSON fields such as `reasoning_summary`、`cognitive_state`、`risk_reason`、`next_step`、`actions`; it does not record or claim hidden chain-of-thought.
+
+CLI viewer:
+
+```bash
+cd /TemiAgent
+python3 tools/show_temi_trace.py --log-dir /TemiAgent/logs/overview_bridge_resident --latest
+python3 tools/show_temi_trace.py --log-dir /TemiAgent/logs/overview_bridge_resident --event-id <event_id>
+python3 tools/show_temi_trace.py --log-dir /TemiAgent/logs/overview_bridge_resident --latest --full
+python3 tools/show_temi_trace.py --log-dir /TemiAgent/logs/overview_bridge_resident --latest --json
+```
+
+`--json` prints machine-readable JSON only on stdout.
+
+Common summary fields:
+
+- `completed`: the Bridge validated Hermes output and finished the event path.
+- `failed`: validation, Hermes invocation, or output handling failed; inspect `event_failed.payload`.
+- `duplicate_attempts`: number of later duplicate event attempts; these do not change the original completed/failed status.
+- `command_result`: latest robot command result status appended to the timeline.
+- `late_result`: `true` when a command result arrived after the terminal `event_completed` or `event_failed` record.
+
+Privacy and retention:
+
+- Use summary mode (`DEBUG_TRACE_FULL=false`) for normal Demo runs.
+- Use full debug mode only for short local debugging. It may store full prompt, full care context, full raw Hermes output, and raw inbound payload.
+- Do not use full debug logs as long-term fixtures or report attachments before de-identification.
+- Clean up old `LOG_DIR` folders regularly; full debug logs should not be retained long term.
 
 ## 測試
 

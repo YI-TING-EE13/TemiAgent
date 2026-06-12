@@ -69,6 +69,11 @@ class BridgeConfig:
     event_dedup_ttl_seconds: int = 600
     log_level: str = "INFO"
     log_dir: str = "logs/events"
+    trace_enabled: bool = True
+    debug_trace_full: bool = False
+    trace_include_asr_text: bool = True
+    trace_run_id: str | None = None
+    trace_max_field_chars: int = 2000
     memory_dir: str = "memory"
     care_context_enabled: bool = True
     care_context_max_events: int = 5
@@ -123,6 +128,15 @@ class BridgeConfig:
             ),
             log_level=os.getenv("LOG_LEVEL", values.get("LOG_LEVEL", cls.log_level)),
             log_dir=os.getenv("LOG_DIR", values.get("LOG_DIR", cls.log_dir)),
+            trace_enabled=_get_bool(values, "TRACE_ENABLED", cls.trace_enabled),
+            debug_trace_full=_get_bool(values, "DEBUG_TRACE_FULL", cls.debug_trace_full),
+            trace_include_asr_text=_get_bool(
+                values, "TRACE_INCLUDE_ASR_TEXT", cls.trace_include_asr_text
+            ),
+            trace_run_id=os.getenv("TRACE_RUN_ID", values.get("TRACE_RUN_ID", "")) or None,
+            trace_max_field_chars=_get_int(
+                values, "TRACE_MAX_FIELD_CHARS", cls.trace_max_field_chars
+            ),
             memory_dir=os.getenv("MEMORY_DIR", values.get("MEMORY_DIR", cls.memory_dir)),
             care_context_enabled=_get_bool(
                 values, "CARE_CONTEXT_ENABLED", cls.care_context_enabled
