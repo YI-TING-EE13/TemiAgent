@@ -2,207 +2,150 @@
 
 最後更新日期：2026-06-12
 
-## 目的
+## 文件索引
 
-本 runbook 用於第一年度 Demo 前的排練與現場操作。它把目前已完成的 P0-P3/P5 內容整理成一條可展示、可解釋、可回復的流程。P4 Navigation 先跳過，不作為主線驗收條件。
+這份 runbook 是 Demo day 快速摘要，只放當天最常用的順序、指令與說明。完整啟動、分服務操作與 debug 請看 `docs/project/first_year_demo_e2e_operation_manual.md`。三個情境的完整台詞、預期回應、後台 artifact 與備援說法請看 `docs/project/first_year_demo_scenario_script.md`。驗收勾選請看 `docs/project/first_year_demo_acceptance_checklist.md`。
 
 ## Demo 定位
 
-本 Demo 展示的是「具備照護情境理解與安全邊界的 Temi 智慧助理雛形」。核心價值不是醫療診斷，而是：
+本 Demo 展示「具備照護情境理解與安全邊界的 Temi 智慧助理雛形」。Temi App 負責 ASR、TTS 與 Picture Streaming；PC 端透過 MQTT 與 shared image paths 收到事件；Hermes / LM Studio 在本地推理；HermesTemiBridge 驗證 JSON output 與 action schema，再把通過驗證的 command 發到 canonical `temi/temi-01/cmd/request`。Structured memory 保存提醒、不適、疑似跌倒與摘要。
 
-- Temi App 整合 ASR、TTS、Picture Streaming。
-- PC 端透過 MQTT 與 shared image paths 收到事件。
-- Hermes / LM Studio 在本地端進行推理。
-- HermesTemiBridge 驗證 JSON output 與 robot actions，並把通過驗證的 command 發到 canonical `temi/{robot_id}/cmd/request`。
-- Structured memory 記錄提醒、不適、疑似跌倒與摘要。
+口頭邊界：這不是醫療診斷，不是真實 119 或家屬通報；`notify_caregiver_mock` 是 Demo artifact。
 
-## 展示架構
+## Demo Day 最短流程
 
-```mermaid
-flowchart TD
-  A["男同學示範長者：王先生"] --> B["Temi App ASR / Picture Streaming"]
-  B --> C["MQTT ASR event + temi_shared image paths"]
-  C --> D["Overview Adapter or temi_backend legacy route"]
-  D --> E["Hermes / LM Studio local reasoning"]
-  E --> F["JSON action plan + cognitive_state.home_esi_level"]
-  F --> G["HermesTemiBridge validation"]
-  G --> H["Robot actions: TTS / ask_clarification"]
-  G --> I["Memory actions: log_event / reminder done / mock notify / summary"]
-  H --> J["Temi feedback"]
-  I --> K["memory/event_log.jsonl + abnormal_events + summaries"]
-```
-
-## Demo 前 Smoke Test
-
-P0 先前已跑過；現場前建議只做快速確認。
-
-```bash
-cd /TemiAgent
-python3 tools/e2e_test_runner.py
-python3 tools/demo_case_runner.py --keep-artifacts
-```
-
-通過條件：
-
-- `e2e_test_runner.py` 回 `status: ok`。
-- `demo_case_runner.py` 三個 case 都是 `status: success`。
-- `run_summary.json` 內有 L3 reminder、L2 discomfort、L1 possible fall 的 final memory state。
-
-## 正式 Demo 錄影
-
-錄影操作同樣在 `yiting.TemiAgent_gpu_all` container 內執行，並從 `/TemiAgent` 啟動。2026-06-12 實測結果：`adb shell screenrecord` 使用 Temi 原生 `1200x1920` 解析度會出現 `Unable to get output buffers (err=-38)` 並產生 0 byte 檔案；指定較低解析度可用。正式 Demo 優先使用 `scrcpy` headless 錄影，穩定性較好，也沒有 Android `screenrecord` 常見的 180 秒單段限制。
-
-### 錄影前確認
+### 1. 進入 container
 
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
 cd /TemiAgent
-
-adb connect 192.168.50.205:5555
-adb devices -l
-scrcpy --version
-mkdir -p logs/demo_recordings
 ```
 
-通過條件：
+### 2. 一鍵重啟全部服務
 
-- `adb devices -l` 看到 `192.168.50.205:5555 device`。
-- `scrcpy --version` 可顯示版本；目前 container 內實測版本為 `scrcpy 1.25`。
-- Temi 是 Android 6.0.1；此路線視為畫面錄影，不保證音訊。
-
-### 建議正式錄影指令
+目前正式 Demo 先用三卡非 QAT Gemma 4 31B：
 
 ```bash
 cd /TemiAgent
+MODEL_LOAD_ID=google/gemma-4-31b \
+MODEL_IDENTIFIER=google/gemma-4-31b \
+CONTEXT_LENGTH=64000 \
+LMSTUDIO_VISIBLE_GPUS=0,1,2 \
+RUN_UNIT_TESTS=0 \
+RUN_LOCAL_E2E=0 \
+RUN_DEMO_CASES=0 \
+RUN_LIVE_E2E=0 \
+./tools/validate_temi_e2e_stack.sh
+```
+
+時間足夠時移除 `RUN_* = 0`，讓腳本跑完整硬體檢查、unit tests、local E2E、demo cases 與 live E2E。完整說明見 E2E 手冊「第一部分：一鍵建立或重啟所有服務」。
+
+### 3. 快速確認服務狀態
+
+```bash
+lms ps
+curl -sS http://127.0.0.1:1234/v1/models
+curl -sS http://127.0.0.1:8765/health
+curl -sS http://127.0.0.1:8010/health
+/TemiAgent/hermes-agent/venv/bin/hermes gateway status
+python3 -m json.tool /root/.hermes/gateway_state.json | grep -A8 '"discord"'
+adb connect 192.168.50.205:5555
+adb devices -l
+```
+
+最低通過條件：LM Studio 有 `google/gemma-4-31b`、Hermes health OK、Action viewer OK、Discord gateway connected、ADB 看到 `192.168.50.205:5555 device`。
+
+### 4. 開始正式錄影
+
+優先短測錄影，確認 MP4 不是只有 header。
+
+`scrcpy` 路線：
+
+```bash
+cd /TemiAgent
+mkdir -p /TemiAgent/logs/demo_recordings
 scrcpy --serial 192.168.50.205:5555 \
   --no-display \
   --no-control \
   --max-size 1280 \
   --bit-rate 2M \
-  --record "logs/demo_recordings/temi-demo-$(date +%Y%m%d_%H%M%S).mp4"
+  --record "/TemiAgent/logs/demo_recordings/temi-demo-$(date +%Y%m%d_%H%M%S).mp4"
 ```
 
-用途：
-
-- `--no-display`：不在 container 內開視窗，只錄影；適合 headless demo workstation。
-- `--no-control`：只鏡像/錄影，不從電腦控制 Temi。
-- `--max-size 1280`：避免 Temi 原生解析度觸發 encoder 失敗。
-- `--bit-rate 2M`：Demo 記錄畫質與檔案大小的折衷值。
-- `--record`：輸出 MP4 到 `logs/demo_recordings/`。
-
-停止錄影時按 `Ctrl+C`。`scrcpy` 正常結束時會印出 `Recording complete to mp4 file: ...`。錄影後確認：
-
-```bash
-ls -lh logs/demo_recordings/temi-demo-*.mp4
-```
-
-若要做 8 秒短測：
-
-```bash
-timeout 8s scrcpy --serial 192.168.50.205:5555 \
-  --no-display \
-  --no-control \
-  --max-size 1280 \
-  --bit-rate 2M \
-  --record "logs/demo_recordings/temi-scrcpy-test-$(date +%Y%m%d_%H%M%S).mp4"
-```
-
-`timeout` 回傳 124 屬於預期，表示時間到後停止錄影；只要 MP4 檔案非 0 byte 即可。
-
-### ADB fallback 錄影
-
-若 `scrcpy` 當天不可用，改用 Android 內建 `screenrecord`，但務必指定較低解析度：
+ADB fallback：
 
 ```bash
 cd /TemiAgent
-adb shell screenrecord --size 720x1280 --bit-rate 2000000 /sdcard/temi-demo.mp4
-adb pull /sdcard/temi-demo.mp4 logs/demo_recordings/
+mkdir -p /TemiAgent/logs/demo_recordings
+adb -s 192.168.50.205:5555 shell screenrecord --bugreport --size 720x1280 --bit-rate 2000000 /sdcard/temi-demo.mp4
+# Ctrl+C 停止後
+adb -s 192.168.50.205:5555 pull /sdcard/temi-demo.mp4 "/TemiAgent/logs/demo_recordings/temi-demo-adb-$(date +%Y%m%d_%H%M%S).mp4"
 ```
 
-停止時按 `Ctrl+C`。不要直接用未指定解析度的 `adb shell screenrecord /sdcard/temi-demo.mp4`，因為 Temi 原生解析度已實測會讓 encoder 失敗。
+若要測 1280x720 橫向輸出，照 E2E 手冊「正式 Demo 錄影」先做短測；直向 `720x1280` 是保守保底。錄完務必 `ls -lh /TemiAgent/logs/demo_recordings/*.mp4` 確認檔案大小合理。
 
-## 現場服務啟動順序
+### 5. 進行三個正式情境
 
-### A. 快速展示備援路線：legacy backend + LM Studio
+| 順序 | 情境 | 建議輸入 | 預期風險 | 展示重點 |
+|---|---|---|---|---|
+| 1 | 提醒吃藥 | `我吃完早餐後的藥了。` | L3 | reminder completed、event log |
+| 2 | L2 不適 | `我有點不舒服，頭有點暈。` | L2 | 先追問，不過度通報 |
+| 3 | L1 跌倒 | `救命，我跌倒了，站不起來。` | L1 | 不要求移動、mock notification、abnormal event、summary |
 
-適合展示 Temi ASR、Picture Streaming、Local VLM、TTS 閉環。
+完整主持稿、Temi 預期回應與 artifact 展示順序見 `docs/project/first_year_demo_scenario_script.md`。
+
+### 6. 後台證據
+
+現場可展示：
+
+```text
+memory/reminders.json
+memory/event_log.jsonl
+memory/abnormal_events/*.json
+memory/summaries/*.md
+logs/demo_cases/<run>/run_summary.json
+logs/demo_cases/<run>/cases/*/parsed_output.json
+logs/demo_cases/<run>/cases/*/command_request.json
+logs/demo_cases/<run>/cases/*/memory_state_after.json
+```
+
+若真機或 real Hermes 不穩，立即切 deterministic artifacts：
 
 ```bash
 cd /TemiAgent
-./tools/start_temi_pc_services.sh
+python3 tools/demo_case_runner.py --keep-artifacts
 ```
 
-確認：
+## 現場快速故障切換
 
-```bash
-./tools/check_temi_connection.sh
-```
-
-### B. Overview / Hermes Bridge 路線
-
-先啟動 resident Hermes：
-
-```bash
-cd /TemiAgent
-python3 tools/hermes_resident_server.py \
-  --host 127.0.0.1 \
-  --port 8765 \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md
-```
-
-再啟動 Bridge HTTP mode：
-
-```bash
-cd /TemiAgent/hermes_temi_bridge
-MQTT_BROKER_HOST=192.168.50.236 \
-MQTT_BROKER_PORT=1883 \
-TEMI_SHARED_BRIDGE_PATH=/TemiAgent/temi_shared \
-TEMI_SHARED_HERMES_PATH=/TemiAgent/temi_shared \
-HERMES_INVOKE_MODE=http \
-HERMES_HTTP_URL=http://127.0.0.1:8765/invoke \
-MEMORY_DIR=/TemiAgent/memory \
-LOG_DIR=/TemiAgent/logs/overview_bridge_resident \
-uv run --extra mqtt hermes-temi-bridge --env-file /TemiAgent/hermes_temi_bridge/.env.example
-```
-
-若要接目前 Temi App 的 legacy ASR 與 camera stream，啟動 ASR/camera-only adapter。command 不經 adapter 轉發，Temi app 會直接訂閱 canonical `cmd/request`：
-
-```bash
-cd /TemiAgent/temi_backend
-uv run python /TemiAgent/tools/temi_overview_adapter.py \
-  --broker 192.168.50.236 \
-  --port 1883 \
-  --vision-port 8080 \
-  --shared-root /TemiAgent/temi_shared \
-  --bridge-root /TemiAgent/temi_shared
-```
+| 問題 | 快速處理 | 詳細章節 |
+|---|---|---|
+| 服務像當機 | 重跑一鍵快速重啟指令 | E2E 第一部分 |
+| Discord 沒看到 Hermes 在線上 | 重啟 gateway 或確認 `discord.state=connected` | E2E Terminal 7 |
+| Temi 沒聽到語音 | `adb devices -l`、重開 Temi App、看 logcat | E2E Terminal 3 |
+| 有 ASR 但沒回應 | 開 `mosquitto_sub -t '#' -v` 看 topic 卡在哪 | E2E Debug 決策表 |
+| Temi 沒說話 | 先跑 `manual_tts.py` 確認 TTS 回路 | E2E 第四部分 |
+| Hermes 很慢 | 確認 resident mode，先預熱，必要時切 artifacts | E2E Terminal 5 |
+| 錄影失敗 | scrcpy 檔案太小就改 ADB `--bugreport --size 720x1280` | E2E 第二部分 |
+| Real route 延遲過高 | 展示 `tools/demo_case_runner.py --keep-artifacts` 輸出的 artifacts | 情境腳本 Artifact 展示方式 |
 
 ## 展示順序建議
 
-1. 說明計畫書第一年目標：多模態異常感知、個人化提醒、隱私保護資料庫雛形。
-2. 說明技術轉換：不做大型知識圖譜，改用 structured memory + Agent skills + Bridge validation；Discord/gateway 也透過 `.hermes.md`、`SOUL.md` 與 `temi-discord-care-assistant` 保持 Temi 居家照護助理身份。
-3. 展示 P0：Temi App ASR/TTS/Picture Streaming 已可形成互動閉環。
-4. 展示 P1/P2：`memory/` 與 Bridge memory actions。
-5. 展示 P3：三個固定照護情境 artifacts。
-6. 若現場硬體穩定，再切到 real Temi / real Hermes 路線。
-7. 收尾說明 P4 Navigation 是加分整合，後續可接語音或影像觸發移動。
+1. 用 30 秒說明架構：Temi 感知、Hermes 本地推理、Bridge 安全驗證、structured memory。
+2. 說明 Demo 邊界：Home-ESI 是 Demo risk policy，不是醫療分診；通知是 mock。
+3. 展示 L3 日常服藥提醒，打開 reminder/memory artifact。
+4. 展示 L2 不適追問，強調系統克制、不直接通報。
+5. 展示 L1 跌倒求救，強調安全語句、mock notification 與 abnormal event。
+6. 收尾展示 summary，說明後續可擴充 navigation、健康報告與正式通知流程。
 
-## 風險聲明
+## 收尾保存
 
-- Home-ESI v2 decision-tree 是 Demo 用風險分級規則，不是正式醫療分診。
-- `notify_caregiver_mock` 只做 mock notification，不代表真實通報家屬或 119。
-- `memory/` 內資料為合成 persona，不含真實個資。
-- 第一年度 Demo 強調可展示、可解釋、可擴充，不宣稱醫療級產品化。
+Demo 後確認保存：
 
-## 快速故障切換
+```bash
+ls -lh /TemiAgent/logs/demo_recordings/*.mp4
+find /TemiAgent/logs -maxdepth 2 -type d -name 'e2e_stack_validation_*' | tail
+find /TemiAgent/logs/demo_cases -maxdepth 2 -name run_summary.json | tail
+```
 
-| 問題 | 快速處理 |
-|---|---|
-| Real Hermes 延遲過高 | 切回 `tools/demo_case_runner.py` artifacts 或 mock Bridge。 |
-| Discord 要求看手勢但 Hermes 說不能看 | 確認 gateway 工作目錄讀到 `/TemiAgent/.hermes.md`，並執行 `/reload-skills` 或重啟 gateway 讓 `temi-discord-care-assistant` 進索引。 |
-| Temi App picture streaming 不穩 | 用 legacy backend route 展示 ASR/TTS，並用 deterministic artifacts 補照護記憶流程。 |
-| MQTT command 沒到 Temi | 用 `mosquitto_sub -t '#' -v` 或 `tools/subscribe_cmd_request.sh` 觀察 topic；canonical 主線不應再由 adapter 發 `temi/action/speak`。 |
-| Bridge 拒絕 output | 檢查 `cognitive_state.home_esi_level`、`risk_reason`、action schema。 |
+核心素材：錄影檔、`e2e_stack_validation_*` logs、`memory/event_log.jsonl`、`memory/abnormal_events/*.json`、`memory/summaries/*.md`、demo case artifacts。

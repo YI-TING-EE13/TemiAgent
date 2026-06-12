@@ -15,6 +15,9 @@ FRAME_BROADCAST_PORT="${FRAME_BROADCAST_PORT:-8081}"
 HERMES_PORT="${HERMES_PORT:-8765}"
 ACTION_VIEWER_PORT="${ACTION_VIEWER_PORT:-8010}"
 LLAMA_SERVER_PORT="${LLAMA_SERVER_PORT:-8011}"
+START_GATEWAY="${START_GATEWAY:-1}"
+GATEWAY_CONNECT_TIMEOUT_SECONDS="${GATEWAY_CONNECT_TIMEOUT_SECONDS:-90}"
+HERMES_BIN="${HERMES_BIN:-$ROOT/hermes-agent/venv/bin/hermes}"
 RESTART_SERVICES="${RESTART_SERVICES:-1}"
 RESTART_LMSTUDIO="${RESTART_LMSTUDIO:-1}"
 RUN_HARDWARE_CHECKS="${RUN_HARDWARE_CHECKS:-1}"
@@ -84,6 +87,40 @@ require_cmd() {
   command -v "$command_name" > /dev/null 2>&1 || fail "Missing command: $command_name"
 }
 
+wait_gateway() {
+  local seconds="$1"
+  local status_file="$LOG_ROOT/gateway_status.log"
+  local state_file="/root/.hermes/gateway_state.json"
+  for _ in $(seq 1 "$seconds"); do
+    if "$HERMES_BIN" gateway status > "$status_file" 2>&1 && grep -q "Gateway is running" "$status_file"; then
+      if python3 - "$state_file" <<'INNERPY'
+import json
+import sys
+from pathlib import Path
+state_path = Path(sys.argv[1])
+try:
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+except Exception:
+    sys.exit(1)
+platforms = state.get("platforms") or {}
+discord = platforms.get("discord") or {}
+sys.exit(0 if discord.get("state") == "connected" else 1)
+INNERPY
+      then
+        cp "$state_file" "$LOG_ROOT/gateway_state.json" 2>/dev/null || true
+        log "Hermes gateway is ready: Discord connected"
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  "$HERMES_BIN" gateway status > "$status_file" 2>&1 || true
+  cp "$state_file" "$LOG_ROOT/gateway_state.json" 2>/dev/null || true
+  cat "$status_file" >&2 || true
+  cat "$LOG_ROOT/gateway_state.json" >&2 || true
+  fail "Hermes gateway did not report Discord connected within $seconds seconds"
+}
+
 cd "$ROOT" || fail "Cannot cd to $ROOT"
 
 log "TemiAgent E2E stack validation started"
@@ -95,6 +132,7 @@ require_cmd curl
 require_cmd ss
 require_cmd mosquitto_pub
 require_cmd mosquitto_sub
+require_cmd python3
 
 if [ "$RESTART_LMSTUDIO" = "1" ]; then
   run_logged start_lmstudio env \
@@ -126,6 +164,9 @@ if command -v lms > /dev/null 2>&1; then
 fi
 
 if [ "$RESTART_SERVICES" = "1" ]; then
+  if [ "$START_GATEWAY" = "1" ]; then
+    stop_pattern "hermes gateway run" "hermes_gateway"
+  fi
   stop_pattern "hermes-temi-bridge" "bridge"
   stop_pattern "tools/hermes_resident_server.py" "hermes_resident"
   stop_pattern "$ROOT/tools/temi_overview_adapter.py" "temi_overview_adapter"
@@ -171,6 +212,18 @@ if [ "$RESTART_SERVICES" = "1" ]; then
     uv run --extra mqtt hermes-temi-bridge --env-file "$ROOT/hermes_temi_bridge/.env.example" \
     > "$LOG_ROOT/bridge_runtime.log" 2>&1 < /dev/null &)
 
+
+  if [ "$START_GATEWAY" = "1" ]; then
+    if [ ! -x "$HERMES_BIN" ]; then
+      fail "Hermes gateway binary is not executable: $HERMES_BIN"
+    fi
+    log "Starting Hermes gateway"
+    (cd "$ROOT" && setsid env HERMES_ACCEPT_HOOKS=1 "$HERMES_BIN" gateway run \
+      > "$LOG_ROOT/hermes_gateway.log" 2>&1 < /dev/null &)
+  else
+    log "Skipping Hermes gateway start because START_GATEWAY=$START_GATEWAY"
+  fi
+
   log "Restarting action viewer"
   (cd "$ROOT/anomaly_detection" && ./restart_action_viewer_8010.sh > "$LOG_ROOT/action_viewer_restart.log" 2>&1) || {
     tail -n 80 "$LOG_ROOT/action_viewer_restart.log" >&2 || true
@@ -181,6 +234,9 @@ else
 fi
 
 wait_http "http://127.0.0.1:$HERMES_PORT/health" 120 "Hermes resident"
+if [ "$START_GATEWAY" = "1" ]; then
+  wait_gateway "$GATEWAY_CONNECT_TIMEOUT_SECONDS"
+fi
 wait_http "http://127.0.0.1:$ACTION_VIEWER_PORT/health" 120 "Action viewer"
 
 curl -fsS "http://127.0.0.1:$HERMES_PORT/health" > "$LOG_ROOT/hermes_health.json"
