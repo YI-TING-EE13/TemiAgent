@@ -3,7 +3,7 @@
 本手冊用於在 **Linux / headless / container-like environment** 中啟動 LM Studio local server，並將 LM Studio 的資料目錄固定在專案 HDD 路徑 `/TemiAgent/.lmstudio-data`，同時用 LMSTUDIO_VISIBLE_GPUS 控制 LM Studio daemon 與模型 worker 使用單卡、雙卡或三卡。
 
 路徑說明：`/TemiAgent` 是 TemiAgent GPU container 內的專案路徑；host workspace 對應路徑是 `/home/yiting/TemiAgent`。
-目前預設：載入 QAT GGUF 權重 `gemma-4-31b-it-qat`，並用 `--identifier google/gemma-4-31b` 保持 Hermes / Bridge 既有 API model 名稱相容。下載命令：`lms get https://huggingface.co/google/gemma-4-31B-it-qat-q4_0-gguf --gguf -y`。
+目前預設：載入 QAT 模型 `google/gemma-4-31b-qat`，並用 `--identifier google/gemma-4-31b` 保持 Hermes / Bridge 既有 API model 名稱相容。下載命令：`lms get google/gemma-4-31b-qat -y`；底層來源為 `lmstudio-community/gemma-4-31B-it-QAT-GGUF`。
 
 目標架構如下：
 
@@ -14,7 +14,7 @@ OpenAI-compatible API
         ↓
 LM Studio local server
         ↓
-QAT 權重 gemma-4-31b-it-qat，API identifier google/gemma-4-31b
+QAT 模型 google/gemma-4-31b-qat，API identifier google/gemma-4-31b
         ↓
 GPU 組合由 LMSTUDIO_VISIBLE_GPUS 指定，預設 GPU 0
 ```
@@ -78,7 +78,7 @@ lms load ...
 目前 TemiAgent 預設使用：
 
 ```bash
-export LMSTUDIO_MODEL_ID=gemma-4-31b-it-qat
+export LMSTUDIO_MODEL_ID=google/gemma-4-31b-qat
 export LMSTUDIO_API_IDENTIFIER=google/gemma-4-31b
 export LMSTUDIO_CONTEXT_LENGTH=64000
 export LMSTUDIO_VISIBLE_GPUS=0
@@ -100,7 +100,7 @@ export LMSTUDIO_VISIBLE_GPUS=0
 ```bash
 export LMSTUDIO_PROJECT_ROOT=/TemiAgent
 export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
-export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-gemma-4-31b-it-qat}
+export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-google/gemma-4-31b-qat}
 export LMSTUDIO_API_IDENTIFIER=${LMSTUDIO_API_IDENTIFIER:-google/gemma-4-31b}
 export LMSTUDIO_CONTEXT_LENGTH=${LMSTUDIO_CONTEXT_LENGTH:-64000}
 export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0}
@@ -123,7 +123,7 @@ lms ps
 如果 `lms load` 進入互動選單，選擇要載入的模型，例如：
 
 ```text
-gemma-4-31b-it-qat
+google/gemma-4-31b-qat
 ```
 
 成功後可能會看到類似訊息：
@@ -717,7 +717,7 @@ set -euo pipefail
 
 export LMSTUDIO_PROJECT_ROOT=/TemiAgent
 export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
-export LMSTUDIO_MODEL_ID="${LMSTUDIO_MODEL_ID:-gemma-4-31b-it-qat}"
+export LMSTUDIO_MODEL_ID="${LMSTUDIO_MODEL_ID:-google/gemma-4-31b-qat}"
 export LMSTUDIO_API_IDENTIFIER="${LMSTUDIO_API_IDENTIFIER:-google/gemma-4-31b}"
 export LMSTUDIO_CONTEXT_LENGTH="${LMSTUDIO_CONTEXT_LENGTH:-64000}"
 export LMSTUDIO_VISIBLE_GPUS="${LMSTUDIO_VISIBLE_GPUS:-0}"
@@ -773,7 +773,7 @@ chmod +x tools/start_lmstudio_3gpu.sh
 ```bash
 export LMSTUDIO_PROJECT_ROOT=/TemiAgent
 export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
-export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-gemma-4-31b-it-qat}
+export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-google/gemma-4-31b-qat}
 export LMSTUDIO_API_IDENTIFIER=${LMSTUDIO_API_IDENTIFIER:-google/gemma-4-31b}
 export LMSTUDIO_CONTEXT_LENGTH=${LMSTUDIO_CONTEXT_LENGTH:-64000}
 export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0}
@@ -822,7 +822,7 @@ nvidia-smi
 本次更新後，TemiAgent 的 LM Studio 預設啟動參數如下：
 
 ```bash
-LMSTUDIO_MODEL_ID=gemma-4-31b-it-qat
+LMSTUDIO_MODEL_ID=google/gemma-4-31b-qat
 LMSTUDIO_API_IDENTIFIER=google/gemma-4-31b
 LMSTUDIO_CONTEXT_LENGTH=64000
 LMSTUDIO_VISIBLE_GPUS=0
