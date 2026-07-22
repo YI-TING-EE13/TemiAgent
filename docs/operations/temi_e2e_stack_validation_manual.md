@@ -66,17 +66,17 @@ cd /TemiAgent
 未來如果要更換模型或 context length，優先改環境變數，不要硬改多個服務檔：
 
 ```bash
-export LMSTUDIO_MODEL_ID='google/gemma-4-31b-qat'
+export LMSTUDIO_MODEL_ID='temi/gemma-4-31b-it-qat'
 export LMSTUDIO_API_IDENTIFIER='google/gemma-4-31b'
 export LMSTUDIO_CONTEXT_LENGTH='64000'
-export MODEL_LOAD_ID='google/gemma-4-31b-qat'
+export MODEL_LOAD_ID='temi/gemma-4-31b-it-qat'
 export MODEL_IDENTIFIER='google/gemma-4-31b'
 export CONTEXT_LENGTH='64000'
 ```
 
 用途與參數：
 
-- `LMSTUDIO_MODEL_ID`：LM Studio 要載入的模型權重 key，例如 `google/gemma-4-31b-qat`。
+- `LMSTUDIO_MODEL_ID`：LM Studio 要載入的模型權重 key，例如 `temi/gemma-4-31b-it-qat`。
 - `LMSTUDIO_API_IDENTIFIER`：LM Studio API/Hermes 使用的模型名稱，例如 `google/gemma-4-31b`。
 - `LMSTUDIO_CONTEXT_LENGTH`：LM Studio 載入模型時使用的 context length。
 - `MODEL_LOAD_ID`：一鍵測試腳本重啟 LM Studio 時要載入的模型權重 key。
@@ -108,7 +108,7 @@ TEMI_IP=192.168.50.205 PC_IP=192.168.50.236 ./tools/check_temi_connection.sh
 
 ```bash
 cd /TemiAgent
-LMSTUDIO_MODEL_ID='google/gemma-4-31b-qat' \
+LMSTUDIO_MODEL_ID='temi/gemma-4-31b-it-qat' \
 LMSTUDIO_API_IDENTIFIER='google/gemma-4-31b' \
 LMSTUDIO_CONTEXT_LENGTH='64000' \
 LMSTUDIO_VISIBLE_GPUS='0' \
@@ -117,7 +117,7 @@ LMSTUDIO_VISIBLE_GPUS='0' \
 
 用途與參數：
 
-- `LMSTUDIO_MODEL_ID`：要載入的模型權重 key，例如 `google/gemma-4-31b-qat`。
+- `LMSTUDIO_MODEL_ID`：要載入的模型權重 key，例如 `temi/gemma-4-31b-it-qat`。
 - `LMSTUDIO_API_IDENTIFIER`：API/Hermes 使用的模型名稱，例如 `google/gemma-4-31b`。
 - `LMSTUDIO_CONTEXT_LENGTH`：模型 context length，目前預設 `64000`。
 - `LMSTUDIO_VISIBLE_GPUS`：LM Studio daemon 可見 GPU，預設單卡 `0`；可改 `0,1` 或 `0,1,2` 測試多卡。
@@ -448,7 +448,7 @@ RESTART_LMSTUDIO=0 ./tools/validate_temi_e2e_stack.sh
 RUN_UNIT_TESTS=0 RUN_LIVE_E2E=0 ./tools/validate_temi_e2e_stack.sh
 
 # 更換載入權重、API identifier、context length 與 GPU 組合
-MODEL_LOAD_ID='google/gemma-4-31b-qat' MODEL_IDENTIFIER='google/gemma-4-31b' CONTEXT_LENGTH='64000' LMSTUDIO_VISIBLE_GPUS='0' ./tools/validate_temi_e2e_stack.sh
+MODEL_LOAD_ID='temi/gemma-4-31b-it-qat' MODEL_IDENTIFIER='google/gemma-4-31b' CONTEXT_LENGTH='64000' LMSTUDIO_VISIBLE_GPUS='0' ./tools/validate_temi_e2e_stack.sh
 
 # Temi 或 PC IP 改變時
 PC_IP=192.168.50.236 TEMI_IP=192.168.50.205 ./tools/validate_temi_e2e_stack.sh

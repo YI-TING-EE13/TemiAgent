@@ -3,11 +3,13 @@ set -euo pipefail
 
 LMSTUDIO_PROJECT_ROOT="${LMSTUDIO_PROJECT_ROOT:-/TemiAgent}"
 LMSTUDIO_TARGET_DIR="${LMSTUDIO_TARGET_DIR:-/TemiAgent/.lmstudio-data}"
-LMSTUDIO_MODEL_ID="${LMSTUDIO_MODEL_ID:-google/gemma-4-31b-qat}"
+LMSTUDIO_MODEL_ID="${LMSTUDIO_MODEL_ID:-temi/gemma-4-31b-it-qat}"
 LMSTUDIO_API_IDENTIFIER="${LMSTUDIO_API_IDENTIFIER:-google/gemma-4-31b}"
 LMSTUDIO_CONTEXT_LENGTH="${LMSTUDIO_CONTEXT_LENGTH:-64000}"
 LMSTUDIO_VISIBLE_GPUS="${LMSTUDIO_VISIBLE_GPUS:-0}"
 LMSTUDIO_SERVER_PORT="${LMSTUDIO_SERVER_PORT:-1234}"
+LMSTUDIO_MODEL_DEFINITION_SOURCE="${LMSTUDIO_MODEL_DEFINITION_SOURCE:-$LMSTUDIO_PROJECT_ROOT/tools/lmstudio_model_definitions/gemma-4-31b-it-qat.model.yaml}"
+LMSTUDIO_MODEL_DEFINITION_TARGET="${LMSTUDIO_MODEL_DEFINITION_TARGET:-$LMSTUDIO_TARGET_DIR/hub/models/temi/gemma-4-31b-it-qat/model.yaml}"
 
 export LMSTUDIO_PROJECT_ROOT
 export LMSTUDIO_TARGET_DIR
@@ -15,6 +17,15 @@ export LMSTUDIO_API_IDENTIFIER
 export PATH="$LMSTUDIO_TARGET_DIR/bin:$PATH"
 
 hash -r
+
+if [[ "$LMSTUDIO_MODEL_ID" == "temi/gemma-4-31b-it-qat" ]]; then
+  if [[ ! -f "$LMSTUDIO_MODEL_DEFINITION_SOURCE" ]]; then
+    echo "[LM Studio] Missing model definition: $LMSTUDIO_MODEL_DEFINITION_SOURCE" >&2
+    exit 1
+  fi
+  install -D -m 0644 "$LMSTUDIO_MODEL_DEFINITION_SOURCE" "$LMSTUDIO_MODEL_DEFINITION_TARGET"
+  echo "[LM Studio] Installed Gemma 4 LM Studio compatibility definition."
+fi
 
 echo "[LM Studio] Using lms:"
 which lms

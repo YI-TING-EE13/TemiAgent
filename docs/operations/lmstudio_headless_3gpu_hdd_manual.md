@@ -3,7 +3,9 @@
 本手冊用於在 **Linux / headless / container-like environment** 中啟動 LM Studio local server，並將 LM Studio 的資料目錄固定在專案 HDD 路徑 `/TemiAgent/.lmstudio-data`，同時用 LMSTUDIO_VISIBLE_GPUS 控制 LM Studio daemon 與模型 worker 使用單卡、雙卡或三卡。
 
 路徑說明：`/TemiAgent` 是 TemiAgent GPU container 內的專案路徑；host workspace 對應路徑是 `/home/yiting/TemiAgent`。
-目前預設：載入 QAT 模型 `google/gemma-4-31b-qat`，並用 `--identifier google/gemma-4-31b` 保持 Hermes / Bridge 既有 API model 名稱相容。下載命令：`lms get google/gemma-4-31b-qat -y`；底層來源為 `lmstudio-community/gemma-4-31B-it-QAT-GGUF`。
+目前預設：載入 QAT 模型 `temi/gemma-4-31b-it-qat`，並用 `--identifier google/gemma-4-31b` 保持 Hermes / Bridge 既有 API model 名稱相容。下載命令：`lms get https://huggingface.co/unsloth/gemma-4-31B-it-qat-GGUF --gguf -y`；底層來源為 `unsloth/gemma-4-31B-it-qat-GGUF` 的 `UD-Q4_K_XL`。
+
+`temi/gemma-4-31b-it-qat` 是專案提供的 LM Studio virtual model。`tools/start_lmstudio_3gpu.sh` 會把 `tools/lmstudio_model_definitions/gemma-4-31b-it-qat.model.yaml` 安裝到 LM Studio hub 目錄；它保留 Google 2026-07-09 canonical template 的 null、thinking、tool response、continuation 與 generation-prompt 修正，同時使用 LM Studio 相容的 tool-schema formatter，避免直接載入 Unsloth GGUF 時出現 Jinja `UndefinedValue` 錯誤。
 
 目標架構如下：
 
@@ -14,7 +16,7 @@ OpenAI-compatible API
         ↓
 LM Studio local server
         ↓
-QAT 模型 google/gemma-4-31b-qat，API identifier google/gemma-4-31b
+QAT 模型 temi/gemma-4-31b-it-qat，API identifier google/gemma-4-31b
         ↓
 GPU 組合由 LMSTUDIO_VISIBLE_GPUS 指定，預設 GPU 0
 ```
@@ -78,7 +80,7 @@ lms load ...
 目前 TemiAgent 預設使用：
 
 ```bash
-export LMSTUDIO_MODEL_ID=google/gemma-4-31b-qat
+export LMSTUDIO_MODEL_ID=temi/gemma-4-31b-it-qat
 export LMSTUDIO_API_IDENTIFIER=google/gemma-4-31b
 export LMSTUDIO_CONTEXT_LENGTH=64000
 export LMSTUDIO_VISIBLE_GPUS=0
@@ -91,6 +93,22 @@ export LMSTUDIO_VISIBLE_GPUS=0
 
 如果 LM Studio 因為同名模型已載入而產生 `:2` 這類 suffix，先用 `lms unload --all` 清掉舊 instance，再重新載入，就可以讓預設 identifier 回到 `google/gemma-4-31b`。如果你刻意要同時載入多個同名 instance，則以 `lms ps` 顯示的 exact identifier 為準。
 
+### 3.1 Gemma 4 12B 是否需要同步更新
+
+12B 不影響目前的標準啟動流程；`tools/start_lmstudio_3gpu.sh` 預設只載入新版 31B。若 12B 只是保留在磁碟上而沒有作為 fallback、開發或 tool-calling 模型，可暫時不更新。
+
+若會實際使用 `google/gemma-4-12b` 或 `google/gemma-4-12b-qat`，則建議重新下載 2026-07 canonical-template 更新後的量化版本。現有本機 12B 權重早於這次模板修正，重新載入舊檔不會取得 null handling、thinking preservation、tool-response continuation 等改善。
+
+```bash
+# 一般 12B GGUF
+lms get https://huggingface.co/unsloth/gemma-4-12b-it-GGUF --gguf -y
+
+# 12B QAT GGUF
+lms get https://huggingface.co/unsloth/gemma-4-12B-it-qat-GGUF --gguf -y
+```
+
+直接載入新版 Unsloth GGUF 前，仍要用 LM Studio OpenAI-compatible API 做完整 tool-call 回歸。31B 實測顯示原始 canonical template 會在 LM Studio 的 tool-schema renderer 遇到 Jinja `UndefinedValue`；12B 若出現同樣錯誤，應建立獨立的 LM Studio-compatible virtual model，不要讓它覆蓋目前已驗證的 `temi/gemma-4-31b-it-qat`。
+
 ---
 
 ## 4. 完整啟動指令
@@ -100,7 +118,7 @@ export LMSTUDIO_VISIBLE_GPUS=0
 ```bash
 export LMSTUDIO_PROJECT_ROOT=/TemiAgent
 export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
-export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-google/gemma-4-31b-qat}
+export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-temi/gemma-4-31b-it-qat}
 export LMSTUDIO_API_IDENTIFIER=${LMSTUDIO_API_IDENTIFIER:-google/gemma-4-31b}
 export LMSTUDIO_CONTEXT_LENGTH=${LMSTUDIO_CONTEXT_LENGTH:-64000}
 export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0}
@@ -123,7 +141,7 @@ lms ps
 如果 `lms load` 進入互動選單，選擇要載入的模型，例如：
 
 ```text
-google/gemma-4-31b-qat
+temi/gemma-4-31b-it-qat
 ```
 
 成功後可能會看到類似訊息：
@@ -717,7 +735,7 @@ set -euo pipefail
 
 export LMSTUDIO_PROJECT_ROOT=/TemiAgent
 export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
-export LMSTUDIO_MODEL_ID="${LMSTUDIO_MODEL_ID:-google/gemma-4-31b-qat}"
+export LMSTUDIO_MODEL_ID="${LMSTUDIO_MODEL_ID:-temi/gemma-4-31b-it-qat}"
 export LMSTUDIO_API_IDENTIFIER="${LMSTUDIO_API_IDENTIFIER:-google/gemma-4-31b}"
 export LMSTUDIO_CONTEXT_LENGTH="${LMSTUDIO_CONTEXT_LENGTH:-64000}"
 export LMSTUDIO_VISIBLE_GPUS="${LMSTUDIO_VISIBLE_GPUS:-0}"
@@ -773,7 +791,7 @@ chmod +x tools/start_lmstudio_3gpu.sh
 ```bash
 export LMSTUDIO_PROJECT_ROOT=/TemiAgent
 export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
-export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-google/gemma-4-31b-qat}
+export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-temi/gemma-4-31b-it-qat}
 export LMSTUDIO_API_IDENTIFIER=${LMSTUDIO_API_IDENTIFIER:-google/gemma-4-31b}
 export LMSTUDIO_CONTEXT_LENGTH=${LMSTUDIO_CONTEXT_LENGTH:-64000}
 export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0}
@@ -817,9 +835,9 @@ nvidia-smi
 
 ---
 
-## 13. 最新版本資訊：QAT 單卡/雙卡/三卡測試（2026-06-10）
+## 13. 歷史紀錄：QAT 單卡/雙卡/三卡測試（2026-06-10）
 
-本次更新後，TemiAgent 的 LM Studio 預設啟動參數如下：
+以下效能數據來自更新前的 `google/gemma-4-31b-qat`，保留作為硬體比較基準；它不能直接代表 2026-07 更新後 `temi/gemma-4-31b-it-qat` 的速度。新版模型需另行重跑相同 prompt 才能建立可比較數據。當時的啟動參數如下：
 
 ```bash
 LMSTUDIO_MODEL_ID=google/gemma-4-31b-qat
@@ -855,4 +873,4 @@ lms chat google/gemma-4-31b --stats -p "Generate exactly 220 short bullet points
 | 雙卡 `0,1` | 62.73, 63.58 | 與單卡幾乎相同 |
 | 三卡 `0,1,2` | 63.37 | 與單卡幾乎相同，但佔用三張卡 |
 
-結論：目前 QAT 31B 模型在單張 32 GiB GPU 上即可保持約 63 token/s，且可保留 GPU 1/2 給其他服務或測試。若未來 context、parallel 或模型版本增加導致 VRAM 壓力上升，再切到雙卡或三卡。
+歷史結論：當時的 QAT 31B 模型在單張 32 GiB GPU 上可保持約 63 token/s，且可保留 GPU 1/2 給其他服務或測試。若新版模型的 context、parallel 或 VRAM 使用量增加，再以同一測試方法評估是否切到雙卡或三卡。

@@ -131,7 +131,7 @@ RUN_LIVE_E2E=0 \
 
 ```bash
 cd /TemiAgent
-MODEL_LOAD_ID=google/gemma-4-31b-qat \
+MODEL_LOAD_ID=temi/gemma-4-31b-it-qat \
 MODEL_IDENTIFIER=google/gemma-4-31b \
 CONTEXT_LENGTH=64000 \
 LMSTUDIO_VISIBLE_GPUS=0 \
