@@ -1,5 +1,18 @@
 # Hermes Temi Bridge
 
+> This directory is a reference bridge implementation. The deployed canonical
+> backend, Resident resolution, Care Plan, Care Context, Hermes, Bridge,
+> memory, trace, and action generation/validation are AI6-owned. LAB606 owns
+> the Temi hardware and Android execution side. Current Android behavior is in
+> `../docs/new_demo_v1_android_baseline.md`, and the exact exercise media
+> contract is in `../docs/play_media_contract.md`.
+
+Current cross-machine milestone:
+
+```text
+CROSS_MACHINE_MEDIA_MILESTONE=PASS
+```
+
 `hermes_temi_bridge` connects Temi Android ASR events to Hermes Agent decisions.
 It receives lightweight MQTT events, validates the three synchronized image references,
 invokes Hermes with the `temi-robot-control` skill, validates JSON actions, then publishes

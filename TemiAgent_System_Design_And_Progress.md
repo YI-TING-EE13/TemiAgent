@@ -1,85 +1,185 @@
-# TemiAgent Architecture Whitepaper: Building a Deterministic Embodied AI
+# TemiAgent System Design and Current Progress
 
-> Date: 2026-05-07
-> Status: Stable Release (Phase 5 Completed)
-> Architecture: Asynchronous Edge-Cloud Decoupling with Vision-Language Models (VLM)
+> Last verified: 2026-07-22
+> Android package: `com.robotemi.agent`
+> Current milestone: `CROSS_MACHINE_MEDIA_MILESTONE=PASS`
 
-## Executive Summary
-TemiAgent is designed to bypass the traditional limitations of integrated robotics by completely decoupling sensory intake and physical actuation (Edge) from high-level cognitive reasoning (Cloud/PC Backend). This document serves as a technical whitepaper detailing the core engineering philosophies, mathematical models, and architectural decisions that guarantee system determinism, safety, and fluidity in Human-Robot Interaction (HRI).
+## System boundary
 
----
+LAB606 owns the Temi hardware and Android/device side:
 
-## A. Time-Series Manifold Alignment & Asymmetric Sampling
+- ASR capture and camera streaming
+- MQTT and WebSocket clients
+- Android canonical validation
+- TTS, media, and safe hardware execution
+- command results
+- APK build and deployment
 
-In physical Embodied AI, human intents are rarely conveyed through speech alone. Deictic gestures (e.g., pointing) provide critical spatial context. The kinematics of such gestures typically consist of three phases:
-1. **Stroke (Preparation)**: The arm begins to move.
-2. **Apex (Hold)**: The finger rests at the target location.
-3. **Retraction**: The arm returns to a resting state.
+AI6 owns the canonical backend and reasoning side:
 
-### The Fallacy of Symmetrical Sampling
-When the robot's Automatic Speech Recognition (ASR) triggers the completion of an utterance (let's denote this timestamp as $T_{asr}$), the human gesture has often already passed its Apex. Symmetrical sampling (e.g., $[T-500ms, T, T+500ms]$) inherently captures the retraction phase in the future frames, feeding the VLM with decaying spatial context, which drastically increases the entropy of intent prediction.
+- Overview Adapter and Resident resolution
+- Care Plan and Care Context
+- Hermes and Bridge
+- memory and trace
+- action generation and backend validation
 
-### Asymmetric Backward Sampling
-To solve this, TemiAgent enforces **Asymmetric Backward Sampling**. When $T_{asr}$ is received, the backend's `VisionBuffer` extracts a deterministic multi-frame grid:
-- **$T - 1000ms$**: Captures the *Stroke* phase, allowing the VLM to observe the gesture's origin and velocity vector.
-- **$T - 500ms$**: Captures the *Apex* phase, locking onto the precise spatial target.
-- **$T$**: Captures the acoustic conclusion, confirming the semantic end of the request.
+The integration boundary is intentionally narrow:
 
-This $3$-frame sequence effectively projects the temporal dynamics of the human's gesture onto a 2D spatial manifold (Time-Series Manifold Alignment), allowing models like Qwen2-VL or Pixtral to perform accurate cross-modal grounding without being confused by post-speech retractions.
+```text
+AI6 temi/{robot_id}/cmd/request
+-> LAB606 validation and execution
+-> LAB606 temi/{robot_id}/cmd/result
+-> AI6 trace
+```
 
----
+## Android voice and vision flow
 
-## B. Deterministic Event Sourcing & Relative Clock Lock
+1. Android listens for the custom Mandarin wake word `小安` using
+   `SpeechRecognizer`.
+2. A matched wake word causes the App to call `robot.wakeup(...)`; unsolicited
+   Temi system wake events remain gated.
+3. Temi supplies final ASR to Android.
+4. Android publishes the compatibility text ASR event over MQTT and streams
+   timestamped H.264 camera frames over WebSocket.
+5. The AI6/PC-side stack can assemble canonical ASR-final events with
+   synchronized `T-1000`, `T-500`, and `T` frame references.
+6. AI6 publishes a canonical command request; Android validates and executes
+   it and returns a correlated result.
 
-A critical failure point in distributed robotics is the attempt to synchronize clocks across disparate networks (e.g., via NTP). 
+Android does not yet publish the full canonical ASR-final event with frame
+paths by itself. Visual assembly remains PC/AI6-side.
 
-### The Network Transmission Equation
-Let $T_{robot}$ be the true time an event occurs on the robot, and $T_{pc}$ be the time the PC receives it.
-The relationship is $T_{pc} = T_{robot} + \Delta_{network} + Jitter$.
-Since $Jitter$ is stochastic (random network fluctuations), relying on $T_{pc}$ to align a video stream with an ASR event leads to catastrophic phase shifts. A 200ms lag could mean the difference between pointing at a cup and resting a hand on the table.
+## Network topology
 
-### Single Source of Truth (SSoT) Architecture
-TemiAgent abandons PC-side clocking entirely. 
-1. **Video Telemetry**: During the Android `H264Encoder` lifecycle, an 8-byte Big-Endian timestamp (`System.currentTimeMillis()`) is prepended to *every single* NAL unit before WebSocket transmission.
-2. **Event Telemetry**: The ASR MQTT payload also attaches the exact hardware timestamp of when the speech processing concluded.
+The App preserves both backend endpoint pairs:
 
-The PC Backend's `VisionBuffer` simply stores tuples of `(Temi_Timestamp, Frame)`. When an ASR event arrives, the system queries the buffer using the Temi timestamp. This **Relative Clock Lock** mechanism mathematically eliminates $\Delta_{network}$ and $Jitter$ from the alignment equation, guaranteeing deterministic frame extraction regardless of network degradation.
+```text
+MQTT
+tcp://192.168.50.233:1883
+tcp://192.168.50.236:1883
 
----
+WebSocket
+ws://192.168.50.233:8080
+ws://192.168.50.236:8080
+```
 
-## C. Embodied Prompting & Cognitive Routing
+`.233` passed LAB606-side acceptance. After the AI6 canonical stack was
+started, `.236:1883` and `.236:8080` both established successfully.
+`MQTT: 2/2` is the healthy target state.
 
-Allowing an LLM to generate raw Python code (Code Interpreter mode) for physical actuation introduces unacceptable risks, including infinite loops, syntax crashes, and physically dangerous navigation commands.
+## Canonical safety and idempotency
 
-### JSON Schema Routing
-To guarantee the robot's action boundaries, TemiAgent utilizes **Cognitive Routing**. The VLM is strictly constrained by `Skills.md` (the System Prompt) to output a predefined JSON Schema array. The `agent_core.py` acts as a firewall and router:
-1. **Validation**: It parses the JSON, discarding hallucinations or malformed syntax via robust Regex extraction.
-2. **Execution**: It maps safe, validated parameters to pre-compiled hardware APIs in `mqtt_bridge.py` (`publish_speak`, `publish_navigate`).
+Android validates schema version, command ID, event ID, robot ID, actions
+array, and action-specific fields before dispatch. Motion allowlists are:
 
-### Cross-Modal Fusion via Chain of Thought (CoT)
-The `Skills.md` forces the Agent to emit a `<think>...</think>` block prior to action execution. This is not merely for explainability. In VLM architecture, early tokens dictate attention for later tokens. By forcing the model to explicitly describe the spatial relationships observed in the 3-frame grid *before* generating the JSON, we ensure **Cross-modal Fusion**. The spatial features in the image embeddings are successfully mapped to the semantic tokens in the text prompt, vastly reducing hallucinations in object referencing.
+- turn direction: `left`, `right`
+- turn degrees: `15`, `30`, `45`, `60`, `90`
+- navigation target: `home_base`, `kitchen`, `living_room`, `meeting_room`
 
----
+Invalid motion is rejected before Temi movement APIs are called.
 
-## D. State Machine Preemption & Latency Masking
+Command idempotency uses a synchronized process-lifetime registry with a
+capacity of 1,024 unique command IDs. A pending duplicate performs zero
+additional execution and receives the eventual result. A completed duplicate
+receives the exact cached result. The registry is not restart-persistent.
 
-In Human-Robot Interaction (HRI), silence is deadly. When a VLM takes 3-7 seconds to process a multi-image prompt and generate its First Token (Time-To-First-Token, TTFT), the user may assume the robot is broken and repeat the command, causing cascading state failures.
+## TTS lifecycle
 
-### Latency Masking
-TemiAgent employs a `THINKING` transitional state. Immediately upon capturing the ASR event, the Android client triggers a non-blocking TTS request (e.g., "Let me take a look"). This ~1.5-second auditory feedback perfectly masks the TTFT of the cloud-based VLM, creating an illusion of immediate, embodied awareness.
+Canonical TTS is callback-grounded:
 
-### Thread-Safe Watchdogs, Subtitles & Global Preemption
-If the VLM crashes or network connectivity is lost, the robot cannot remain paralyzed. 
-- **The Watchdog**: The `WAITING` state activates a rigid 60,000ms timer. If the backend fails to reply via MQTT within this window, the State Machine aborts, apologizes ("Connection timed out"), and returns to `IDLE`.
-- **TTS Subtitle Mirror**: Backend-driven `speak` actions are mirrored into a compact bottom subtitle overlay. The app tracks the active `TtsRequest` id so completion from an older request cannot accidentally clear a newer subtitle.
-- **Interrupt Transition**: Linear state machines fail in dynamic environments. TemiAgent binds the Android root view (`android.R.id.content`) to a global `interrupt()` method. A single physical touch on the robot's screen instantly triggers `robot.cancelAllTtsRequests()` and `robot.stopMovement()`, purging the Watchdog and forcing a state reset. This guarantees that humans maintain ultimate physical authority over the agent's actions at all times.
+```text
+received
+-> validated
+-> robot.speak(...)
+-> pending
+-> COMPLETED -> completed
+   ERROR     -> failed
+```
 
----
+API dispatch is never reported as completion. Real Temi acceptance verified
+audible output, terminal-callback correlation, and duplicate suppression.
 
-## Development Milestones
+## Exercise media
 
-- **Phase 1**: Android edge-cloud decoupling, SDK integration, and JDK 21 build system migration.
-- **Phase 2**: Bidirectional communication verification (MQTT action routing, PyAV H.264 decoding).
-- **Phase 3**: Implementation of the `AgentStateMachine` with preemption and latency masking.
-- **Phase 4**: Development of the thread-safe `VisionBuffer` and implementation of Asymmetric Backward Sampling.
-- **Phase 5**: Integration of LMStudio/Hermes Agent via OpenAI standard APIs, utilizing `Skills.md` for deterministic JSON Cognitive Routing.
+Android supports a single canonical `play_media` action with two IDs:
+
+- `elderly_hand_exercise`
+- `elderly_leg_exercise`
+
+Both videos are bundled in `app/src/main/res/raw`, use H.264 Constrained
+Baseline at 960 x 540 and 15 fps, and run for 10 seconds. Caller-provided URLs,
+filesystem paths, content URIs, and unknown IDs are rejected.
+
+Playback follows:
+
+```text
+received
+-> prepared/started
+-> completed | failed | cancelled
+```
+
+Completion cannot occur before start. The stop button returns `cancelled`, a
+stale completion callback after cancellation is ignored, and duplicate command
+IDs do not replay media.
+
+## Verified progress
+
+### Local verification
+
+- Android assemble and Java compile: PASS
+- JVM tests: 36/36 PASS
+- Media APK SHA-256:
+  `E2DD1CABE7032DD73B65AA6CB451F48906FAA87F7633D7C7739AC5971DA94A11`
+
+The hash identifies the accepted APK artifact and is not a permanent release
+identifier.
+
+### Real Temi
+
+- canonical audible TTS: PASS
+- callback-grounded TTS result: PASS
+- duplicate TTS suppression: PASS
+- invalid turn/navigation rejection: PASS
+- hand exercise playback: PASS
+- leg exercise playback: PASS
+- stop/cancel without later completion: PASS
+- unknown media rejection: PASS
+- no crash during acceptance: PASS
+
+### Cross-machine AI6 x LAB606
+
+- Father daily hand exercise: PASS
+- Mother daily leg exercise: PASS
+- Mother post-dialysis hand exercise: PASS
+- unknown Resident fail-safe: PASS
+- duplicate media suppression: PASS
+- TTS regression: PASS
+
+## Deployment and ADB ownership
+
+The current Temi wireless ADB target is `192.168.50.204:5555`. Only one
+computer may hold wireless ADB at a time:
+
+```text
+LAB606 device work
+-> LAB606 holds ADB
+-> adb disconnect 192.168.50.204:5555
+-> AI6 integration work connects
+```
+
+Build and deployment details are maintained in `README.md` and `AGENTS.md`.
+
+## Remaining limitations
+
+- Command deduplication does not survive App restart and is limited to 1,024
+  unique IDs per process.
+- Canonical TTS has no separate timeout if Temi never supplies a terminal
+  callback.
+- Navigation arrival and physical turn completion are not observed; the
+  current Demo does not use autonomous navigation.
+- Android has no Resident selector UI; Resident resolution is AI6-owned.
+- Android does not yet publish the complete canonical ASR-final event.
+- Only the two bundled exercise media IDs are accepted.
+- Android `SpeechRecognizer` is a pragmatic wake-word implementation, not a
+  production keyword-spotting engine.
+- The pre-existing ChromeOS camera lint finding remains.

@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -14,6 +15,9 @@ import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.VideoView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -22,6 +26,12 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.robotemi.agent.camera.CameraManager;
+import com.robotemi.agent.command.CanonicalCommandValidator;
+import com.robotemi.agent.command.CanonicalCommandValidator.CanonicalAction;
+import com.robotemi.agent.command.CanonicalCommandValidator.CanonicalCommand;
+import com.robotemi.agent.command.CanonicalMediaTracker;
+import com.robotemi.agent.command.CanonicalTtsTracker;
+import com.robotemi.agent.command.ProcessCommandRegistry;
 import com.robotemi.agent.mqtt.MqttManager;
 import com.robotemi.agent.mqtt.MqttTopics;
 import com.robotemi.agent.network.WebSocketClient;
@@ -38,6 +48,7 @@ import org.json.JSONObject;
 import com.robotemi.agent.agent.AgentStateMachine;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -95,6 +106,12 @@ public class MainActivity extends AppCompatActivity
     private boolean hotwordListening = false;
     private boolean acceptingTemiAsr = false;
     private String activeConversationId = "conv-" + UUID.randomUUID();
+    private final ProcessCommandRegistry commandRegistry = new ProcessCommandRegistry(1024);
+    private final ArrayDeque<CanonicalCommand> canonicalCommandQueue = new ArrayDeque<>();
+    private final CanonicalTtsTracker canonicalTtsTracker = new CanonicalTtsTracker();
+    private final CanonicalMediaTracker canonicalMediaTracker = new CanonicalMediaTracker();
+    private PendingCanonicalCommand activeCanonicalCommand;
+    private boolean resumeListeningAfterCanonicalQueue;
 
     // ─── UI ───────────────────────────────────────────────────────────
     private PreviewView viewFinder;
@@ -103,6 +120,10 @@ public class MainActivity extends AppCompatActivity
     private TextView mqttStatusText;
     private TextView subtitleText;
     private UUID activeSubtitleTtsId;
+    private FrameLayout mediaContainer;
+    private VideoView exerciseVideoView;
+    private TextView mediaTitleText;
+    private Button mediaStopButton;
 
     // ═══════════════════════════════════════════════════════════════════
     //  Lifecycle
@@ -119,6 +140,11 @@ public class MainActivity extends AppCompatActivity
         agentStateText = findViewById(R.id.agentStateText);
         mqttStatusText = findViewById(R.id.mqttStatusText);
         subtitleText = findViewById(R.id.subtitleText);
+        mediaContainer = findViewById(R.id.mediaContainer);
+        exerciseVideoView = findViewById(R.id.exerciseVideoView);
+        mediaTitleText = findViewById(R.id.mediaTitleText);
+        mediaStopButton = findViewById(R.id.mediaStopButton);
+        mediaStopButton.setOnClickListener(v -> cancelCanonicalMedia("user_cancelled"));
 
         // Initialize State Machine
         stateMachine = new AgentStateMachine(this);
@@ -178,6 +204,7 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onStop() {
         super.onStop();
+        cancelCanonicalMedia("activity_stopped");
         hotwordEnabled = false;
         mainHandler.removeCallbacksAndMessages(null);
         stopHotwordListening();
@@ -235,12 +262,13 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onMessage(@NonNull String topic, @NonNull String payload) {
         Log.i(TAG, "MQTT [" + topic + "]: " + payload);
+        if (MqttTopics.COMMAND_REQUEST.equals(topic)) {
+            handleCommandRequest(payload);
+            return;
+        }
         try {
             JSONObject json = new JSONObject(payload);
             switch (topic) {
-                case MqttTopics.COMMAND_REQUEST:
-                    handleCommandRequest(json);
-                    break;
                 case MqttTopics.ACTION_SPEAK:
                     handleSpeakAction(json);
                     break;
@@ -284,6 +312,7 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onInterrupt() {
         Log.w(TAG, "Executing Global Interrupt: Stopping all actions.");
+        cancelCanonicalMedia("interrupted");
         robot.cancelAllTtsRequests();
         robot.stopMovement();
         hideSubtitle();
@@ -301,6 +330,18 @@ public class MainActivity extends AppCompatActivity
         if (ttsRequest.getStatus() == TtsRequest.Status.COMPLETED ||
             ttsRequest.getStatus() == TtsRequest.Status.ERROR) {
             hideSubtitleForRequest(ttsRequest);
+
+            CanonicalTtsTracker.Resolution resolution = canonicalTtsTracker.resolve(
+                    ttsRequest.getId(),
+                    ttsRequest.getStatus() == TtsRequest.Status.COMPLETED);
+            if (resolution != null) {
+                runOnUiThread(() -> completeCanonicalTtsAction(resolution));
+                return;
+            }
+            if (activeCanonicalCommand != null) {
+                Log.i(TAG, "Ignoring unrelated terminal TTS callback during canonical execution");
+                return;
+            }
         }
 
         if (stateMachine.getCurrentState() == AgentStateMachine.State.EXECUTING) {
@@ -357,76 +398,311 @@ public class MainActivity extends AppCompatActivity
         wakeupWithoutBuiltInResponse();
     }
 
-    private void handleCommandRequest(JSONObject command) throws JSONException {
-        String commandId = command.optString("command_id", "unknown_command");
-        String eventId = command.optString("event_id", "");
-        JSONArray actions = command.getJSONArray("actions");
-        JSONArray results = new JSONArray();
-
-        Log.i(TAG, "COMMAND_REQUEST: " + commandId + " actions=" + actions.length());
-        int failedCount = 0;
-        boolean hasSpeechAction = false;
-        for (int i = 0; i < actions.length(); i++) {
-            JSONObject action = actions.getJSONObject(i);
-            String type = action.optString("type", "");
-            if ("speak".equals(type) || "ask_clarification".equals(type)) {
-                hasSpeechAction = true;
+    private void handleCommandRequest(String payload) {
+        final CanonicalCommand command;
+        try {
+            command = CanonicalCommandValidator.validate(payload, MqttTopics.ROBOT_ID);
+        } catch (CanonicalCommandValidator.ValidationException e) {
+            Log.e(TAG, "Rejected canonical command: " + e.getReason());
+            if (e.hasCorrelation()) {
+                JSONArray results = new JSONArray();
+                if (e.getActionId() != null || e.getActionType() != null) {
+                    results.put(createActionResult(
+                            e.getActionId(), e.getActionType(), "failed", e.getReason()));
+                }
+                publishRawCommandResult(buildCommandResultPayload(
+                        e.getCommandId(), e.getEventId(), "failed", results, e.getReason()));
+            } else {
+                Log.e(TAG, "Cannot publish failure result without command_id and event_id correlation");
             }
-            JSONObject actionResult = executeHermesAction(action);
-            if ("failed".equals(actionResult.optString("status"))) {
-                failedCount++;
-            }
-            results.put(actionResult);
+            return;
         }
 
-        String status = failedCount == 0 ? "success" : failedCount == actions.length() ? "failed" : "partial_success";
-        publishCommandResult(commandId, eventId, status, results, null);
-        if (!hasSpeechAction && stateMachine.getCurrentState() != AgentStateMachine.State.IDLE) {
-            stateMachine.transitionTo(AgentStateMachine.State.IDLE);
+        ProcessCommandRegistry.BeginResult beginResult =
+                commandRegistry.begin(command.getCommandId());
+        switch (beginResult.getState()) {
+            case DUPLICATE_COMPLETE:
+                Log.i(TAG, "Duplicate completed command; replaying cached result: "
+                        + command.getCommandId());
+                publishRawCommandResult(beginResult.getResultPayload());
+                return;
+            case DUPLICATE_PENDING:
+                Log.i(TAG, "Duplicate pending command; execution suppressed and final result queued: "
+                        + command.getCommandId());
+                return;
+            case CAPACITY_REJECTED:
+                Log.e(TAG, "Canonical command registry capacity exhausted; rejecting command: "
+                        + command.getCommandId());
+                publishRawCommandResult(buildCommandResultPayload(
+                        command.getCommandId(), command.getEventId(), "failed",
+                        new JSONArray(), "command_registry_capacity_exhausted"));
+                return;
+            case FIRST_DELIVERY:
+            default:
+                Log.i(TAG, "COMMAND_REQUEST: " + command.getCommandId()
+                        + " actions=" + command.getActions().size());
+                runOnUiThread(() -> {
+                    canonicalCommandQueue.add(command);
+                    startNextCanonicalCommand();
+                });
         }
     }
 
-    private JSONObject executeHermesAction(JSONObject action) {
-        String actionId = action.optString("action_id", "unknown_action");
-        String type = action.optString("type", "");
-        JSONObject result = new JSONObject();
-        try {
-            switch (type) {
-                case "speak":
-                case "ask_clarification":
-                    if ("ask_clarification".equals(type) && !action.has("continue_listening")) {
-                        action.put("continue_listening", true);
-                    }
-                    handleSpeakAction(action);
-                    break;
-                case "navigate":
-                    handleNavigateAction(action);
-                    break;
-                case "turn":
-                    handleTurnAction(action);
-                    break;
-                case "stop":
-                    handleStopAction();
-                    break;
-                case "noop":
-                    Log.i(TAG, "ACTION_NOOP: " + action.optString("reason", ""));
-                    break;
-                default:
-                    throw new JSONException("Unsupported action type: " + type);
+    private void startNextCanonicalCommand() {
+        if (activeCanonicalCommand != null) {
+            return;
+        }
+        CanonicalCommand command = canonicalCommandQueue.poll();
+        if (command == null) {
+            return;
+        }
+        activeCanonicalCommand = new PendingCanonicalCommand(command);
+        stateMachine.transitionTo(AgentStateMachine.State.EXECUTING);
+        executeNextCanonicalAction();
+    }
+
+    private void executeNextCanonicalAction() {
+        while (activeCanonicalCommand != null
+                && activeCanonicalCommand.nextActionIndex
+                < activeCanonicalCommand.command.getActions().size()) {
+            CanonicalAction action = activeCanonicalCommand.command.getActions().get(
+                    activeCanonicalCommand.nextActionIndex);
+            if ("speak".equals(action.getType())
+                    || "ask_clarification".equals(action.getType())) {
+                startCanonicalSpeech(action);
+                return;
             }
-            result.put("action_id", actionId);
-            result.put("type", type);
-            result.put("status", "completed");
+            if ("play_media".equals(action.getType())) {
+                startCanonicalMedia(action);
+                return;
+            }
+
+            JSONObject result = executeImmediateCanonicalAction(action);
+            activeCanonicalCommand.recordResult(result);
+            activeCanonicalCommand.nextActionIndex++;
+        }
+
+        if (activeCanonicalCommand != null) {
+            finishCanonicalCommand();
+        }
+    }
+
+    private void startCanonicalSpeech(CanonicalAction action) {
+        try {
+            suppressLauncherConversation();
+            TtsRequest request = TtsRequest.create(
+                    action.getText(), false, mapTtsLanguage(action.getLanguage()));
+            activeCanonicalCommand.continueListeningAfterCompletion |=
+                    action.shouldContinueListening();
+            activeCanonicalCommand.pendingSpeechAction = action;
+            canonicalTtsTracker.begin(request.getId());
+            showSubtitle(action.getText(), request.getId());
+            Log.i(TAG, "CANONICAL_TTS_DISPATCH: " + action.getActionId());
+            robot.speak(request);
         } catch (Exception e) {
-            Log.e(TAG, "Failed to execute Hermes action: " + action, e);
-            try {
-                result.put("action_id", actionId);
-                result.put("type", type);
-                result.put("status", "failed");
-                result.put("error", e.getMessage());
-            } catch (JSONException ignored) {}
+            Log.e(TAG, "Failed to dispatch canonical TTS", e);
+            canonicalTtsTracker.clear();
+            activeCanonicalCommand.recordResult(createActionResult(
+                    action.getActionId(), action.getType(), "failed", safeError(e)));
+            activeCanonicalCommand.pendingSpeechAction = null;
+            activeCanonicalCommand.nextActionIndex++;
+            executeNextCanonicalAction();
+        }
+    }
+
+    private void completeCanonicalTtsAction(CanonicalTtsTracker.Resolution resolution) {
+        if (activeCanonicalCommand == null
+                || activeCanonicalCommand.pendingSpeechAction == null) {
+            Log.e(TAG, "Canonical TTS resolved without an active speech action");
+            return;
+        }
+        CanonicalAction action = activeCanonicalCommand.pendingSpeechAction;
+        activeCanonicalCommand.recordResult(createActionResult(
+                action.getActionId(), action.getType(),
+                resolution.getStatus(), resolution.getError()));
+        activeCanonicalCommand.pendingSpeechAction = null;
+        activeCanonicalCommand.nextActionIndex++;
+        executeNextCanonicalAction();
+    }
+
+    private void startCanonicalMedia(CanonicalAction action) {
+        String token = UUID.randomUUID().toString();
+        try {
+            int resourceId = mediaResourceId(action.getMediaId());
+            activeCanonicalCommand.pendingMediaAction = action;
+            activeCanonicalCommand.pendingMediaToken = token;
+            canonicalMediaTracker.begin(token, action.getMediaId());
+
+            mediaTitleText.setText(mediaTitleResourceId(action.getMediaId()));
+            mediaContainer.setVisibility(View.VISIBLE);
+            exerciseVideoView.setOnPreparedListener(player -> {
+                if (!canonicalMediaTracker.markStarted(token)) {
+                    return;
+                }
+                try {
+                    player.setLooping(false);
+                    exerciseVideoView.start();
+                    Log.i(TAG, "CANONICAL_MEDIA_STARTED: " + action.getActionId()
+                            + " media_id=" + action.getMediaId());
+                } catch (Exception e) {
+                    CanonicalMediaTracker.Resolution resolution =
+                            canonicalMediaTracker.fail(token, safeError(e));
+                    if (resolution != null) {
+                        Log.e(TAG, "CANONICAL_MEDIA_FAILED_TO_START: "
+                                + action.getActionId(), e);
+                        completeCanonicalMediaAction(resolution);
+                    }
+                }
+            });
+            exerciseVideoView.setOnCompletionListener(player -> {
+                CanonicalMediaTracker.Resolution resolution =
+                        canonicalMediaTracker.complete(token);
+                if (resolution != null) {
+                    Log.i(TAG, "CANONICAL_MEDIA_COMPLETED: " + action.getActionId()
+                            + " media_id=" + action.getMediaId());
+                    completeCanonicalMediaAction(resolution);
+                }
+            });
+            exerciseVideoView.setOnErrorListener((player, what, extra) -> {
+                CanonicalMediaTracker.Resolution resolution = canonicalMediaTracker.fail(
+                        token, "media_playback_error_" + what + "_" + extra);
+                if (resolution != null) {
+                    Log.e(TAG, "CANONICAL_MEDIA_FAILED: " + action.getActionId()
+                            + " media_id=" + action.getMediaId()
+                            + " what=" + what + " extra=" + extra);
+                    completeCanonicalMediaAction(resolution);
+                }
+                return true;
+            });
+            Log.i(TAG, "CANONICAL_MEDIA_RECEIVED: " + action.getActionId()
+                    + " media_id=" + action.getMediaId());
+            Uri uri = Uri.parse("android.resource://" + getPackageName() + "/" + resourceId);
+            exerciseVideoView.setVideoURI(uri);
+            exerciseVideoView.requestFocus();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to prepare canonical media", e);
+            CanonicalMediaTracker.Resolution resolution =
+                    canonicalMediaTracker.fail(token, safeError(e));
+            if (resolution != null) {
+                completeCanonicalMediaAction(resolution);
+            } else {
+                activeCanonicalCommand.recordResult(createMediaActionResult(
+                        action, "failed", safeError(e)));
+                activeCanonicalCommand.pendingMediaAction = null;
+                activeCanonicalCommand.pendingMediaToken = null;
+                activeCanonicalCommand.nextActionIndex++;
+                executeNextCanonicalAction();
+            }
+        }
+    }
+
+    private void cancelCanonicalMedia(String reason) {
+        if (activeCanonicalCommand == null
+                || activeCanonicalCommand.pendingMediaAction == null
+                || activeCanonicalCommand.pendingMediaToken == null) {
+            return;
+        }
+        CanonicalAction action = activeCanonicalCommand.pendingMediaAction;
+        CanonicalMediaTracker.Resolution resolution = canonicalMediaTracker.cancel(
+                activeCanonicalCommand.pendingMediaToken, reason);
+        if (resolution == null) {
+            return;
+        }
+        Log.i(TAG, "CANONICAL_MEDIA_CANCELLED: " + action.getActionId()
+                + " media_id=" + action.getMediaId() + " reason=" + reason);
+        completeCanonicalMediaAction(resolution);
+    }
+
+    private void completeCanonicalMediaAction(CanonicalMediaTracker.Resolution resolution) {
+        if (activeCanonicalCommand == null
+                || activeCanonicalCommand.pendingMediaAction == null) {
+            Log.e(TAG, "Canonical media resolved without an active media action");
+            clearMediaPlaybackUi();
+            return;
+        }
+        CanonicalAction action = activeCanonicalCommand.pendingMediaAction;
+        clearMediaPlaybackUi();
+        activeCanonicalCommand.recordResult(createMediaActionResult(
+                action, resolution.getStatus(), resolution.getError()));
+        activeCanonicalCommand.pendingMediaAction = null;
+        activeCanonicalCommand.pendingMediaToken = null;
+        activeCanonicalCommand.nextActionIndex++;
+        executeNextCanonicalAction();
+    }
+
+    private JSONObject createMediaActionResult(
+            CanonicalAction action, String status, String error) {
+        JSONObject result = createActionResult(
+                action.getActionId(), action.getType(), status, error);
+        try {
+            result.put("media_id", action.getMediaId());
+        } catch (JSONException e) {
+            Log.e(TAG, "Failed to attach media_id to action result", e);
         }
         return result;
+    }
+
+    private int mediaResourceId(String mediaId) {
+        switch (mediaId) {
+            case "elderly_hand_exercise":
+                return R.raw.elderly_hand_exercise;
+            case "elderly_leg_exercise":
+                return R.raw.elderly_leg_exercise;
+            default:
+                throw new IllegalArgumentException("Unsupported media_id: " + mediaId);
+        }
+    }
+
+    private int mediaTitleResourceId(String mediaId) {
+        return "elderly_hand_exercise".equals(mediaId)
+                ? R.string.hand_exercise_title : R.string.leg_exercise_title;
+    }
+
+    private void clearMediaPlaybackUi() {
+        exerciseVideoView.setOnPreparedListener(null);
+        exerciseVideoView.setOnCompletionListener(null);
+        exerciseVideoView.setOnErrorListener(null);
+        exerciseVideoView.stopPlayback();
+        mediaContainer.setVisibility(View.GONE);
+        mediaTitleText.setText(null);
+    }
+
+    private JSONObject executeImmediateCanonicalAction(CanonicalAction action) {
+        try {
+            switch (action.getType()) {
+                case "navigate":
+                    Log.i(TAG, "ACTION_NAVIGATE_DISPATCH: " + action.getTarget());
+                    robot.goTo(action.getTarget());
+                    return createActionResult(
+                            action.getActionId(), action.getType(), "dispatched", null);
+                case "turn":
+                    int signedDegrees = "left".equals(action.getDirection())
+                            ? action.getDegrees() : -action.getDegrees();
+                    Log.i(TAG, "ACTION_TURN_DISPATCH: " + action.getDirection()
+                            + " " + action.getDegrees());
+                    robot.turnBy(signedDegrees, 0.6f);
+                    return createActionResult(
+                            action.getActionId(), action.getType(), "dispatched", null);
+                case "stop":
+                    Log.i(TAG, "ACTION_STOP");
+                    robot.cancelAllTtsRequests();
+                    robot.stopMovement();
+                    hideSubtitle();
+                    return createActionResult(
+                            action.getActionId(), action.getType(), "completed", null);
+                case "noop":
+                    Log.i(TAG, "ACTION_NOOP: " + action.getReason());
+                    return createActionResult(
+                            action.getActionId(), action.getType(), "completed", null);
+                default:
+                    throw new IllegalStateException(
+                            "Unexpected validated action type: " + action.getType());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to execute canonical action " + action.getActionId(), e);
+            return createActionResult(
+                    action.getActionId(), action.getType(), "failed", safeError(e));
+        }
     }
 
     private void handleTurnAction(JSONObject json) throws JSONException {
@@ -447,7 +723,7 @@ public class MainActivity extends AppCompatActivity
         stateMachine.transitionTo(AgentStateMachine.State.IDLE);
     }
 
-    private void publishCommandResult(
+    private String buildCommandResultPayload(
             String commandId,
             String eventId,
             String status,
@@ -466,14 +742,110 @@ public class MainActivity extends AppCompatActivity
             if (error != null) {
                 result.put("error", error);
             }
+            return result.toString();
+        } catch (JSONException e) {
+            Log.e(TAG, "Failed to build command result", e);
+            return null;
+        }
+    }
 
-            for (MqttManager mm : mqttManagers) {
-                if (mm != null && mm.isConnected()) {
-                    mm.publish(MqttTopics.COMMAND_RESULT, result.toString());
-                }
+    private JSONObject createActionResult(
+            String actionId, String type, String status, String error) {
+        JSONObject result = new JSONObject();
+        try {
+            result.put("action_id", actionId == null ? "unknown_action" : actionId);
+            result.put("type", type == null ? "unknown" : type);
+            result.put("status", status);
+            if (error != null) {
+                result.put("error", error);
             }
         } catch (JSONException e) {
-            Log.e(TAG, "Failed to publish command result", e);
+            Log.e(TAG, "Failed to build action result", e);
+        }
+        return result;
+    }
+
+    private void finishCanonicalCommand() {
+        PendingCanonicalCommand completed = activeCanonicalCommand;
+        int actionCount = completed.command.getActions().size();
+        String status;
+        if (completed.cancelledCount == actionCount) {
+            status = "cancelled";
+        } else if (completed.failedCount == actionCount) {
+            status = "failed";
+        } else if (completed.failedCount > 0 || completed.cancelledCount > 0) {
+            status = "partial_success";
+        } else {
+            status = "success";
+        }
+        String payload = buildCommandResultPayload(
+                completed.command.getCommandId(),
+                completed.command.getEventId(),
+                status,
+                completed.results,
+                null);
+        if (payload != null) {
+            int pendingReplays = commandRegistry.complete(
+                    completed.command.getCommandId(), payload);
+            publishRawCommandResult(payload);
+            for (int i = 0; i < pendingReplays; i++) {
+                publishRawCommandResult(payload);
+            }
+        }
+
+        activeCanonicalCommand = null;
+        resumeListeningAfterCanonicalQueue |= completed.continueListeningAfterCompletion;
+        if (!canonicalCommandQueue.isEmpty()) {
+            startNextCanonicalCommand();
+            return;
+        }
+        if (resumeListeningAfterCanonicalQueue) {
+            resumeListeningAfterCanonicalQueue = false;
+            stateMachine.transitionTo(AgentStateMachine.State.WAKEUP_TRIGGERED);
+            stateMachine.transitionTo(AgentStateMachine.State.ASR_LISTENING);
+            wakeupWithoutBuiltInResponse();
+        } else if (stateMachine.getCurrentState() != AgentStateMachine.State.IDLE) {
+            stateMachine.transitionTo(AgentStateMachine.State.IDLE);
+        }
+    }
+
+    private void publishRawCommandResult(String payload) {
+        if (payload == null) {
+            return;
+        }
+        for (MqttManager mm : mqttManagers) {
+            if (mm != null && mm.isConnected()) {
+                mm.publish(MqttTopics.COMMAND_RESULT, payload);
+            }
+        }
+    }
+
+    private String safeError(Exception e) {
+        return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+    }
+
+    private static final class PendingCanonicalCommand {
+        private final CanonicalCommand command;
+        private final JSONArray results = new JSONArray();
+        private int nextActionIndex;
+        private int failedCount;
+        private int cancelledCount;
+        private CanonicalAction pendingSpeechAction;
+        private CanonicalAction pendingMediaAction;
+        private String pendingMediaToken;
+        private boolean continueListeningAfterCompletion;
+
+        private PendingCanonicalCommand(CanonicalCommand command) {
+            this.command = command;
+        }
+
+        private void recordResult(JSONObject result) {
+            results.put(result);
+            if ("failed".equals(result.optString("status"))) {
+                failedCount++;
+            } else if ("cancelled".equals(result.optString("status"))) {
+                cancelledCount++;
+            }
         }
     }
 

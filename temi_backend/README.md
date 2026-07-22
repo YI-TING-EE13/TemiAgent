@@ -1,5 +1,12 @@
 # Temi Backend
 
+> This is the repository's local/reference backend. The deployed canonical
+> backend, Resident resolution, Care Plan, Care Context, Hermes, Bridge,
+> memory, trace, and action generation/validation are AI6-owned. Current
+> Android command semantics are documented in
+> `../docs/new_demo_v1_android_baseline.md`; the exact media contract is
+> `../docs/play_media_contract.md`.
+
 Portable Python backend and verification suite for the TemiAgent robot.
 
 The backend receives Temi's WebSocket H.264 video stream, listens for ASR events over MQTT, sends aligned speech-and-vision context to a local OpenAI-compatible VLM endpoint, and publishes safe robot actions back to Temi over MQTT.

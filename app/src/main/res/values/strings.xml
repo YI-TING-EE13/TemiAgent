@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stop_exercise_video">停止影片</string>
+    <string name="hand_exercise_title">每日手部運動</string>
+    <string name="leg_exercise_title">每日腿部運動</string>
+</resources>

@@ -1,12 +1,37 @@
 # TemiAgent: Embodied AI Integration Framework
 
-TemiAgent turns a Temi robot into a VLM-driven embodied AI agent. The Android app stays close to the robot hardware and Temi SDK, while the PC backend handles vision buffering, multimodal reasoning, and safe action routing.
+TemiAgent turns a Temi robot into a VLM-driven embodied AI agent. The Android
+App stays close to the robot hardware and Temi SDK, while the AI6-owned
+canonical backend handles Resident-aware reasoning and safe action generation.
+
+Current milestone:
+
+```text
+ANDROID_MEDIA_CAPABILITY_READY
+CROSS_MACHINE_MEDIA_MILESTONE=PASS
+```
+
+Documentation map:
+
+- This README: build, deployment, runtime operation, and troubleshooting.
+- `docs/new_demo_v1_android_baseline.md`: canonical validation, lifecycle,
+  verification evidence, ownership, and limitations.
+- `docs/play_media_contract.md`: exact exercise media contract.
+- `AGENTS.md`: future-agent handoff, ADB ownership, and workspace rules.
 
 ## Key Features
 
 - **Vision-language interaction**: Streams H.264 camera frames from the robot to a PC backend and pairs them with user ASR events.
 - **Timestamp-aligned frame sampling**: Uses robot-side timestamps to sample visual context around the end of speech, such as `T-1000ms`, `T-500ms`, and `T`.
-- **MQTT command bridge**: Sends text ASR events from Android to the backend and receives Hermes command requests such as speak, ask clarification, navigate, turn, stop, and noop.
+- **MQTT command bridge**: Sends text ASR events from Android to the backend and receives canonical requests such as speak, ask clarification, navigate, turn, stop, noop, and allowlisted media playback.
+- **Hardened canonical execution**: Validates command envelopes and action
+  allowlists locally before hardware dispatch and publishes correlated results.
+- **Process-lifetime idempotency**: Suppresses pending duplicates and replays
+  exact cached results for completed duplicate command IDs.
+- **Callback-grounded TTS**: Reports completion only after Temi supplies a
+  terminal TTS callback.
+- **Offline exercise media**: Plays two bundled, allowlisted exercise videos
+  with truthful completed, failed, and cancelled outcomes.
 - **State-machine control**: Uses `AgentStateMachine` to manage `IDLE`, `WAKEUP_TRIGGERED`, `ASR_LISTENING`, `THINKING`, `WAITING`, and `EXECUTING` states.
 - **Multicast telemetry**: Supports multiple WebSocket and MQTT backend endpoints for parallel backends or Hermes integration.
 - **Temi built-in voice suppression**: The Android app declares NLU/conversation-layer ownership and suppresses Temi Launcher conversation output before playing backend-generated TTS.
@@ -24,6 +49,8 @@ Responsibilities:
 - Stream camera frames through WebSocket.
 - Publish ASR events through MQTT.
 - Execute backend commands through Temi SDK APIs.
+- Validate canonical speech, motion, and media actions before execution.
+- Play allowlisted bundled exercise videos and publish terminal results.
 - Reduce duplicate speech by suppressing Temi built-in NLU/conversation output.
 
 Important files:
@@ -33,9 +60,29 @@ Important files:
 - `app/src/main/java/com/robotemi/agent/mqtt/MqttTopics.java`
 - `app/src/main/AndroidManifest.xml`
 
-### PC Backend
+### Backend responsibility boundary
 
-Located in `temi_backend/`.
+The production canonical backend is AI6-owned. AI6 owns the Overview Adapter,
+Resident resolution, Care Plan, Care Context, Hermes, Bridge, memory, trace,
+and action generation/validation. LAB606 owns the Android App, Temi hardware,
+ASR/camera clients, local validation, TTS/media/hardware execution, results,
+build, and deployment.
+
+```text
+AI6 cmd/request
+-> LAB606 execution
+-> LAB606 cmd/result
+-> AI6 trace
+```
+
+Cross-machine acceptance demonstrates interoperability but does not make AI6
+internals part of the LAB606 Android implementation.
+
+### Reference PC Backend
+
+The repository also contains a local/reference backend in `temi_backend/`.
+Its documentation and the checked-in Hermes skill mirror are not the authority
+for the deployed AI6 canonical stack.
 
 Responsibilities:
 
@@ -62,8 +109,10 @@ Current voice flow:
 2. When `小安` is detected, the app calls `robot.wakeup(Collections.singletonList(SttLanguage.ZH_TW))`.
 3. Temi performs ASR and returns the final transcript through `Robot.AsrListener`.
 4. The app publishes ASR text to the backend through MQTT.
-5. HermesTemiBridge returns validated command requests on `temi/{robot_id}/cmd/request`.
-6. The app executes TTS/navigation through Temi SDK.
+5. The AI6-owned canonical stack returns validated command requests on
+   `temi/{robot_id}/cmd/request`.
+6. The app validates and executes TTS, allowlisted media, or safe robot actions
+   and publishes `temi/{robot_id}/cmd/result`.
 
 This keeps Temi's ASR while avoiding normal use of Temi's built-in assistant wake word and response flow.
 
@@ -116,17 +165,9 @@ The current wake word listener is implemented with Android `SpeechRecognizer`. I
    ws.server.urls=ws://192.168.50.233:8080,ws://192.168.50.236:8080
    mqtt.broker.urls=tcp://192.168.50.233:1883,tcp://192.168.50.236:1883
    mqtt.client.id=temi-agent
-   robot.id=temi-01
    ```
 
-   These two endpoints are required for the local Hermes/Temi setup:
-
-   - `192.168.50.233`
-   - `192.168.50.236`
-
-   Keep both IPs in `ws.server.urls` and `mqtt.broker.urls` unless the deployment topology is intentionally changed.
-
-   On the robot UI, `MQTT: connected/total` shows how many configured MQTT brokers are currently connected. For this setup, the expected healthy state is `MQTT: 2/2`, meaning both broker URLs above are connected and can receive ASR events or send robot actions.
+   On the robot UI, `MQTT: connected/total` shows how many configured MQTT brokers are currently connected. For example, `MQTT: 2/2` means both broker URLs above are connected and can receive ASR events or send robot actions.
 
 2. Build the debug APK:
 
@@ -134,11 +175,19 @@ The current wake word listener is implemented with Android `SpeechRecognizer`. I
    .\gradlew.bat :app:assembleDebug
    ```
 
+   Full milestone verification uses:
+
+   ```powershell
+   .\gradlew.bat :app:assembleDebug :app:compileDebugJavaWithJavac :app:testDebugUnitTest :app:lintDebug
+   ```
+
 3. Connect to Temi:
 
    ```powershell
-   adb connect <temi_ip>
-   adb devices
+   adb kill-server
+   adb start-server
+   adb connect 192.168.50.204:5555
+   adb devices -l
    ```
 
 4. Install the APK:
@@ -168,7 +217,42 @@ The current wake word listener is implemented with Android `SpeechRecognizer`. I
    adb shell am start -n com.robotemi.agent/.MainActivity
    ```
 
+### Current deployment baseline
+
+```text
+Package: com.robotemi.agent
+Version: 1.0.0
+Version code: 1
+ADB target: 192.168.50.204:5555
+Verified media APK SHA-256:
+E2DD1CABE7032DD73B65AA6CB451F48906FAA87F7633D7C7739AC5971DA94A11
+```
+
+The APK hash identifies the artifact used for the current milestone. It is not
+a permanent release value; recompute it after any rebuild used for acceptance.
+
+### ADB ownership handoff
+
+Temi wireless ADB may be owned by only one computer at a time:
+
+```text
+LAB606 Android/device-side work
+-> LAB606 holds ADB
+
+LAB606 completes device work
+-> adb disconnect 192.168.50.204:5555
+
+AI6 integration/E2E work
+-> AI6 connects to 192.168.50.204:5555
+```
+
+Do not allow both computers to compete for the device connection.
+
 ## Backend Setup
+
+This section starts the repository's reference backend. Production AI6 setup
+and internals are maintained on the AI6 computer and are outside LAB606
+ownership.
 
 1. Start the MQTT broker.
 
@@ -204,19 +288,59 @@ The current wake word listener is implemented with Android `SpeechRecognizer`. I
 - `app\build\outputs\apk\debug\app-debug.apk` exists.
 - Android app status shows connected WebSocket and MQTT endpoints.
 - Android app status shows the expected MQTT count, such as `MQTT: 2/2` for two connected brokers.
+- Both `.236:1883` and `.236:8080` have passed real cross-machine connection
+  acceptance when the AI6 canonical stack is running.
 - Logcat shows `Temi built-in wake trigger disabled; custom wake word is 小安`.
 - Logcat shows `RecognitionService#onStartListening` while the app is idle.
 - Saying `小安`, `小安你好`, or `你好小安` logs `Custom wake word matched`.
 - Saying `Hi Temi` may still produce a Temi wake event, but the app should log `Ignoring Temi system wake word` unless it was triggered by the custom wake word flow.
 - Backend receives `temi/event/asr` for text-only ASR, or `temi/{robot_id}/asr/final` when a PC-side frame assembler provides synchronized image paths.
-- HermesTemiBridge publishes `temi/{robot_id}/cmd/request`.
+- The AI6 canonical Bridge publishes `temi/{robot_id}/cmd/request`.
 - Android publishes `temi/{robot_id}/cmd/result`.
 - Temi speaks only the backend answer in normal operation.
 - During backend-driven TTS, a compact white subtitle appears near the bottom of the screen and disappears after TTS completion.
+- Canonical speech remains pending until Temi reports `COMPLETED` or `ERROR`;
+  `robot.speak(...)` dispatch alone is not completion.
+- `elderly_hand_exercise` and `elderly_leg_exercise` visibly play and finish
+  with correlated results.
+- The media stop button returns `cancelled` and does not later return
+  `completed`.
+- Duplicate command IDs do not replay TTS, media, or hardware actions.
+- Unknown media and invalid motion are rejected before playback or movement.
+
+## Verified Milestone Evidence
+
+- JVM tests: `36/36 PASS`.
+- Android assemble, Java compile, unit tests, and lint tasks: `PASS`.
+- Lint baseline: one pre-existing ChromeOS camera feature error plus 23
+  warnings.
+- Real Temi audible and callback-grounded TTS: `PASS`.
+- Duplicate TTS suppression and invalid-motion rejection: `PASS`.
+- Real hand video, leg video, stop/cancel, and unknown-media rejection: `PASS`.
+- AI6 x LAB606 scenarios for Father daily hand exercise, Mother daily leg
+  exercise, Mother post-dialysis hand exercise, unknown Resident fail-safe,
+  duplicate media suppression, and TTS regression: `PASS`.
+
+## Known Limitations
+
+- The 1,024-entry command registry is process-lifetime only and is not
+  restart-persistent exactly-once.
+- Canonical TTS has no separate timeout if Temi never supplies a terminal
+  callback.
+- Navigation arrival and physical turn completion are not observed; results
+  report dispatch. The current Demo does not use autonomous navigation.
+- Android has no Resident selector UI; Resident resolution is AI6-owned.
+- Android does not yet publish the full canonical ASR-final event with
+  synchronized frame paths.
+- No arbitrary media source is accepted. Only the two bundled exercise IDs are
+  supported.
+- The pre-existing ChromeOS camera lint finding remains.
 
 ## Troubleshooting
 
-- **No device in `adb devices`**: Confirm Temi developer mode, same network, and run `adb connect <temi_ip>`.
+- **No device in `adb devices`**: Confirm ADB ownership has been handed to
+  LAB606, Temi developer mode is enabled, both devices are on the same network,
+  and run `adb connect 192.168.50.204:5555`.
 - **Backend does not receive ASR**: Check MQTT broker IP, port `1883`, firewall rules, and `mqtt.broker.urls`.
 - **No video stream**: Check `ws.server.urls`, backend WebSocket listener port, and camera permission.
 - **`MQTT: 0/N` or red MQTT status**: Check that each broker in `mqtt.broker.urls` is reachable from Temi on port `1883`.

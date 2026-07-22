@@ -1,6 +1,6 @@
 ---
 name: temi-robot-control
-description: Generate safe JSON-only Temi robot action plans for Hermes from Temi ASR text, robot_id, event_id, conversation context, and synchronized visual frame paths. Use for Temi visual question answering, clarification, speech replies, safe turn/navigation/stop/noop planning, and bridge-validated robot command output. Do not use to directly control hardware, publish MQTT, run shell commands, or execute Temi SDK calls.
+description: Generate safe JSON-only Temi robot action plans for Hermes from Temi ASR text, robot_id, event_id, conversation context, image attachments, and synchronized visual frame paths. Use for Temi visual question answering, Discord/gateway camera requests, hand gestures, pointing, clarification, speech replies, safe turn/navigation/stop/noop planning, and bridge-validated robot command output. Do not use to directly control hardware, publish MQTT, run shell commands, or execute Temi SDK calls.
 ---
 
 # Temi Robot Control Skill
@@ -10,6 +10,20 @@ description: Generate safe JSON-only Temi robot action plans for Hermes from Tem
 Use this skill when Hermes receives a single Temi robot interaction event from `HermesTemiBridge`.
 
 This skill is an operation manual for decision making only. It must output one JSON object that the bridge can validate and dispatch. It must never directly control Temi hardware, publish MQTT messages, run scripts, or call the Temi SDK.
+
+## Activation Hints
+
+Use this skill when Hermes receives Temi frame paths from the Bridge, or when a Discord/gateway user asks Hermes to inspect Temi camera context, for example:
+
+- "看我的手勢"
+- "看我的手"
+- "我比的是什麼"
+- "你看得到我嗎"
+- "看一下相機"
+- "我指的那個是什麼"
+- "桌上那個東西是什麼"
+
+First check whether the current turn includes image attachments, image paths, or Bridge-provided frame paths. If no current image/frame is available, say that Hermes does not have a live Temi camera frame in this turn and ask the user to trigger/send a Temi camera event or attach an image. Do not invent visual details.
 
 ## Expected Input
 
@@ -21,10 +35,12 @@ The bridge should provide:
 - `conversation_id`
 - `language`, usually `zh-TW`
 - ASR final text from the user
-- three synchronized image paths visible to the Hermes runtime:
+- when visual context is available, three synchronized image paths visible to the Hermes runtime:
   - `t_minus_1000`
   - `t_minus_500`
   - `t`
+
+Legacy text-only TemiAgent events may arrive without frames. In that case, do not answer visual questions from imagination; use `ask_clarification`, `speak`, or `noop` to say that no current camera frame is available.
 
 Example:
 
@@ -117,13 +133,14 @@ No text may appear before or after the JSON object.
 
 ## Decision Policy
 
-1. If the user asks a question about what is visible, inspect the images and answer with `speak`.
-2. If the user refers to "this", "that", "there", or points, use the three frames to infer the referent. If unclear, use `ask_clarification`.
-3. If the user asks Temi to move to a known allowlisted location, use `navigate`.
-4. If the user asks Temi to turn, use `turn` with the smallest useful allowed degree.
-5. If the user asks Temi to stop, use `stop`.
-6. If the request is unsupported, use `speak` to explain the limitation.
-7. If there is any safety uncertainty, use `ask_clarification` or `noop` instead of movement.
+1. If the user asks a question about what is visible and frames are available, inspect the images and answer with `speak`.
+2. If the user asks a visual question but no frames are available, explain that Hermes does not have a current camera frame and ask the user to trigger/send a Temi camera event.
+3. If the user refers to "this", "that", "there", or points, use the three frames to infer the referent. If unclear, use `ask_clarification`.
+4. If the user asks Temi to move to a known allowlisted location, use `navigate`.
+5. If the user asks Temi to turn, use `turn` with the smallest useful allowed degree.
+6. If the user asks Temi to stop, use `stop`.
+7. If the request is unsupported, use `speak` to explain the limitation.
+8. If there is any safety uncertainty, use `ask_clarification` or `noop` instead of movement.
 
 ## Validation Checklist
 

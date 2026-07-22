@@ -81,4 +81,49 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
+    <FrameLayout
+        android:id="@+id/mediaContainer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#FF07111C"
+        android:clickable="true"
+        android:focusable="true"
+        android:keepScreenOn="true"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <VideoView
+            android:id="@+id/exerciseVideoView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center" />
+
+        <TextView
+            android:id="@+id/mediaTitleText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="16dp"
+            android:background="#B0000000"
+            android:paddingStart="20dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="10dp"
+            android:textColor="#FFFFFFFF"
+            android:textSize="22sp" />
+
+        <Button
+            android:id="@+id/mediaStopButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="24dp"
+            android:minWidth="140dp"
+            android:text="@string/stop_exercise_video"
+            android:textSize="18sp" />
+    </FrameLayout>
+
 </androidx.constraintlayout.widget.ConstraintLayout>

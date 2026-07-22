@@ -4,16 +4,29 @@ This file is the handoff guide for future coding agents working on this TemiAgen
 
 ## Project Identity
 
-- Current working project: `F:\sdk\TemiAgent`
-- GitHub/backup working tree used previously: `F:\TemiAgent`
+- Active Android baseline branch: `new-demo-v1`
+- Android module location: `TemiAgent/` inside the repository checkout
 - Android package: `com.robotemi.agent`
+- Current package version: `1.0.0` (`versionCode 1`)
 - Main Android entry point: `app/src/main/java/com/robotemi/agent/MainActivity.java`
-- Temi ADB target used in local testing: `192.168.50.205:5555`
+- Temi ADB target used in local testing: `192.168.50.204:5555`
+- Current verified media APK SHA-256:
+  `E2DD1CABE7032DD73B65AA6CB451F48906FAA87F7633D7C7739AC5971DA94A11`
 - Default backend endpoints are configured in `local.properties`, which is intentionally ignored by Git.
-- Required backend endpoints must stay as a two-node pair:
-  - `192.168.50.233`
-  - `192.168.50.236`
-- Do not collapse `ws.server.urls` or `mqtt.broker.urls` to a single IP. The app is expected to connect to both endpoints; `MQTT: 2/2` is the healthy state.
+
+The APK hash is the verified milestone baseline, not a permanent identifier.
+Recompute and document it after every rebuild used for acceptance.
+
+## Documentation Authority
+
+- `README.md`: user-facing Android build, deployment, runtime, and
+  troubleshooting guide.
+- `docs/new_demo_v1_android_baseline.md`: authoritative canonical-command
+  behavior, validation, lifecycle, evidence, and limitations.
+- `docs/play_media_contract.md`: exact `play_media` action/result contract.
+- This `AGENTS.md`: operational handoff, ADB ownership, and workspace safety.
+- Repository-root SDK documentation and generated `docs/sdk/**` pages describe
+  the upstream Temi SDK and must not be rewritten as App documentation.
 
 ## Current Voice Architecture
 
@@ -85,11 +98,14 @@ adb shell appops set com.google.android.googlequicksearchbox RECORD_AUDIO allow
 
 ## Build and Deploy
 
-From `F:\sdk\TemiAgent`:
+From the active checkout's `TemiAgent` directory:
 
 ```powershell
 .\gradlew.bat :app:assembleDebug
-adb connect 192.168.50.205:5555
+adb kill-server
+adb start-server
+adb connect 192.168.50.204:5555
+adb devices -l
 adb install -r app\build\outputs\apk\debug\app-debug.apk
 adb shell pm grant com.robotemi.agent android.permission.CAMERA
 adb shell pm grant com.robotemi.agent android.permission.RECORD_AUDIO
@@ -101,16 +117,87 @@ adb shell am start -n com.robotemi.agent/.MainActivity
 
 Expected build state: `:app:assembleDebug` succeeds. Warnings about Java 8 source/target and deprecated APIs are currently non-blocking.
 
+### ADB ownership and handoff
+
+Temi wireless ADB may be held by only one computer at a time. Do not let AI6
+and LAB606 compete for the same device connection.
+
+```text
+LAB606 Android/device-side work
+-> LAB606 holds ADB
+
+LAB606 completes device work
+-> adb disconnect 192.168.50.204:5555
+
+AI6 integration/E2E work
+-> AI6 connects to 192.168.50.204:5555
+```
+
+When receiving ownership, connect explicitly and confirm that
+`192.168.50.204:5555` is in `device` state. When handing ownership to AI6,
+disconnect explicitly; do not merely close a terminal.
+
+## Current Network Topology
+
+Keep both endpoint pairs unless the system topology is intentionally changed:
+
+```text
+MQTT:     tcp://192.168.50.233:1883,tcp://192.168.50.236:1883
+WebSocket: ws://192.168.50.233:8080,ws://192.168.50.236:8080
+```
+
+`.233` passed LAB606-side acceptance. After the AI6 canonical stack started,
+real `.236:1883` MQTT and `.236:8080` WebSocket connections were established
+and passed cross-machine integration. `MQTT: 2/2` is the healthy target state;
+do not preserve an old claim that `.236` is permanently unavailable.
+
 ## UI Status Indicators
 
 - `MQTT: connected/total` is the count of connected MQTT brokers versus configured brokers from `mqtt.broker.urls`.
-- Example: `MQTT: 2/2` means both required brokers, `192.168.50.233` and `192.168.50.236`, are connected. Text ASR events are published to both brokers, and Hermes command requests such as `temi/{robot_id}/cmd/request` can be received from either broker.
+- Example: `MQTT: 2/2` means both configured brokers are connected. Text ASR events are published to connected brokers, and Hermes command requests such as `temi/{robot_id}/cmd/request` can be received.
 - The top-left status text shows the hotword/listening state, such as `Waiting for "小安"`.
 - Backend TTS subtitles appear above the bottom status area with small white text and should clear automatically after speech ends.
 
 ## Timeout Behavior
 
 The `WAITING` watchdog in `AgentStateMachine` is currently 60 seconds. If ASR is published but no backend action arrives over MQTT before the watchdog fires, the app says `連線逾時，請稍後再試` and returns to `IDLE`. This timeout is app-side behavior, not a Temi built-in ASR timeout.
+
+## Canonical Command Runtime
+
+The active contract is:
+
+```text
+temi/{robot_id}/cmd/request
+-> Android validation and serialized execution
+-> temi/{robot_id}/cmd/result
+```
+
+Envelope validation covers schema version, command ID, event ID, robot ID, and
+the actions array. Action validation includes speech, motion, and media fields.
+Invalid motion is rejected before `robot.turnBy(...)` or `robot.goTo(...)`.
+
+Motion allowlists:
+
+- turn direction: `left`, `right`
+- turn degrees: `15`, `30`, `45`, `60`, `90`
+- navigate target: `home_base`, `kitchen`, `living_room`, `meeting_room`
+
+Idempotency uses a synchronized process-lifetime registry of 1,024 unique
+command IDs. A pending duplicate executes no additional hardware action and
+receives the eventual result; a completed duplicate receives the exact cached
+payload. The registry is not persistent or restart-safe, and unseen commands
+are rejected after capacity is exhausted.
+
+Canonical TTS stays pending after `robot.speak(...)`. Only a Temi
+`COMPLETED` callback produces `completed`; an `ERROR` callback produces
+`failed`. There is currently no separate timeout if no terminal callback ever
+arrives.
+
+`play_media` accepts only `elderly_hand_exercise` and
+`elderly_leg_exercise`. Playback is callback-grounded as
+`received -> prepared/started -> completed | failed | cancelled`. The stop
+button cancels playback, stale completion after cancellation is ignored, and a
+duplicate command ID does not replay video.
 
 ## Validation Commands
 
@@ -184,18 +271,46 @@ Expected logs when system wake phrase is ignored:
 - Temi system wake cannot be fully disabled on the currently tested Launcher, so ignore-gating is required.
 - If the activity is stopped and resumed, ensure camera resources are recreated. `MainActivity` currently sets `cameraManager = null` after shutdown and recreates it in `startAllServices()`.
 - Source files may contain older mojibake comments from prior encoding issues. Avoid touching unrelated comment blocks unless necessary.
+- Command deduplication is process-lifetime only, has a 1,024-ID capacity, and
+  does not survive restart.
+- Navigation arrival and physical turn completion are not observed; the
+  canonical result records dispatch rather than physical completion.
+- The current Demo does not use autonomous navigation.
+- Android has no Resident selector UI and does not yet publish the full
+  canonical ASR-final event with synchronized frame paths.
+- Media is intentionally limited to two bundled exercise IDs; arbitrary URLs,
+  filesystem paths, and content URIs are rejected.
+- Lint retains one pre-existing ChromeOS camera hardware finding and 23
+  warnings.
+
+## Current Verification Milestone
+
+- JVM tests: `36/36 PASS`.
+- Android build: `PASS`.
+- Real Temi audible/callback-grounded TTS: `PASS`.
+- Duplicate TTS and invalid-motion rejection: `PASS`.
+- Hand video, leg video, stop/cancel, unknown-media rejection: `PASS`.
+- AI6 x LAB606 media integration, duplicate suppression, Resident scenarios,
+  TTS regression, and real `.236` connectivity:
+  `CROSS_MACHINE_MEDIA_MILESTONE=PASS`.
+
+LAB606 owns Android/device execution. AI6 owns Resident resolution, care
+context, Hermes, Bridge, memory, trace, and action generation/validation.
 
 ## Git and Workspace Notes
 
-- `F:\sdk` has unrelated changes from the broader SDK workspace. Do not reset or clean it.
-- `F:\sdk\TemiAgent` is the active working copy used for implementation and robot deployment.
+- `F:\sdk` can contain unrelated changes from the broader SDK workspace. Do not reset or clean it.
+- Work may use a dedicated Git worktree. Always confirm the Git top level,
+  branch, HEAD, and `git status --short` before editing.
 - The active Hermes command contract is `temi/{robot_id}/cmd/request` -> Android execution -> `temi/{robot_id}/cmd/result`. The legacy `temi/action/*` topics are still subscribed for manual scripts and the original backend.
 - The Android app still publishes `temi/event/asr` as a text-only compatibility event. Visual Hermes events require a PC-side frame assembler to publish `temi/{robot_id}/asr/final` with frame paths under the shared Temi directory.
-- Endpoint rule: preserve both `192.168.50.233` and `192.168.50.236` in source defaults, examples, and local deployment notes unless the user explicitly says the network topology changed.
-- `F:\TemiAgent` is the separate GitHub/backup working tree. If asked to push, sync `F:\sdk\TemiAgent` into `F:\TemiAgent` while preserving `F:\TemiAgent\.git` and excluding local/build artifacts.
+- `F:\TemiAgent` was historically used as a separate GitHub/backup working
+  tree. Do not reuse the old split-tree procedure unless the current checkout
+  and Git ownership have been verified explicitly.
 - Do not commit `local.properties`, `.gradle`, `.idea`, `build`, APK files, cache folders, or debug frames.
 
-Recommended sync command for the GitHub working tree:
+Historical split-tree sync command, only after verifying that this layout is
+still intentionally in use:
 
 ```powershell
 robocopy F:\sdk\TemiAgent F:\TemiAgent /MIR /XD .git .gradle .idea build .venv venv __pycache__ .pytest_cache debug_frames /XF local.properties *.apk *.ap_ *.dex *.class /R:2 /W:2
