@@ -95,8 +95,8 @@ class CrossServiceContractSchemaTests(unittest.TestCase):
         }
         self.assert_schema("temi_command_request.schema.json", payload)
 
-    def test_video_command_legal_boundary_and_illegal(self):
-        legal = {
+    def video_command(self, **overrides):
+        payload = {
             "schema_version": "1.1",
             "message_type": "video.command",
             "command_id": "req_video_001",
@@ -105,16 +105,63 @@ class CrossServiceContractSchemaTests(unittest.TestCase):
             "robot_id": "temi-01",
             "resident_id": "resident_father",
             "action": "play_video",
+            "execution_class": "serialized_execution",
+            "target_playback_session_id": None,
             "video_id": "exercise_upper_body_01",
             "parameters": {"start_position_ms": 0},
             "source": "hermes_temi_bridge",
             "timestamp": "2026-07-26T10:01:00Z",
         }
-        boundary = {**legal, "action": "stop_video", "parameters": {}}
-        illegal = {**legal, "action": "seek_video"}
-        self.assert_schema("temi_command_request.schema.json", legal)
-        self.assert_schema("temi_command_request.schema.json", boundary)
-        self.assert_schema("temi_command_request.schema.json", illegal, False)
+        payload.update(overrides)
+        return payload
+
+    def video_result(self, **overrides):
+        payload = {
+            "schema_version": "1.1",
+            "message_type": "video.command_result",
+            "command_id": "req_video_001",
+            "request_id": "req_video_001",
+            "event_id": "evt_video_001",
+            "robot_id": "temi-01",
+            "command_action": "play_video",
+            "video_id": "exercise_upper_body_01",
+            "status": "started",
+            "terminal": False,
+            "playback_session_id": "session_video_001",
+            "target_playback_session_id": None,
+            "active_playback_session_id": None,
+            "playback_state": "playing",
+            "cancelled_by_command_id": None,
+            "cancel_reason": None,
+            "actor": "remote_command",
+            "result_delivery": "original",
+            "error_code": None,
+            "error_message": None,
+            "timestamp": "2026-07-26T10:01:01Z",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_video_play_is_serialized_and_controls_target_active_session(self):
+        play = self.video_command()
+        pause = self.video_command(
+            command_id="req_pause_001",
+            request_id="req_pause_001",
+            action="pause_video",
+            execution_class="active_playback_control",
+            target_playback_session_id="session_video_001",
+            parameters={},
+        )
+        invalid_play_class = self.video_command(execution_class="active_playback_control")
+        invalid_control_target = self.video_command(
+            action="stop_video",
+            execution_class="active_playback_control",
+            target_playback_session_id=None,
+        )
+        self.assert_schema("temi_command_request.schema.json", play)
+        self.assert_schema("temi_command_request.schema.json", pause)
+        self.assert_schema("temi_command_request.schema.json", invalid_play_class, False)
+        self.assert_schema("temi_command_request.schema.json", invalid_control_target, False)
 
     def test_legacy_command_result_remains_valid(self):
         payload = {
@@ -127,30 +174,146 @@ class CrossServiceContractSchemaTests(unittest.TestCase):
         }
         self.assert_schema("temi_command_result.schema.json", payload)
 
-    def test_video_result_legal_boundary_and_illegal(self):
-        legal = {
-            "schema_version": "1.1",
-            "message_type": "video.command_result",
-            "command_id": "req_video_001",
-            "request_id": "req_video_001",
-            "event_id": "evt_video_001",
-            "robot_id": "temi-01",
-            "video_id": "exercise_upper_body_01",
-            "status": "started",
-            "error_code": None,
-            "error_message": None,
-            "timestamp": "2026-07-26T10:01:01Z",
+    def test_video_play_lifecycle_has_nonterminal_and_terminal_results(self):
+        accepted = self.video_result(status="accepted", playback_state=None)
+        started = self.video_result()
+        completed = self.video_result(status="completed", terminal=True, playback_state="completed")
+        invalid_terminal = self.video_result(status="started", terminal=True)
+        self.assert_schema("temi_command_result.schema.json", accepted)
+        self.assert_schema("temi_command_result.schema.json", started)
+        self.assert_schema("temi_command_result.schema.json", completed)
+        self.assert_schema("temi_command_result.schema.json", invalid_terminal, False)
+
+    def test_pause_and_resume_are_terminal_commands_without_terminating_play(self):
+        pause = self.video_result(
+            command_id="req_pause_001",
+            request_id="req_pause_001",
+            command_action="pause_video",
+            status="succeeded",
+            terminal=True,
+            target_playback_session_id="session_video_001",
+            playback_state="paused",
+        )
+        resume = self.video_result(
+            command_id="req_resume_001",
+            request_id="req_resume_001",
+            command_action="resume_video",
+            status="succeeded",
+            terminal=True,
+            target_playback_session_id="session_video_001",
+            playback_state="playing",
+        )
+        invalid_old_status = {**pause, "status": "paused"}
+        self.assert_schema("temi_command_result.schema.json", pause)
+        self.assert_schema("temi_command_result.schema.json", resume)
+        self.assert_schema("temi_command_result.schema.json", invalid_old_status, False)
+
+    def test_remote_stop_has_terminal_control_and_linked_play_cancellation(self):
+        stop_result = self.video_result(
+            command_id="req_stop_001",
+            request_id="req_stop_001",
+            command_action="stop_video",
+            status="succeeded",
+            terminal=True,
+            target_playback_session_id="session_video_001",
+            playback_state="cancelled",
+        )
+        play_cancelled = self.video_result(
+            status="cancelled",
+            terminal=True,
+            playback_state="cancelled",
+            cancelled_by_command_id="req_stop_001",
+            cancel_reason="remote_stop",
+        )
+        self.assert_schema("temi_command_result.schema.json", stop_result)
+        self.assert_schema("temi_command_result.schema.json", play_cancelled)
+
+    def test_local_stop_and_restart_reconciliation_are_not_fake_remote_commands(self):
+        local_stop = self.video_result(
+            status="cancelled",
+            terminal=True,
+            playback_state="cancelled",
+            cancel_reason="local_user_stop",
+            actor="local_user",
+        )
+        restart = self.video_result(
+            status="cancelled",
+            terminal=True,
+            playback_state="cancelled",
+            cancel_reason="app_process_restart",
+            actor="app_process",
+            result_delivery="restart_reconciliation",
+        )
+        fake_remote_link = {**local_stop, "cancelled_by_command_id": "req_stop_fake"}
+        self.assert_schema("temi_command_result.schema.json", local_stop)
+        self.assert_schema("temi_command_result.schema.json", restart)
+        self.assert_schema("temi_command_result.schema.json", fake_remote_link, False)
+
+    def test_concurrent_play_rejection_identifies_active_session(self):
+        rejected = self.video_result(
+            command_id="req_video_002",
+            request_id="req_video_002",
+            status="rejected",
+            terminal=True,
+            playback_session_id=None,
+            active_playback_session_id="session_video_001",
+            playback_state=None,
+            error_code="MEDIA_SESSION_ACTIVE",
+            error_message="Another playback session is active.",
+        )
+        missing_active_session = {**rejected, "active_playback_session_id": None}
+        leaked_active_session = self.video_result(active_playback_session_id="session_other")
+        self.assert_schema("temi_command_result.schema.json", rejected)
+        self.assert_schema("temi_command_result.schema.json", missing_active_session, False)
+        self.assert_schema("temi_command_result.schema.json", leaked_active_session, False)
+
+    def test_duplicate_delivery_reuses_active_or_terminal_session_result(self):
+        active_reference = self.video_result(result_delivery="active_reference")
+        cached_terminal = self.video_result(
+            status="completed",
+            terminal=True,
+            playback_state="completed",
+            result_delivery="cached_replay",
+        )
+        self.assert_schema("temi_command_result.schema.json", active_reference)
+        self.assert_schema("temi_command_result.schema.json", cached_terminal)
+        self.assert_schema(
+            "temi_command_result.schema.json",
+            self.video_result(result_delivery="cached_replay"),
+            False,
+        )
+
+    def test_media_error_allowlist_is_complete_and_used_by_failed_results(self):
+        common = json.loads(
+            (SCHEMA_DIR / "cross_service_common.schema.json").read_text(encoding="utf-8")
+        )
+        required = {
+            "MEDIA_SESSION_ACTIVE",
+            "MEDIA_SESSION_NOT_FOUND",
+            "MEDIA_SESSION_NOT_PLAYING",
+            "MEDIA_SESSION_NOT_PAUSED",
+            "VIDEO_ID_NOT_ALLOWED",
+            "MEDIA_CONTROL_CONFLICT",
+            "UNSUPPORTED_MEDIA_ACTION",
+            "APP_PROCESS_RESTART",
+            "LOCAL_USER_STOP",
         }
-        boundary = {
-            **legal,
-            "status": "failed",
+        self.assertTrue(required.issubset(common["$defs"]["mediaErrorCode"]["enum"]))
+        restart_failure = self.video_result(
+            status="failed",
+            terminal=True,
+            playback_state="failed",
+            actor="app_process",
+            result_delivery="restart_reconciliation",
+            error_code="APP_PROCESS_RESTART",
+            error_message="Playback cannot resume after application restart.",
+        )
+        legacy_media_error = {
+            **restart_failure,
             "error_code": "invalid_video_state",
-            "error_message": "Video is not active.",
         }
-        illegal = {**legal, "status": "failed"}
-        self.assert_schema("temi_command_result.schema.json", legal)
-        self.assert_schema("temi_command_result.schema.json", boundary)
-        self.assert_schema("temi_command_result.schema.json", illegal, False)
+        self.assert_schema("temi_command_result.schema.json", restart_failure)
+        self.assert_schema("temi_command_result.schema.json", legacy_media_error, False)
 
     def test_care_report_legal_boundary_and_illegal(self):
         legal = {

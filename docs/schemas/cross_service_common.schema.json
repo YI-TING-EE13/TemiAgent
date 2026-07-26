@@ -17,7 +17,32 @@
         "report_no_records",
         "report_partial_data",
         "report_delivery_failed",
-        "internal_error"
+        "internal_error",
+        "MEDIA_SESSION_ACTIVE",
+        "MEDIA_SESSION_NOT_FOUND",
+        "MEDIA_SESSION_NOT_PLAYING",
+        "MEDIA_SESSION_NOT_PAUSED",
+        "VIDEO_ID_NOT_ALLOWED",
+        "MEDIA_CONTROL_CONFLICT",
+        "UNSUPPORTED_MEDIA_ACTION",
+        "APP_PROCESS_RESTART",
+        "LOCAL_USER_STOP",
+        "INTERNAL_ERROR"
+      ]
+    },
+    "mediaErrorCode": {
+      "type": "string",
+      "enum": [
+        "MEDIA_SESSION_ACTIVE",
+        "MEDIA_SESSION_NOT_FOUND",
+        "MEDIA_SESSION_NOT_PLAYING",
+        "MEDIA_SESSION_NOT_PAUSED",
+        "VIDEO_ID_NOT_ALLOWED",
+        "MEDIA_CONTROL_CONFLICT",
+        "UNSUPPORTED_MEDIA_ACTION",
+        "APP_PROCESS_RESTART",
+        "LOCAL_USER_STOP",
+        "INTERNAL_ERROR"
       ]
     },
     "nullableErrorCode": {

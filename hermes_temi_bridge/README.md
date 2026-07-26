@@ -74,6 +74,9 @@ Temi Action Viewer / Video Action Tester
   runtime schema 與 schema tests，但 producer、consumer 與 service integration 尚未實作。
 - Video v1.1 沿用 `cmd/request`/`cmd/result` topic。Hermes video action 不在目前
   `action_validator.py` allowlist，因此 Bridge 尚不能從 Hermes output 產生 video command。
+- Video v1.1 保留 `play_video`、`pause_video`、`resume_video`、`stop_video`。Play 是
+  serialized execution；controls 只有完成 schema、semantic validator 與 active-session
+  target validation 後才可優先處理。既有 generic robot `stop` 不具 media session 語意。
 
 ## Bridge 設計檢視
 
@@ -251,6 +254,11 @@ duplicate_event_ignored
 
 `seq` is monotonic within each event timeline. `duration_ms` on a stage record means that stage's duration; `event_completed.payload.total_duration_ms` is the whole event duration. `command_result_received` may arrive later and is appended to the same event timeline.
 
+Video v1.1 不新增 trace stage。後續 result consumer 必須在既有
+`command_result_received.payload` 保留 `command_action`、`terminal`、三種 session ID、
+`playback_state`、`result_delivery`、`cancelled_by_command_id`、`cancel_reason` 與 `actor`。
+目前 handler 尚未做 v1.1 semantic validation；不得把 raw trace persistence 當成完整支援。
+
 All payloads pass through the shared sanitizer in `logging_utils.py`. Hashes use SHA-256. Excerpts use `TRACE_MAX_FIELD_CHARS` and include `truncated=true|false`. Summary mode records prompt/raw output/care context only as length/hash/excerpt; full debug mode is required to store full prompt, full care_context, and full raw Hermes output. Image bytes are never stored; traces only record paths, frame metadata, and validation result.
 
 Failure records include `failed_stage`、`error_code`、`error_message`、`fallback_generated`、`fallback_command_published`、`fallback_command_id` even when a fallback is not produced. The Bridge only records Hermes' explicit JSON fields such as `reasoning_summary`、`cognitive_state`、`risk_reason`、`next_step`、`actions`; it does not record or claim hidden chain-of-thought.
@@ -347,3 +355,5 @@ Identity、video 與 care report 的欄位、topic、correlation、privacy 與 m
 - Bridge 只支援 Demo／研究照護流程，不提供醫療診斷或真實緊急通報。
 - Bridge runtime 尚未 subscribe/publish 新 identity 或 care-report topics，也尚未處理
   video v1.1 subtype；本階段只有 contract 與 hardware-free schema validation。
+- Bridge 現有 `event_id` TTL cache 不是 Android command idempotency store。Media duplicate、
+  terminal-result replay 與 process-restart reconciliation 必須由 App 持久層實作並另行驗證。

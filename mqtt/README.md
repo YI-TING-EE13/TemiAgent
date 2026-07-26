@@ -33,6 +33,9 @@ Video command/result 沿用 `cmd/request` 與 `cmd/result`，並以 `schema_vers
 與 `message_type` 區分。現有 v1.0 command route 保持不變。完整 owner、direction、
 correlation 與 rollout gate 見
 [canonical cross-service contract](../docs/architecture/canonical_cross_service_contract.md)。
+Play 與 active-session controls 不建立不同 topic：play 保持 serialized；pause/resume/stop
+只有在 consumer 完成 schema、semantic 與 target-session validation 後才可優先處理。
+MQTT arrival 或 timestamp 本身不授權 queue bypass，也不取代 App monotonic ordering。
 
 Reserved topic，尚未確認 active producer／consumer：
 

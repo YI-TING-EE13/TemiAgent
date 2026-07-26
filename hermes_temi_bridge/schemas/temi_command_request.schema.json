@@ -39,6 +39,8 @@
         "robot_id",
         "resident_id",
         "action",
+        "execution_class",
+        "target_playback_session_id",
         "video_id",
         "parameters",
         "source",
@@ -56,14 +58,41 @@
           "type": "string",
           "enum": ["play_video", "pause_video", "resume_video", "stop_video"]
         },
+        "execution_class": {
+          "type": "string",
+          "enum": ["serialized_execution", "active_playback_control"]
+        },
+        "target_playback_session_id": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
         "video_id": { "type": "string", "minLength": 1 },
-        "parameters": { "type": "object" },
+        "parameters": { "type": "object", "maxProperties": 16 },
         "source": {
           "type": "string",
           "enum": ["hermes_temi_bridge", "temi_app_manual", "remote_operator"]
         },
         "timestamp": { "type": "string", "minLength": 1 }
       },
+      "allOf": [
+        {
+          "if": { "properties": { "action": { "const": "play_video" } } },
+          "then": {
+            "properties": {
+              "execution_class": { "const": "serialized_execution" },
+              "target_playback_session_id": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "execution_class": { "const": "active_playback_control" },
+              "target_playback_session_id": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      ],
       "additionalProperties": false
     }
   }

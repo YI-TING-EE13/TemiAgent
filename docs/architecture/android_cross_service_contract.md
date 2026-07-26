@@ -36,21 +36,53 @@ source，本文件不代表 Android 功能已實作或通過真機驗證。
 
 ## Video state 與 result
 
-App 必須以 `request_id` 去重，並使用 allowlisted `video_id` 對應 bundled/deployed media。
-App 不得執行 payload 中的 URL 或 filesystem path。建議的最小 state transition：
+App 必須以 `command_id` 去重，並確認 `command_id == request_id`。只使用 allowlisted
+`video_id` 對應 bundled/deployed media，不執行 payload 中的 URL 或 filesystem path。
+在任何 player side effect 前依序完成：schema、robot/resident/correlation、action/video
+allowlist、execution class、target session 與 state transition validation。
+
+`play_video` 必須是 `serialized_execution` 並進一般 command queue。Pause/resume/stop
+必須是 `active_playback_control`，而且只有完成上述 validation、確認 target 是目前 active
+session 且 `video_id` 相符後，才可優先控制現有播放。Generic robot `stop` 不等於
+`stop_video`。
+
+App 接受 play 時建立新的 `playback_session_id`；producer 不建立。最小 state machine：
 
 ```text
-idle --play_video--> accepted --> started --> completed
-playing --pause_video--> paused
-paused --resume_video--> resumed
-playing|paused --stop_video--> stopped
-invalid transition --> rejected|failed + invalid_video_state
+idle --play_video--> accepted(nonterminal) --> started/playing(nonterminal)
+playing --pause_video--> pause command succeeded(terminal), session paused
+paused --resume_video--> resume command succeeded(terminal), session playing
+playing|paused --stop_video--> stop command succeeded(terminal)
+                            + original play cancelled(terminal, remote_stop)
+playing --natural end--> original play completed(terminal)
+invalid transition --> command rejected|failed(terminal)
 ```
 
-App 可以為同一 request 發布多個 lifecycle results。每個 result 必須原樣回傳
-`command_id`、`request_id`、`event_id`、`robot_id` 與 `video_id`。`rejected` 或 `failed`
-必須提供 allowlisted error code 與安全 error message；其他 status 的 error fields 必須為
-null。
+同一 play 的所有 lifecycle results 使用同一 session ID。Pause/resume 不終止原 play；
+remote stop 必須發布 stop command `succeeded` 及原 play `cancelled`，後者以
+`cancelled_by_command_id` 指向 stop command。本機 Stop 只發布原 play cancellation：
+`actor=local_user`、`cancel_reason=local_user_stop`、link=null，不建立假的 remote result。
+本機開始播放僅記 App telemetry，不發布 command result。
+
+### Ordering、duplicate 與 process restart
+
+- 同一 active session 的 controls 依 validation 完成後的本機 monotonic order 執行；stale
+  或互斥控制回 `MEDIA_CONTROL_CONFLICT`，不可依 MQTT timestamp 回溯重排。
+- Active session 存在時，新的 play 立即回 `MEDIA_SESSION_ACTIVE` 與
+  `active_playback_session_id`；不 queue、不 replace、不建立新 session。
+- 相同 command ID、相同 payload 不得重播。Active duplicate 使用
+  `result_delivery=active_reference` 回相同 session/目前結果；terminal duplicate 使用
+  `cached_replay` 重送保存結果。相同 ID、不同 payload 回 conflict。
+- 必須持久保存 command/request/event/session/video/action、canonical payload digest、目前
+  state 與最後 result，且保存時間至少涵蓋 backend retry window。資料不可含 media bytes、
+  private path、URL 或 raw logs。
+- Process restart 不自動續播。啟動時將先前 active play reconciliation 為 terminal
+  `cancelled`（`cancel_reason=app_process_restart`）或 `failed`（error
+  `APP_PROCESS_RESTART`），保存該 terminal result，之後 duplicate retry 只能 replay。
+
+每個 result 原樣回傳 correlation fields，並包含 action、terminal、session IDs、state、
+actor 與 delivery mode。`rejected`/`failed` 使用 media error allowlist；其他 result 的 error
+fields 為 null。Late nonterminal callback 不得覆蓋 terminal session。
 
 ## Identity 與 resident data isolation
 
@@ -75,8 +107,10 @@ App 顯示 report 後才可建立 `viewed`。只有明確的使用者確認操�
 ## LAB606 implementation checklist
 
 - 保留 v1.0 command/result JVM tests，新增 v1.1 legal/boundary/invalid parser tests。
-- 新增 player state transition、unknown video ID、duplicate request、late callback、conflict
-  terminal result tests。
+- 新增 serialized play、validated control bypass、target mismatch、generic stop isolation、
+  concurrent play rejection 與 unknown video ID tests。
+- 新增 pause/resume 不終止 play、remote/local stop、duplicate active/terminal replay、late
+  callback、process restart reconciliation 與 persistence tests。
 - 新增 unknown identity 與 father/mother cache isolation tests。
 - 新增 report completeness、unknown identity、date not found、unsupported version tests。
 - 新增 viewed/acknowledged user-action tests與 publish retry/idempotency tests。

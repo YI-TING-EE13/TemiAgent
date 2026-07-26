@@ -49,7 +49,8 @@ tests 同時完成。
 - `request_id` 由 command 或 report interaction 的入口 producer 產生。同一 logical
   request 的 retry 必須重用 `request_id`；不同操作必須使用新值。
 - Video v1.1 同時保留 `command_id` 供既有 command correlation。Publisher MUST 令
-  `command_id == request_id`；subscriber 若兩者不同，必須以 `request_conflict` 拒絕。
+  `command_id == request_id`；subscriber 若兩者不同，必須以
+  `MEDIA_CONTROL_CONFLICT` 拒絕。
 - Video result MUST 原樣回傳 `request_id`、`command_id`、`event_id` 與 `video_id`。
   一個 request 可依序產生多個 lifecycle results。
 - `report_id` 由 report producer 產生。Interaction result 必須原樣回傳 `report_id` 與
@@ -98,16 +99,34 @@ allowlisted logical ID；payload 不得包含 URL、absolute path、media bytes 
 `parameters` 是 bounded object；每個參數需由後續 Android contract revision 明確列入
 allowlist 才能執行。
 
+`execution_class` 定義 ordering，不建立新 topic：
+
+| Action | `execution_class` | Session target | Ordering |
+|---|---|---|---|
+| `play_video` | `serialized_execution` | `target_playback_session_id=null` | 保留在一般 serialized command queue；不可插隊 |
+| pause/resume/stop | `active_playback_control` | 必須指定非空 `target_playback_session_id` | 只有通過 schema、semantic/Action Validator 與 active-session target validation 後，才可繞過 serialized queue |
+
+繞過 queue 只代表控制現有播放，不代表繞過 Bridge safety boundary。Generic robot action
+`stop` 的既有語意與 schema 不變，也不能代替 `stop_video`。App 在接受新的 play 後建立
+唯一 `playback_session_id`；request producer 不得預先指定該 ID。`command_id == request_id`
+仍是 transport correlation invariant，兩者不是 playback session ID。
+Control result 的 `playback_session_id` 與 `target_playback_session_id` 必須相等；此欄位
+equality 與 request/session lookup 一樣由 semantic validation 執行。
+
 合法範例：
 
 ```json
-{"schema_version":"1.1","message_type":"video.command","command_id":"req_video_001","request_id":"req_video_001","event_id":"evt_video_001","robot_id":"temi-01","resident_id":"resident_father","action":"play_video","video_id":"exercise_upper_body_01","parameters":{"start_position_ms":0},"source":"hermes_temi_bridge","timestamp":"2026-07-26T10:01:00Z"}
+{"schema_version":"1.1","message_type":"video.command","command_id":"req_video_001","request_id":"req_video_001","event_id":"evt_video_001","robot_id":"temi-01","resident_id":"resident_father","action":"play_video","execution_class":"serialized_execution","target_playback_session_id":null,"video_id":"exercise_upper_body_01","parameters":{"start_position_ms":0},"source":"hermes_temi_bridge","timestamp":"2026-07-26T10:01:00Z"}
 ```
 
-邊界範例：`stop_video` 可使用空的 `parameters={}`，但仍必須提供 `video_id`。
+邊界範例：`stop_video` 使用 `execution_class=active_playback_control`、目前 active session
+ID 與空的 `parameters={}`，且仍提供與 session 相符的 `video_id`。
 
-非法範例：`action=seek_video`、缺少 `resident_id`，或 `command_id != request_id`。前兩項
-由 schema 拒絕；ID equality 由 producer/consumer semantic validation 拒絕。
+非法範例：play 使用 control execution class、control 缺少 target session、
+`action=seek_video`、缺少 `resident_id`，或 `command_id != request_id`。Schema 拒絕前四類；
+JSON Schema 無法比較兩個欄位，ID equality 由 publisher 與 subscriber semantic validation
+拒絕。Target session 不存在、不是目前 active session、`video_id` 不符或 state transition
+不合法，也必須在任何 player side effect 前拒絕。
 
 Hermes 目前不能輸出 video robot action：`hermes_action_output.schema.json` 與受保護的
 `action_validator.py` 沒有 video allowlist。本階段不得讓 Hermes 直接 publish v1.1
@@ -118,27 +137,61 @@ builder、Android contract 與 producer/consumer tests。
 
 Authority：`hermes_temi_bridge/schemas/temi_command_result.schema.json`。
 
-Lifecycle status：`accepted`、`started`、`paused`、`resumed`、`completed`、`stopped`、
-`rejected`、`failed`。非 error status 的 `error_code` 與 `error_message` 必須為 `null`；
-`rejected` 或 `failed` 必須提供 allowlisted `error_code` 與非空 message。
+Command status 是 `accepted`、`started`、`succeeded`、`completed`、`cancelled`、
+`rejected`、`failed`；它與 `playback_state` 分離。`terminal=false` 只允許 play 的
+`accepted`/`started`，其他結果均為 terminal。非 error status 的 error fields 為 null；
+`rejected`/`failed` 必須使用 media error allowlist。
+
+| Command | Result lifecycle | Playback session effect |
+|---|---|---|
+| play | `accepted` → `started` → `completed` / `cancelled` / `failed` | 同一 `playback_session_id`；只有最後一筆 terminal |
+| pause | terminal `succeeded` / `rejected` / `failed` | 成功後 state=`paused`；原 play 仍 active、非 terminal |
+| resume | terminal `succeeded` / `rejected` / `failed` | 成功後 state=`playing`；原 play 仍 active、非 terminal |
+| stop | terminal `succeeded` / `rejected` / `failed` | 成功時另發布原 play 的 terminal `cancelled` |
+
+Remote stop 產生兩筆結果：stop command 自身 `succeeded`，以及原 play 的
+`status=cancelled`、`cancel_reason=remote_stop`、`cancelled_by_command_id=<stop command>`。
+本機使用者停止只終止原 play，使用 `actor=local_user`、
+`cancel_reason=local_user_stop`、`cancelled_by_command_id=null`；不得捏造 remote stop
+command result。本機發起的 play 是 App telemetry，不使用 `cmd/result` 假裝收到 remote
+command。
 
 合法範例：
 
 ```json
-{"schema_version":"1.1","message_type":"video.command_result","command_id":"req_video_001","request_id":"req_video_001","event_id":"evt_video_001","robot_id":"temi-01","video_id":"exercise_upper_body_01","status":"started","error_code":null,"error_message":null,"timestamp":"2026-07-26T10:01:01Z"}
+{"schema_version":"1.1","message_type":"video.command_result","command_id":"req_video_001","request_id":"req_video_001","event_id":"evt_video_001","robot_id":"temi-01","command_action":"play_video","video_id":"exercise_upper_body_01","status":"started","terminal":false,"playback_session_id":"session_video_001","target_playback_session_id":null,"active_playback_session_id":null,"playback_state":"playing","cancelled_by_command_id":null,"cancel_reason":null,"actor":"remote_command","result_delivery":"original","error_code":null,"error_message":null,"timestamp":"2026-07-26T10:01:01Z"}
 ```
 
-邊界範例：
+邊界範例（同時有 active session 時拒絕新的 play，不 queue、不 replace）：
 
 ```json
-{"schema_version":"1.1","message_type":"video.command_result","command_id":"req_video_001","request_id":"req_video_001","event_id":"evt_video_001","robot_id":"temi-01","video_id":"exercise_upper_body_01","status":"failed","error_code":"invalid_video_state","error_message":"Video is not active.","timestamp":"2026-07-26T10:01:02Z"}
+{"schema_version":"1.1","message_type":"video.command_result","command_id":"req_video_002","request_id":"req_video_002","event_id":"evt_video_002","robot_id":"temi-01","command_action":"play_video","video_id":"exercise_upper_body_01","status":"rejected","terminal":true,"playback_session_id":null,"target_playback_session_id":null,"active_playback_session_id":"session_video_001","playback_state":null,"cancelled_by_command_id":null,"cancel_reason":null,"actor":"remote_command","result_delivery":"original","error_code":"MEDIA_SESSION_ACTIVE","error_message":"Another playback session is active.","timestamp":"2026-07-26T10:01:02Z"}
 ```
 
-非法範例：`status=failed` 且 `error_code=null`；schema 必須拒絕。
+非法範例：pause 使用非 terminal result、舊的 `status=paused`、local stop 帶有假的
+`cancelled_by_command_id`，或 `MEDIA_SESSION_ACTIVE` 沒有 active session ID；schema 必須拒絕。
 
-Result ordering 由 publisher timestamp 與 local monotonic sequence（若實作者增加）判定。
-Consumer 不得因 late `accepted` 將 `completed` 狀態回退。重複的相同 status 可視為
-idempotent delivery；同一 request 的衝突 terminal status 必須記錄 `request_conflict`。
+## Ordering、duplicate 與 restart
+
+- 同一 active session 的 controls 依 App 接收並驗證完成後的 monotonic order 套用；互斥或
+  stale control 回 `MEDIA_CONTROL_CONFLICT`，不得以 MQTT timestamp 重排已執行 action。
+- 同時只能有一個 remote playback session。新的 play 遇到 active session 必須立即拒絕，
+  不排隊、不取代，也不建立新 session。
+- App 以 `command_id` 為 idempotency key，並檢查同 ID payload digest。相同 command 不得
+  重播或建立新 session；不同 payload 使用同 ID 回 `MEDIA_CONTROL_CONFLICT`。
+- Active duplicate 回目前結果與相同 session，`result_delivery=active_reference`；terminal
+  duplicate 重送已保存 terminal result，`result_delivery=cached_replay`。不得建立第三個
+  correlation ID。
+- App 必須持久保存足以跨 process restart 去重的 command/request/event/session/video/action、
+  payload digest、session state 與最後結果。Process restart 不自動續播；先前 active play
+  必須以 `cancel_reason=app_process_restart` 產生 terminal cancelled，或以
+  `APP_PROCESS_RESTART` 產生 failed，並保存 terminal result，避免 backend retry 重新播放。
+- `result_delivery=restart_reconciliation` 標示 restart 補發。持久資料不得包含 media bytes、
+  URL、private path 或 raw log。
+
+Trace 沿用 `command_result_received`，不增加 record type/topic。Trace payload 必須保留
+command/action、`terminal`、session IDs、playback state、result delivery 與 cancellation
+link；consumer 不得因 late nonterminal result 將 terminal session 回退。
 
 ## Care report v1.0
 
@@ -197,6 +250,9 @@ schema 必須拒絕。
 
 Authority：`hermes_temi_bridge/schemas/cross_service_common.schema.json`。
 
+小寫 codes 保留給既有 identity/report 與 pre-v1.1 compatibility；video v1.1
+`rejected`/`failed` 只接受下列大寫 media allowlist。
+
 | Code | Meaning |
 |---|---|
 | `invalid_message` | Payload 無法通過 schema 或 semantic validation |
@@ -211,6 +267,16 @@ Authority：`hermes_temi_bridge/schemas/cross_service_common.schema.json`。
 | `report_partial_data` | 至少一個必要 data source 缺失或讀取失敗 |
 | `report_delivery_failed` | Report 無法傳送給指定 consumer |
 | `internal_error` | Receiver 內部失敗且沒有更精確 allowlisted code |
+| `MEDIA_SESSION_ACTIVE` | 新 play 被現有 active session 阻擋；附 active session ID |
+| `MEDIA_SESSION_NOT_FOUND` | Control target 不存在或已終止 |
+| `MEDIA_SESSION_NOT_PLAYING` | Pause/stop 需要 playing session，但 state 不符 |
+| `MEDIA_SESSION_NOT_PAUSED` | Resume target 不是 paused |
+| `VIDEO_ID_NOT_ALLOWED` | Logical video ID 不在 App allowlist |
+| `MEDIA_CONTROL_CONFLICT` | ID/payload、control ordering 或 terminal state 衝突 |
+| `UNSUPPORTED_MEDIA_ACTION` | v1.1 不支援 action |
+| `APP_PROCESS_RESTART` | Restart reconciliation 選擇 failed 結果時使用 |
+| `LOCAL_USER_STOP` | 需要以 error 表示本機停止衝突時使用；正常 local cancellation 的 error fields 仍為 null |
+| `INTERNAL_ERROR` | Media handler 沒有更精確 code 的內部失敗 |
 
 Error message 不得包含 secret、private path、raw care payload 或 stack trace。Transport
 retry 只能針對明確 retryable failure 且必須 bounded；schema error、unknown resident 與
@@ -222,6 +288,9 @@ request conflict 不得自動改寫後重試。
   properties；既有 Bridge serialization、Android parser 與 tests 不需改寫。
 - Video 使用 v1.1 discriminator。舊 Android 若不支援 v1.1，必須拒絕並回傳明確 error；
   publisher 不得 fallback 成 `speak` 或任意 legacy media action。
+- Starting commit `5c94cd3` 的 v1.1 `paused`/`resumed`/`stopped` result status 被本版的
+  terminal `succeeded` + `playback_state` 取代。該 subtype 尚未接入 runtime，因此採
+  pre-runtime schema refinement；實作者不得同時接受兩種 v1.1 語意。v1.0 完全不變。
 - 新 identity/report topics 不改變 ASR、abnormal、command 或 legacy topics。
 - MQTT 不使用 retained message。Deploy consumer validation 後才能 enable producer，
   rollback 時先 disable producer，再移除 consumer support。

@@ -32,8 +32,18 @@
         "request_id",
         "event_id",
         "robot_id",
+        "command_action",
         "video_id",
         "status",
+        "terminal",
+        "playback_session_id",
+        "target_playback_session_id",
+        "active_playback_session_id",
+        "playback_state",
+        "cancelled_by_command_id",
+        "cancel_reason",
+        "actor",
+        "result_delivery",
         "error_code",
         "error_message",
         "timestamp"
@@ -45,19 +55,67 @@
         "request_id": { "type": "string", "minLength": 1 },
         "event_id": { "type": "string", "minLength": 1 },
         "robot_id": { "type": "string", "minLength": 1 },
+        "command_action": {
+          "type": "string",
+          "enum": ["play_video", "pause_video", "resume_video", "stop_video"]
+        },
         "video_id": { "type": "string", "minLength": 1 },
         "status": {
           "type": "string",
           "enum": [
             "accepted",
             "started",
-            "paused",
-            "resumed",
+            "succeeded",
             "completed",
-            "stopped",
+            "cancelled",
             "rejected",
             "failed"
           ]
+        },
+        "terminal": { "type": "boolean" },
+        "playback_session_id": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "target_playback_session_id": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "active_playback_session_id": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "playback_state": {
+          "oneOf": [
+            { "type": "string", "enum": ["playing", "paused", "completed", "cancelled", "failed"] },
+            { "type": "null" }
+          ]
+        },
+        "cancelled_by_command_id": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "cancel_reason": {
+          "oneOf": [
+            { "type": "string", "enum": ["remote_stop", "local_user_stop", "app_process_restart"] },
+            { "type": "null" }
+          ]
+        },
+        "actor": {
+          "type": "string",
+          "enum": ["remote_command", "local_user", "app_process"]
+        },
+        "result_delivery": {
+          "type": "string",
+          "enum": ["original", "active_reference", "cached_replay", "restart_reconciliation"]
         },
         "error_code": {
           "$ref": "urn:temiagent:schema:cross-service-common:1.0#/$defs/nullableErrorCode"
@@ -72,11 +130,16 @@
       },
       "allOf": [
         {
+          "if": { "properties": { "status": { "enum": ["accepted", "started"] } } },
+          "then": { "properties": { "terminal": { "const": false } } },
+          "else": { "properties": { "terminal": { "const": true } } }
+        },
+        {
           "if": { "properties": { "status": { "enum": ["rejected", "failed"] } } },
           "then": {
             "properties": {
               "error_code": {
-                "$ref": "urn:temiagent:schema:cross-service-common:1.0#/$defs/errorCode"
+                "$ref": "urn:temiagent:schema:cross-service-common:1.0#/$defs/mediaErrorCode"
               },
               "error_message": { "type": "string", "minLength": 1, "maxLength": 500 }
             }
@@ -85,6 +148,161 @@
             "properties": {
               "error_code": { "type": "null" },
               "error_message": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "command_action": { "const": "play_video" } } },
+          "then": {
+            "properties": {
+              "target_playback_session_id": { "type": "null" },
+              "status": {
+                "enum": ["accepted", "started", "completed", "cancelled", "rejected", "failed"]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "target_playback_session_id": { "type": "string", "minLength": 1 },
+              "status": { "enum": ["succeeded", "rejected", "failed"] },
+              "terminal": { "const": true }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "accepted" } } },
+          "then": {
+            "properties": {
+              "playback_session_id": { "type": "string", "minLength": 1 },
+              "playback_state": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "started" } } },
+          "then": {
+            "properties": {
+              "playback_session_id": { "type": "string", "minLength": 1 },
+              "playback_state": { "const": "playing" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "completed" } } },
+          "then": {
+            "properties": {
+              "playback_session_id": { "type": "string", "minLength": 1 },
+              "playback_state": { "const": "completed" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "succeeded" } } },
+          "then": {
+            "properties": { "playback_session_id": { "type": "string", "minLength": 1 } },
+            "allOf": [
+              {
+                "if": { "properties": { "command_action": { "const": "pause_video" } } },
+                "then": { "properties": { "playback_state": { "const": "paused" } } }
+              },
+              {
+                "if": { "properties": { "command_action": { "const": "resume_video" } } },
+                "then": { "properties": { "playback_state": { "const": "playing" } } }
+              },
+              {
+                "if": { "properties": { "command_action": { "const": "stop_video" } } },
+                "then": { "properties": { "playback_state": { "const": "cancelled" } } }
+              }
+            ]
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "cancelled" } } },
+          "then": {
+            "properties": {
+              "command_action": { "const": "play_video" },
+              "playback_session_id": { "type": "string", "minLength": 1 },
+              "playback_state": { "const": "cancelled" },
+              "cancel_reason": {
+                "enum": ["remote_stop", "local_user_stop", "app_process_restart"]
+              }
+            },
+            "allOf": [
+              {
+                "if": { "properties": { "cancel_reason": { "const": "remote_stop" } } },
+                "then": {
+                  "properties": {
+                    "cancelled_by_command_id": { "type": "string", "minLength": 1 },
+                    "actor": { "const": "remote_command" }
+                  }
+                }
+              },
+              {
+                "if": { "properties": { "cancel_reason": { "const": "local_user_stop" } } },
+                "then": {
+                  "properties": {
+                    "cancelled_by_command_id": { "type": "null" },
+                    "actor": { "const": "local_user" }
+                  }
+                }
+              },
+              {
+                "if": { "properties": { "cancel_reason": { "const": "app_process_restart" } } },
+                "then": {
+                  "properties": {
+                    "cancelled_by_command_id": { "type": "null" },
+                    "actor": { "const": "app_process" },
+                    "result_delivery": { "const": "restart_reconciliation" }
+                  }
+                }
+              }
+            ]
+          },
+          "else": {
+            "properties": {
+              "cancelled_by_command_id": { "type": "null" },
+              "cancel_reason": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": { "const": "rejected" },
+              "error_code": { "const": "MEDIA_SESSION_ACTIVE" }
+            },
+            "required": ["status", "error_code"]
+          },
+          "then": {
+            "properties": {
+              "playback_session_id": { "type": "null" },
+              "active_playback_session_id": { "type": "string", "minLength": 1 }
+            }
+          },
+          "else": {
+            "properties": { "active_playback_session_id": { "type": "null" } }
+          }
+        },
+        {
+          "if": { "properties": { "result_delivery": { "const": "active_reference" } } },
+          "then": {
+            "properties": {
+              "command_action": { "const": "play_video" },
+              "status": { "enum": ["accepted", "started"] },
+              "terminal": { "const": false }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "result_delivery": { "const": "cached_replay" } } },
+          "then": { "properties": { "terminal": { "const": true } } }
+        },
+        {
+          "if": { "properties": { "result_delivery": { "const": "restart_reconciliation" } } },
+          "then": {
+            "properties": {
+              "terminal": { "const": true },
+              "actor": { "const": "app_process" }
             }
           }
         }

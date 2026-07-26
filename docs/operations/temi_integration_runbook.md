@@ -234,3 +234,13 @@ Identity、video lifecycle、care report 與 report interaction 目前只有 sch
 不得把上述 test 當成 Android、Hermes video tool、MQTT live flow、report generation 或
 real-device acceptance。實作與 rollout gate 見
 [canonical cross-service contract](../architecture/canonical_cross_service_contract.md)。
+
+Video v1.1 rollout 前必須另外保存以下 Android/AI6 evidence；本 contract-only 階段全部
+標記 `SKIPPED`，不得為了驗證文件啟動 robot 或 App：
+
+- serialized play 與通過三層 validation 後的 active-session control ordering；
+- play accepted/started/terminal lifecycle，以及 pause/resume 不終止原 play；
+- remote stop 的 control result 與 linked play cancellation；local stop 不捏造 remote result；
+- concurrent play rejection、active/terminal duplicate replay、process restart reconciliation；
+- AI6 request、Android receive/player callback、MQTT result 與既有
+  `command_result_received` trace 的 correlation/session ID 一致性。
