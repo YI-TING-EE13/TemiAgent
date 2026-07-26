@@ -28,6 +28,8 @@ from .hermes_client import (
 from .idempotency import TTLProcessedEventCache
 from .image_resolver import ImageValidationError, translate_frames, validate_image_file
 from .logging_utils import EventJsonlLogger, configure_logging
+from .media_contract import MediaContractError, build_media_command_request
+from .media_registry import MediaSessionRegistry
 from .memory_store import EventContext, MemoryActionError, StructuredMemoryStore
 from .mqtt_client import TemiMqttClient
 
@@ -55,6 +57,7 @@ class HermesTemiBridgeService:
         event_logger: EventJsonlLogger | None = None,
         memory_store: StructuredMemoryStore | None = None,
         care_context_builder: CareContextBuilder | None = None,
+        media_registry: MediaSessionRegistry | None = None,
     ):
         """Create a Bridge service with injectable clients for tests."""
         self.config = config
@@ -81,6 +84,7 @@ class HermesTemiBridgeService:
             if config.care_context_enabled
             else None
         )
+        self.media_registry = media_registry or MediaSessionRegistry()
 
     def start(self) -> None:
         """Start the MQTT runtime and block forever."""
@@ -781,20 +785,224 @@ class HermesTemiBridgeService:
             image_paths=image_paths,
         )
 
-    def handle_command_result(self, topic: str, payload: dict[str, Any]) -> None:
-        """Persist command result notifications for later inspection."""
+    def publish_media_play(
+        self,
+        *,
+        event_id: str,
+        robot_id: str,
+        resident_id: str,
+        video_id: str,
+        parameters: dict[str, Any] | None = None,
+        command_id: str | None = None,
+        timestamp: str | None = None,
+    ) -> dict[str, Any]:
+        """Publish one feature-gated serialized play request."""
+        self._require_media_v11(robot_id)
+        request = build_media_command_request(
+            event_id=event_id,
+            robot_id=robot_id,
+            resident_id=resident_id,
+            action="play_video",
+            video_id=video_id,
+            parameters=parameters,
+            command_id=command_id,
+            timestamp=timestamp,
+        )
+        return self._publish_media_request(request, originating_play_command_id=None)
+
+    def publish_media_control(
+        self,
+        *,
+        robot_id: str,
+        action: str,
+        parameters: dict[str, Any] | None = None,
+        command_id: str | None = None,
+        timestamp: str | None = None,
+    ) -> dict[str, Any]:
+        """Publish a control only for the known active playback session."""
+        self._require_media_v11(robot_id)
+        play_request = self.media_registry.active_play_request(robot_id)
+        session_id = self.media_registry.active_session_id(robot_id)
+        if play_request is None or session_id is None:
+            raise MediaContractError(
+                "MEDIA_SESSION_NOT_FOUND",
+                "cannot publish a media control before play acceptance",
+                details={"robot_id": robot_id, "action": action},
+            )
+        request = build_media_command_request(
+            event_id=play_request["event_id"],
+            robot_id=robot_id,
+            resident_id=play_request["resident_id"],
+            action=action,
+            video_id=play_request["video_id"],
+            target_playback_session_id=session_id,
+            parameters=parameters,
+            command_id=command_id,
+            timestamp=timestamp,
+        )
+        return self._publish_media_request(
+            request,
+            originating_play_command_id=play_request["command_id"],
+        )
+
+    def _publish_media_request(
+        self,
+        request: dict[str, Any],
+        *,
+        originating_play_command_id: str | None,
+    ) -> dict[str, Any]:
+        """Register, publish, and trace a validated media request."""
+        command_id = request["command_id"]
+        self.media_registry.register_published(request)
+        try:
+            self.mqtt_client.publish_command(request["robot_id"], request)
+        except Exception:
+            self.media_registry.unregister_unpublished(command_id)
+            raise
+        self.event_logger.write_trace(
+            event_id=request["event_id"],
+            robot_id=request["robot_id"],
+            source_type="video.command",
+            stage="command_request_published",
+            status="published",
+            component="bridge",
+            payload={
+                "command_status": "published",
+                "command_id": command_id,
+                "request_id": request["request_id"],
+                "command_action": request["action"],
+                "execution_class": request["execution_class"],
+                "target_playback_session_id": request["target_playback_session_id"],
+                "originating_play_command_id": originating_play_command_id,
+                "command_request": request,
+            },
+        )
+        return request
+
+    def handle_command_result(self, topic: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Strictly dispatch v1.0 and media v1.1 command results."""
+        event_id = str(payload.get("event_id") or "unknown_event")
+        robot_id = str(payload.get("robot_id") or _robot_id_from_topic(topic) or "unknown_robot")
+        schema_version = payload.get("schema_version")
+        if schema_version == "1.0":
+            self._trace_command_result(topic, payload, status=str(payload.get("status") or "received"))
+            return {"status": "recorded", "schema_version": "1.0"}
+
+        if schema_version != "1.1" or payload.get("message_type") != "video.command_result":
+            return self._reject_command_result(
+                topic,
+                payload,
+                "unsupported_schema_version",
+                "command result discriminator is not supported",
+            )
+        if not self.config.media_v11_enabled:
+            return self._reject_command_result(
+                topic,
+                payload,
+                "media_v11_disabled",
+                "MEDIA_V11_ENABLED is false",
+            )
+        topic_robot_id = _robot_id_from_topic(topic)
+        if topic_robot_id is None or topic_robot_id != robot_id:
+            return self._reject_command_result(
+                topic,
+                payload,
+                "MEDIA_CONTROL_CONFLICT",
+                "result robot_id does not match the MQTT topic",
+            )
+        try:
+            disposition = self.media_registry.consume_result(payload)
+        except MediaContractError as exc:
+            return self._reject_command_result(topic, payload, exc.code, str(exc), exc.details)
+        trace_payload = {
+            "topic": topic,
+            "command_id": payload["command_id"],
+            "request_id": payload["request_id"],
+            "command_action": payload["command_action"],
+            "terminal": payload["terminal"],
+            "playback_session_id": payload["playback_session_id"],
+            "target_playback_session_id": payload["target_playback_session_id"],
+            "active_playback_session_id": payload["active_playback_session_id"],
+            "playback_state": payload["playback_state"],
+            "cancelled_by_command_id": payload["cancelled_by_command_id"],
+            "cancel_reason": payload["cancel_reason"],
+            "actor": payload["actor"],
+            "result_delivery": payload["result_delivery"],
+            "result_disposition": disposition.disposition,
+            "side_effect_applied": disposition.side_effect_applied,
+            "originating_play_command_id": disposition.originating_play_command_id,
+            "command_result": payload,
+        }
+        self.event_logger.write_trace(
+            event_id=event_id,
+            robot_id=robot_id,
+            source_type="video.command_result",
+            stage="command_result_received",
+            record_type="command_result",
+            status=str(payload["status"]),
+            component="mqtt",
+            payload=trace_payload,
+        )
+        return {"status": "processed", **disposition.as_dict()}
+
+    def _trace_command_result(
+        self,
+        topic: str,
+        payload: dict[str, Any],
+        *,
+        status: str,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        """Write one existing command_result trace record."""
         event_id = str(payload.get("event_id") or "unknown_event")
         robot_id = str(payload.get("robot_id") or _robot_id_from_topic(topic) or "unknown_robot")
         self.event_logger.write_trace(
             event_id=event_id,
             robot_id=robot_id,
-            source_type=str(payload.get("source_type") or "command.result"),
+            source_type=str(payload.get("message_type") or payload.get("source_type") or "command.result"),
             stage="command_result_received",
             record_type="command_result",
-            status=str(payload.get("status") or "received"),
+            status=status,
             component="mqtt",
-            payload={"topic": topic, "command_result": payload},
+            payload={"topic": topic, "command_result": payload, **(extra or {})},
         )
+
+    def _reject_command_result(
+        self,
+        topic: str,
+        payload: dict[str, Any],
+        code: str,
+        message: str,
+        details: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Trace and return a fail-closed result disposition."""
+        self._trace_command_result(
+            topic,
+            payload,
+            status="rejected",
+            extra={
+                "result_disposition": "rejected",
+                "side_effect_applied": False,
+                "error_code": code,
+                "error_message": message,
+                "details": details or {},
+            },
+        )
+        return {"status": "rejected", "error_code": code, "error_message": message}
+
+    def _require_media_v11(self, robot_id: str) -> None:
+        """Enforce the rollout gate and robot allowlist before publication."""
+        if not self.config.media_v11_enabled:
+            raise MediaContractError(
+                "MEDIA_CONTROL_CONFLICT",
+                "MEDIA_V11_ENABLED is false; media requests are not published",
+            )
+        if robot_id not in self.config.robot_id_allowlist:
+            raise MediaContractError(
+                "MEDIA_CONTROL_CONFLICT",
+                "robot_id is not allowlisted for Bridge publication",
+                details={"robot_id": robot_id},
+            )
 
     def _fail_with_fallback(
         self,

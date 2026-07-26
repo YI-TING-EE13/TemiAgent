@@ -4,16 +4,17 @@
 
 本文件定義第一年度新增功能的跨服務協議。`hermes_temi_bridge/schemas/` 是
 runtime schema 的唯一權威來源；本文件只說明 message flow、責任、安全語意與
-相容性。本階段只建立 contract 與 hardware-free schema tests，不代表 identity
-推論、Hermes video action、Android 實作或 care report service 已完成。
+相容性。Bridge media v1.1 runtime 已在預設關閉的 feature gate 後實作並以 fake Android
+驗證；這不代表 identity 推論、Hermes video action、Android 實作、真機或 care report
+service 已完成。
 
 ## 現況盤點與決策
 
 | 需求 | 既有能力 | 決策 | Capability state |
 |---|---|---|---|
 | Resident identity result | 沒有 canonical identity topic 或 schema；`memory/profile.json` 是 Demo-only 單一 persona，不可當 identity result | 新增獨立 identity result topic 與 schema | Contract defined；runtime 未實作 |
-| Video command | `cmd/request` 已是唯一 robot command topic，但 v1.0 只有 `command_id` 與 `actions[]` | 沿用 topic，新增以 `schema_version=1.1`、`message_type=video.command` 辨識的 subtype | Contract defined；producer/consumer 未實作 |
-| Video command result | `cmd/result` 已回傳 command 結果，但 v1.0 status 無法表達播放 lifecycle | 沿用 topic，新增 v1.1 video result subtype | Contract defined；Android/Bridge handling 未實作 |
+| Video command | `cmd/request` 已是唯一 robot command topic，但 v1.0 只有 `command_id` 與 `actions[]` | 沿用 topic；Bridge explicit media API 由 feature flag 隔離 | Bridge producer implemented and fake-verified；Android pending |
+| Video command result | `cmd/result` 已回傳 command 結果，但 v1.0 status 無法表達播放 lifecycle | 沿用 topic；Bridge 依 discriminator 嚴格分流並追蹤 session | Bridge consumer implemented and fake-verified；Android pending |
 | Care report | `generate_summary` 與 Markdown summary 是 Demo memory action/artifact，不是跨服務 report payload | 新增 care report topic 與 schema；不從 Demo 情境推導內容 | Contract defined；report service 未實作 |
 | Report interaction | Trace 可記錄 command result，沒有 report viewed/acknowledged contract | 新增 interaction result topic 與 schema | Contract defined；runtime 未實作 |
 | Error codes | 既有 code 分散在 validators 與 trace payload | 新 schema 使用 `cross_service_common.schema.json` 的 allowlist；既有錯誤碼不變 | New contracts only |
@@ -32,7 +33,7 @@ Publisher 在 publish 前驗證；subscriber 在處理前再次驗證。Schema g
 | Topic | Direction | Publisher | Subscriber | Runtime validation owner |
 |---|---|---|---|---|
 | `temi/{robot_id}/resident/identity/result` | identity result → consumers | 未來 identity adapter；manual selection 由 Temi App 產生 | Temi App、未來 report pipeline、Bridge integration | 各 subscriber；Bridge schema 是 authority |
-| `temi/{robot_id}/cmd/request` | command producer → Temi App | Bridge。Remote gateway 必須把 authorized intent 交給 Bridge；Temi App manual UI 可直接重用本地 command handler | Temi App | Bridge publish boundary 與 Temi App boundary validator |
+| `temi/{robot_id}/cmd/request` | command producer → Temi App | Bridge。Media v1.1 只由 feature-gated explicit API 產生；Remote gateway 必須把 authorized intent 交給 Bridge | Temi App | Bridge publish boundary 與 Temi App boundary validator |
 | `temi/{robot_id}/cmd/result` | Temi App → command producer/trace | Temi App | Bridge、request originator | Bridge/result consumer |
 | `temi/{robot_id}/care/report` | report producer → reviewer UI | 未來 report producer behind Bridge/memory boundary | Temi App、authorized reviewer | 每個 report consumer |
 | `temi/{robot_id}/care/report/interaction/result` | reviewer UI → report owner/trace | Temi App 或 authorized reviewer client | 未來 report owner、Bridge trace adapter | Report interaction consumer |
@@ -193,6 +194,12 @@ Trace 沿用 `command_result_received`，不增加 record type/topic。Trace pay
 command/action、`terminal`、session IDs、playback state、result delivery 與 cancellation
 link；consumer 不得因 late nonterminal result 將 terminal session 回退。
 
+Bridge runtime insertion points：`media_contract.py` 建立 request 並執行 strict structural
+與 semantic validation；`media_registry.py` 保存 process-local command/session state；service
+依 discriminator 消費 result 並寫入既有 trace stage。`MEDIA_V11_ENABLED` 預設為 `false`。
+Registry 不取代 Android durable idempotency store，Bridge process restart 後也不宣稱還原
+active session。
+
 ## Care report v1.0
 
 Authority：`hermes_temi_bridge/schemas/care_report.schema.json`。
@@ -299,7 +306,8 @@ request conflict 不得自動改寫後重試。
 
 ## Verification scope
 
-`hermes_temi_bridge/tests/test_cross_service_contract_schemas.py` 使用指定容器既有的
-Node.js Ajv Draft 2020-12 validator，覆蓋每個新 message 的合法、邊界與非法資料，並
-確認舊 command request/result v1.0 仍合法。Android、MQTT live flow、Hermes video
-action、report generation、identity model 與 real-device execution 均留待後續實作驗證。
+Schema tests 使用指定容器既有的 Node.js Ajv Draft 2020-12 validator。
+`test_media_v11_runtime.py` 覆蓋 builder、strict result validation、lifecycle、session
+correlation、stop linkage 與 replay；`tools/media_v11_fake_e2e.py` 驗證 in-memory integration
+與 trace。Android、live MQTT、Hermes video action、report generation、identity model 與
+real-device execution 均留待後續驗證。

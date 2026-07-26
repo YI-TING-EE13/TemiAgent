@@ -152,8 +152,9 @@ temi/{robot_id}/cmd/request
 temi/{robot_id}/cmd/result
 ```
 
-Identity、video lifecycle 與 care report 是 contract-defined future integration。現行
-Android App 不得被描述為已支援這些新 schema；LAB606 實作要求見
+Identity 與 care report 是 contract-defined future integration。Bridge media v1.1 runtime
+已由預設關閉的 feature gate 隔離並通過 fake Android 測試；現行 Android App 不得被描述為
+已支援 media 或其他新 schema。LAB606 實作要求見
 [Android cross-service contract](android_cross_service_contract.md)。
 
 ***

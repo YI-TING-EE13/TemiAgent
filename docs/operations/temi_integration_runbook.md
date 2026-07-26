@@ -34,6 +34,16 @@ python3 tools/e2e_test_runner.py
 
 Expected result: JSON with `"status": "ok"`.
 
+Media v1.1 fake Android integration（不啟動 broker、Hermes、Android 或 robot）：
+
+```bash
+cd /TemiAgent
+python3 tools/media_v11_fake_e2e.py
+```
+
+Expected result：JSON 包含 `"status": "ok"`、四筆 request trace、七筆 result trace 與
+`"cached_replay_disposition": "cached_replay"`。
+
 Inspect the generated trace with:
 
 ```bash
@@ -230,13 +240,13 @@ cd /TemiAgent/hermes_temi_bridge
 uv run python -m unittest tests.test_cross_service_contract_schemas -v
 ```
 
-Identity、video lifecycle、care report 與 report interaction 目前只有 schema contract。
-不得把上述 test 當成 Android、Hermes video tool、MQTT live flow、report generation 或
-real-device acceptance。實作與 rollout gate 見
+Identity、care report 與 report interaction 目前只有 schema contract。Video v1.1 已有
+feature-gated Bridge runtime 與 fake Android integration，但沒有正式 Android consumer、
+Hermes video entry、live MQTT 或 real-device evidence。實作與 rollout gate 見
 [canonical cross-service contract](../architecture/canonical_cross_service_contract.md)。
 
-Video v1.1 rollout 前必須另外保存以下 Android/AI6 evidence；本 contract-only 階段全部
-標記 `SKIPPED`，不得為了驗證文件啟動 robot 或 App：
+Video v1.1 rollout 前必須另外保存以下 Android/AI6 evidence；fake E2E 只滿足 Bridge
+hardware-free evidence，不得為了驗證文件啟動 robot 或 App：
 
 - serialized play 與通過三層 validation 後的 active-session control ordering；
 - play accepted/started/terminal lifecycle，以及 pause/resume 不終止原 play；

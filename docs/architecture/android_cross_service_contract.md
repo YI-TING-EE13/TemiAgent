@@ -6,6 +6,9 @@
 相容性規則見 [canonical cross-service contract](canonical_cross_service_contract.md)；
 runtime schemas 位於 `hermes_temi_bridge/schemas/`。AI6 repository 不包含 Android
 source，本文件不代表 Android 功能已實作或通過真機驗證。
+AI6 Bridge 已提供預設關閉的 media v1.1 producer/result consumer 與 fake client；Android
+仍須自行實作 durable idempotency、player state machine 與 schema validation。Bridge 的
+process-local registry 不是 Android persistence 的替代品。
 
 ## Topic 與 direction
 

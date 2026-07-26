@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import unittest
 
+from hermes_temi_bridge.media_contract import build_media_command_request
+
 
 SCHEMA_DIR = Path(__file__).parents[1] / "schemas"
 AJV_DRIVER = r"""
@@ -162,6 +164,18 @@ class CrossServiceContractSchemaTests(unittest.TestCase):
         self.assert_schema("temi_command_request.schema.json", pause)
         self.assert_schema("temi_command_request.schema.json", invalid_play_class, False)
         self.assert_schema("temi_command_request.schema.json", invalid_control_target, False)
+
+    def test_runtime_media_builder_matches_the_authoritative_request_schema(self):
+        payload = build_media_command_request(
+            event_id="evt_runtime_schema_001",
+            robot_id="temi-01",
+            resident_id="resident_father",
+            action="play_video",
+            video_id="exercise_upper_body_01",
+            command_id="cmd_runtime_schema_001",
+            timestamp="2026-07-26T10:00:00Z",
+        )
+        self.assert_schema("temi_command_request.schema.json", payload)
 
     def test_legacy_command_result_remains_valid(self):
         payload = {

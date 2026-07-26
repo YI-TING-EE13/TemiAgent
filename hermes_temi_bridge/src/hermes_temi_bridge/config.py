@@ -78,6 +78,7 @@ class BridgeConfig:
     care_context_enabled: bool = True
     care_context_max_events: int = 5
     care_context_max_chars: int = 4000
+    media_v11_enabled: bool = False
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> "BridgeConfig":
@@ -147,4 +148,5 @@ class BridgeConfig:
             care_context_max_chars=_get_int(
                 values, "CARE_CONTEXT_MAX_CHARS", cls.care_context_max_chars
             ),
+            media_v11_enabled=_get_bool(values, "MEDIA_V11_ENABLED", cls.media_v11_enabled),
         )

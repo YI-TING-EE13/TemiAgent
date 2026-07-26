@@ -22,7 +22,7 @@ When no single generated contract package exists, the producer and consumer impl
 | Command request v1.0 | Implemented; hardware-free verified | `hermes_temi_bridge/schemas/temi_command_request.schema.json` and `command_dispatcher.py` | Bridge; manual dispatcher after reusing validator/builder; action-viewer pre-alert is a known Demo-only exception | Temi App | dispatcher/Bridge tests, mock E2E and real-device runbook | Schema, dispatcher, Temi App, tests, reader copy and MQTT docs |
 | Command result v1.0 | Implemented | `hermes_temi_bridge/schemas/temi_command_result.schema.json` and result handler | Temi App or mock publisher | Bridge trace/result handler | Bridge result/trace tests and mock E2E | Schema, Android producer, Bridge consumer/tests and reader copy |
 | Resident identity result v1.0 | Contract defined; runtime integration pending | `hermes_temi_bridge/schemas/resident_identity_result.schema.json` | Future identity adapter; Temi App manual selection | Temi App, future report pipeline and Bridge integration | `test_cross_service_contract_schemas.py`; Android/integration tests pending | Runtime schema, all producers/consumers, Android contract, reader copy and privacy tests |
-| Video command/result v1.1 | Ordering/session/idempotency contract defined; runtime integration pending | v1.1 subtypes in `temi_command_request.schema.json` and `temi_command_result.schema.json` | Future validated Bridge/remote producer; Temi App owns session creation, execution and result publishing | Temi App validates schema/semantics/active target before execution; Bridge validates result/correlation and traces it | Schema lifecycle, control, cancellation, concurrent play, duplicate/restart and v1.0 compatibility tests; Android/real-device tests pending | Both command schemas, common errors, semantic validators, Android persistence/state machine, Bridge result handling, tests, reader copies and runbooks |
+| Video command/result v1.1 | Feature-gated Bridge runtime and fake Android integration implemented; real consumer pending | Schemas plus `media_contract.py`, `media_registry.py` and service result dispatch | Explicit Bridge media API when enabled; Temi App owns session creation/execution/results | Bridge validates request semantics, result correlation/lifecycle/replay; Android validation remains external | `test_media_v11_runtime.py`, schema tests and `media_v11_fake_e2e.py`; Android/real-device tests pending | Both schemas, common errors, Bridge validator/registry/service, Android persistence/state machine, tests, reader copies and runbooks |
 | Care report v1.0 | Contract defined; report service not implemented | `hermes_temi_bridge/schemas/care_report.schema.json` | Future report producer behind Bridge/memory boundary | Temi App and authorized reviewer | Schema tests; producer/consumer/privacy tests pending | Runtime schema, report producer/consumer, identity isolation, reader copy and contract docs |
 | Care report interaction result v1.0 | Contract defined; runtime integration pending | `hermes_temi_bridge/schemas/care_report_interaction_result.schema.json` | Temi App or authorized reviewer | Future report owner and Bridge trace adapter | Schema tests; interaction/integration tests pending | Runtime schema, publisher/consumer, idempotency/trace tests, reader copy and Android contract |
 | New cross-service error codes | Contract defined for identity/video/report only | `hermes_temi_bridge/schemas/cross_service_common.schema.json` | New contract producers | New contract consumers | `$ref` compilation and invalid error-state tests | Common schema, every reference, reader copy and error documentation |
@@ -32,7 +32,7 @@ When no single generated contract package exists, the producer and consumer impl
 | Service ports | Implemented defaults; environment-dependent | Owning service config or CLI parser: Bridge config, resident server, backend config, action viewer and startup scripts | Service owners | Operators and downstream clients | Health probes and integration runbooks | Owning code/config, scripts, module README and cross-module runbook |
 | Model input/output | Research/Demo | Prompt construction in `hermes_client.py`; output enforcement in `action_validator.py`; anomaly parser in `temi_action_viewer.py` | Hermes or specialist model | Bridge validator or anomaly parser | Bridge client/action tests; anomaly manual/model tests | Prompt, parser/validator, model revision/config, tests, skills and capability claims |
 | Care memory formats | Demo-only synthetic data | `memory_store.py` and `care_context_builder.py` | Bridge memory actions | Bridge/Hermes context builder | memory and context-builder tests | Code, tests, `memory/README.md`, skill contract and retention rules |
-| Bridge trace/event-log format | Implemented for v1.0; v1.1 media fields contract-defined | `logging_utils.py` and `hermes_temi_bridge/README.md`; media payload fields come from command-result schema | Bridge | Maintainers and `tools/show_temi_trace.py` | `test_trace_logging.py`; media trace integration pending | Writer, viewer, result schema/consumer, tests, README and retention/privacy policy |
+| Bridge trace/event-log format | Implemented for v1.0 and feature-gated v1.1 media flow | `logging_utils.py`, service media trace calls and `hermes_temi_bridge/README.md` | Bridge | Maintainers and `tools/show_temi_trace.py` | trace tests plus media runtime/fake E2E | Writer, viewer, result schema/consumer, tests, README and retention/privacy policy |
 | Health endpoints | Implemented per service | Owning endpoint implementation or server wrapper | Backend/resident/viewer services | Operators and validation scripts | service tests or runbook probes | Endpoint implementation, startup/validation scripts and module/runbook docs |
 | Runtime artifact layout | Implemented but incompletely governed | Owning writers, `.gitignore`, `logs/README.md`, `memory/README.md`, `temi_shared/README.md` | All runtime modules | Maintainers | Git/private-artifact scan | Writer, ignore rules, retention/access documentation and cleanup procedure |
 
@@ -55,9 +55,10 @@ temi/{robot_id}/care/report/interaction/result
 
 Video v1.1 reuses `cmd/request` and `cmd/result`; it does not create a parallel hardware
 command route. Serialized play and validated active-session controls share the request topic;
-queue priority is an execution policy after validation, not a transport route. Current Bridge and
-Android behavior remains v1.0 until consumer validation, producer wiring and integration tests are
-implemented. Direction, owner and rollout rules are defined in
+queue priority is an execution policy after validation, not a transport route. Bridge media
+publication is isolated behind `MEDIA_V11_ENABLED=false` by default. Android behavior remains v1.0
+until its parser, persistence, player state machine and integration tests are implemented.
+Direction, owner and rollout rules are defined in
 [canonical_cross_service_contract.md](canonical_cross_service_contract.md).
 
 The current topic strings are repeated across modules. No generated, single-source topic library exists. A topic change therefore requires an explicit repository-wide search and coordinated producer/consumer review.
@@ -113,12 +114,13 @@ The filenames differ for three reader copies. Compare the mapped files by conten
 
 ## Capability Classification
 
-- **Implemented and verified without hardware:** Bridge validators and unit tests, backend unit tests, local mock E2E.
+- **Implemented and verified without hardware:** Bridge validators and unit tests, backend unit tests, local mock E2E, and feature-gated media v1.1 with fake Android.
 - **Implemented but environment-dependent:** resident Hermes, MQTT integration, streaming endpoints and health probes.
 - **Demo-only:** Home-ESI care scenarios, synthetic memory actions, mock caregiver notification and manual/demo action dispatch.
 - **Experimental:** continuous abnormal perception and model-driven action classification.
 - **Deprecated compatibility route:** none formally removed; legacy MQTT route remains supported for Demo verification.
-- **Contract defined; integration pending:** first-year resident identity result, video command lifecycle, care report and report interaction result.
+- **Contract defined; integration pending:** first-year resident identity result, care report and report interaction result.
+- **Feature-gated integration:** Bridge media v1.1 runtime; Android, Hermes video entry and real-device acceptance pending.
 - **Planned/future:** real notification workflow, clinical validation, production identity/access controls and a centralized generated topic contract.
 
 Do not rewrite a planned or experimental item as an implemented, verified or regulated capability.

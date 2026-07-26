@@ -56,6 +56,8 @@ Temi Action Viewer / Video Action Tester
 - 將 robot actions 發布到 `temi/{robot_id}/cmd/request`。
 - 執行 Bridge-internal memory/demo actions，包含 event log、reminder done、summary 與 mock caregiver notification。
 - 記錄 raw output、parsed output、robot command request、memory action result、command result 與錯誤。
+- 在 `MEDIA_V11_ENABLED=true` 時提供獨立 media v1.1 request API，並嚴格驗證 result、
+  command/session correlation、lifecycle 與 replay disposition。
 
 ## 目前狀態與限制
 
@@ -70,13 +72,15 @@ Temi Action Viewer / Video Action Tester
 - Bridge-internal memory/demo actions：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
 - 只有 robot-facing actions 會 publish 到 `temi/{robot_id}/cmd/request`；memory/demo actions 只寫入 `MEMORY_DIR`。
 - Abnormal perception events currently carry only `observation.action_name`, `observation.reason`, and `evidence.frame_paths`; they do not carry model confidence, confidence_source, or severity.
-- Identity、video command lifecycle、care report 與 report interaction 已有 canonical
-  runtime schema 與 schema tests，但 producer、consumer 與 service integration 尚未實作。
+- Identity、care report 與 report interaction 已有 canonical runtime schema 與 schema tests，
+  但 producer、consumer 與 service integration 尚未實作。
 - Video v1.1 沿用 `cmd/request`/`cmd/result` topic。Hermes video action 不在目前
   `action_validator.py` allowlist，因此 Bridge 尚不能從 Hermes output 產生 video command。
 - Video v1.1 保留 `play_video`、`pause_video`、`resume_video`、`stop_video`。Play 是
   serialized execution；controls 只有完成 schema、semantic validator 與 active-session
   target validation 後才可優先處理。既有 generic robot `stop` 不具 media session 語意。
+- Bridge 已實作預設關閉的 media v1.1 producer/result consumer、in-memory correlation
+  registry 與 fake Android E2E。這不代表 Android、Hermes video tool 或真機已支援。
 
 ## Bridge 設計檢視
 
@@ -106,6 +110,8 @@ hermes_temi_bridge/
     action_validator.py     # Hermes action contract validation
     command_dispatcher.py   # command request publishing
     idempotency.py          # event_id dedup
+    media_contract.py       # media v1.1 builder and strict boundary validation
+    media_registry.py       # command/session lifecycle and replay correlation
   schemas/                  # runtime JSON schemas
   tests/                    # hardware-free unittest suite
 ```
@@ -215,6 +221,7 @@ uv run --extra mqtt hermes-temi-bridge --env-file .env.example
 | `TRACE_RUN_ID` | 手動指定 run id；空值時自動產生。 |
 | `TRACE_MAX_FIELD_CHARS` | excerpt 最大字元數，預設 `2000`。 |
 | `MEMORY_DIR` | structured memory root，預設 `memory`。 |
+| `MEDIA_V11_ENABLED` | 啟用 isolated media v1.1 producer/consumer；預設 `false`。 |
 
 ## Trace log schema
 
@@ -254,10 +261,11 @@ duplicate_event_ignored
 
 `seq` is monotonic within each event timeline. `duration_ms` on a stage record means that stage's duration; `event_completed.payload.total_duration_ms` is the whole event duration. `command_result_received` may arrive later and is appended to the same event timeline.
 
-Video v1.1 不新增 trace stage。後續 result consumer 必須在既有
+Video v1.1 不新增 trace stage。Media result consumer 在既有
 `command_result_received.payload` 保留 `command_action`、`terminal`、三種 session ID、
 `playback_state`、`result_delivery`、`cancelled_by_command_id`、`cancel_reason` 與 `actor`。
-目前 handler 尚未做 v1.1 semantic validation；不得把 raw trace persistence 當成完整支援。
+Trace 另記 `result_disposition`、`side_effect_applied` 與 originating play command。拒絕的
+schema、correlation 或 lifecycle result 也使用相同 stage，且不改變 registry state。
 
 All payloads pass through the shared sanitizer in `logging_utils.py`. Hashes use SHA-256. Excerpts use `TRACE_MAX_FIELD_CHARS` and include `truncated=true|false`. Summary mode records prompt/raw output/care context only as length/hash/excerpt; full debug mode is required to store full prompt, full care_context, and full raw Hermes output. Image bytes are never stored; traces only record paths, frame metadata, and validation result.
 
@@ -302,6 +310,7 @@ uv run python -m unittest discover -s tests
 ```bash
 cd /TemiAgent
 python3 tools/e2e_test_runner.py
+python3 tools/media_v11_fake_e2e.py
 ```
 
 ## 常見問題
@@ -353,7 +362,7 @@ Identity、video 與 care report 的欄位、topic、correlation、privacy 與 m
 - `.env.example` 未列出 `BridgeConfig` 的每個 optional care-context setting；以 `config.py` 為實作依據。
 - CLI、HTTP、MQTT、Hermes 與 Temi App failure 都可能使事件進入 degraded state；trace completion 不等同 robot action 成功，必須檢查 command result。
 - Bridge 只支援 Demo／研究照護流程，不提供醫療診斷或真實緊急通報。
-- Bridge runtime 尚未 subscribe/publish 新 identity 或 care-report topics，也尚未處理
-  video v1.1 subtype；本階段只有 contract 與 hardware-free schema validation。
-- Bridge 現有 `event_id` TTL cache 不是 Android command idempotency store。Media duplicate、
-  terminal-result replay 與 process-restart reconciliation 必須由 App 持久層實作並另行驗證。
+- Bridge runtime 尚未 subscribe/publish 新 identity 或 care-report topics。
+- Media registry 只保存目前 Bridge process 的 correlation；Android 仍須依 contract 持久化
+  command idempotency 與 restart reconciliation。Bridge restart 不還原既有 session。
+- Media producer 預設關閉，且沒有 CLI、Hermes action 或正式 remote gateway entry point。

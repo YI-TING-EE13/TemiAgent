@@ -17,6 +17,7 @@
 | `hermes_resident_server.py` | 啟動低延遲 resident Hermes HTTP worker，供 Bridge `HERMES_INVOKE_MODE=http` 使用。 |
 | `temi_overview_adapter.py` | ASR/camera-only adapter：接 legacy `temi/event/asr` 與 WebSocket camera frames，產生 canonical `temi/{robot_id}/asr/final` 與三張 keyframe path；不轉發 command。 |
 | `e2e_test_runner.py` | 不需硬體的本地 mock E2E smoke test。 |
+| `media_v11_fake_e2e.py` | 以 in-memory MQTT 與 fake Android 驗證 media v1.1 lifecycle、stop linkage、replay 與 trace。 |
 | `demo_case_runner.py` | 跑第一年度 Demo 三個固定照護案例並輸出 artifacts。 |
 | `create_mock_event_images.py` | 產生 ASR event 測試用三張 mock images。 |
 | `publish_mock_asr_event.sh` | 發送 canonical mock ASR event。 |
@@ -36,6 +37,16 @@
 cd /TemiAgent
 python3 tools/e2e_test_runner.py
 ```
+
+Media v1.1 isolated fake Android E2E：
+
+```bash
+cd /TemiAgent
+python3 tools/media_v11_fake_e2e.py
+```
+
+此腳本將 `MEDIA_V11_ENABLED` 只套用在 process 內的 test service，並使用 temporary
+directory。腳本不啟動 MQTT broker、Hermes、Android 或 robot，也不保留 trace artifact。
 
 ### Demo case runner
 

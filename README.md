@@ -10,6 +10,7 @@ TemiAgent 是以 Temi robot 為實體載具、Hermes Agent 為認知核心的 em
 |---|---|---|
 | Legacy live route | Verified Demo route | `temi_backend/` 已用於 Temi ASR、影像、local VLM 與 MQTT action 閉環；保留作相容路線。 |
 | Canonical ASR route | Implemented; hardware-free path verified | Overview adapter 產生 canonical ASR event，Bridge 驗證 Hermes output 後發布 command。 |
+| Canonical media v1.1 Bridge route | Feature-gated; fake Android verified | Bridge 可建立 play/control request、消費 session lifecycle/result 並寫 trace；預設關閉，Android、Hermes video entry 與真機尚未驗證。 |
 | Resident Hermes HTTP mode | Implemented; Demo route verified | `tools/hermes_resident_server.py` 提供 `/health` 與 `/invoke`；預設整合 port 為 `8765`。 |
 | Structured care memory | Demo-only | `memory/` 只應保存合成 Demo 資料；不是病歷或正式個資儲存系統。 |
 | Continuous abnormal perception | Experimental Demo | `anomaly_detection/` 可產生 abnormal event；模型結果未經醫療或安全認證。 |
