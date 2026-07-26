@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -27,7 +28,7 @@ from temi_action_viewer import (
     save_abnormal_evidence_frames,
     should_publish_abnormal_event,
 )
-from temi_video_action_tester import build_video_inference_batches
+from temi_video_action_tester import build_video_inference_batches, parse_args
 
 
 def make_frame(sequence: int, received_at: float) -> BufferedFrame:
@@ -96,6 +97,36 @@ class SamplerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([frame.sequence for frame in batches[0][:3]], [1, 11, 21])
         self.assertEqual([frame.sequence for frame in batches[0][3:]], [30, 31, 32, 34, 35])
         self.assertEqual([batch[-1].sequence for batch in batches], [35, 45, 55])
+
+
+class VideoTesterCliTests(unittest.TestCase):
+    def parse(self, *arguments: str):
+        with mock.patch.object(sys, "argv", ["temi-video-action-tester", *arguments]):
+            return parse_args()
+
+    def test_default_mode_disables_abnormal_publication(self) -> None:
+        args = self.parse("--video", "sample.mp4")
+
+        self.assertFalse(args.publish)
+        self.assertEqual(args.abnormal_publish, "disabled")
+
+    def test_publish_mode_keeps_abnormal_publication_enabled(self) -> None:
+        args = self.parse("--video", "sample.mp4", "--publish")
+
+        self.assertTrue(args.publish)
+        self.assertEqual(args.abnormal_publish, "enabled")
+
+    def test_rejects_non_positive_fallback_fps(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "--fallback-fps must be positive"):
+            self.parse("--video", "sample.mp4", "--fallback-fps", "0")
+
+    def test_rejects_invalid_port(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "--mqtt-port must be in 1-65535"):
+            self.parse("--video", "sample.mp4", "--mqtt-port", "70000")
+
+    def test_rejects_invalid_evidence_quality(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "--evidence-jpeg-quality must be in 1-100"):
+            self.parse("--video", "sample.mp4", "--evidence-jpeg-quality", "0")
 
 
 class PromptParserTests(unittest.TestCase):

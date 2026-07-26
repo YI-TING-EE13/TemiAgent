@@ -19,6 +19,7 @@ pose = [
 [project.scripts]
 temi-live-viewer = "temi_live_viewer:main"
 temi-action-viewer = "temi_action_viewer:main"
+temi-video-action-tester = "temi_video_action_tester:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -28,4 +29,4 @@ build-backend = "hatchling.build"
 package = true
 
 [tool.hatch.build.targets.wheel]
-only-include = ["temi_live_viewer.py", "temi_action_viewer.py"]
+only-include = ["temi_live_viewer.py", "temi_action_viewer.py", "temi_video_action_tester.py"]
