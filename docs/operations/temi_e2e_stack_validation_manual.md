@@ -13,7 +13,7 @@
 - Demo 或實驗前，需要確認語音事件、Hermes 推理、MQTT 指令、Temi TTS、影像串流與 action viewer 都正常。
 - Debug 端到端問題時，需要逐層定位是模型、Bridge、MQTT、Temi app、網路或影像串流出問題。
 
-本文件的所有指令都必須在指定容器內執行。不要直接在 host `/home/yiting/TemiAgent` 修改或啟動專案服務，避免產生檔案權限與 runtime path 不一致問題。
+本文件的所有指令都必須在指定容器內執行。不要直接在 host `<host-workspace>` 修改或啟動專案服務，避免產生檔案權限與 runtime path 不一致問題。
 
 ## 2. 環境與前置條件
 
@@ -36,22 +36,30 @@ cd /TemiAgent
 
 ### 2.2 固定網路與服務資訊
 
-目前預設值如下：
+先在目前 shell 明確設定本機值。不要把實際私人網路位址提交到文件：
+
+```bash
+export PC_IP='<pc-ip>'
+export SECONDARY_PC_IP='<secondary-pc-ip>'
+export TEMI_IP='<temi-ip>'
+```
+
+下表以這些 shell 變數表示環境值：
 
 | 項目 | 預設值 |
 |---|---|
 | 專案容器路徑 | `/TemiAgent` |
-| Host 專案路徑 | `/home/yiting/TemiAgent` |
-| 容器/PC IP | `192.168.50.236` |
-| 使用者電腦 IP | `192.168.50.233` |
-| Temi IP | `192.168.50.205` |
+| Host 專案路徑 | `<host-workspace>` |
+| 容器/PC IP | `$PC_IP` |
+| 使用者電腦 IP | `$SECONDARY_PC_IP` |
+| Temi IP | `$TEMI_IP` |
 | Robot ID | `temi-01` |
 | LM Studio API | `http://127.0.0.1:1234/v1` |
 | Hermes resident | `http://127.0.0.1:8765` |
-| MQTT | `192.168.50.236:1883` |
-| Vision ingest | `192.168.50.236:8080` |
-| Frame broadcast | `192.168.50.236:8081` |
-| Action viewer | `http://192.168.50.236:8010` |
+| MQTT | `$PC_IP:1883` |
+| Vision ingest | `$PC_IP:8080` |
+| Frame broadcast | `$PC_IP:8081` |
+| Action viewer | `http://$PC_IP:8010` |
 | Action viewer llama-server | `127.0.0.1:8011` |
 
 目前預設模型：
@@ -89,7 +97,7 @@ export CONTEXT_LENGTH='64000'
 
 ```bash
 cd /TemiAgent
-TEMI_IP=192.168.50.205 PC_IP=192.168.50.236 ./tools/check_temi_connection.sh
+TEMI_IP=$TEMI_IP PC_IP=$PC_IP ./tools/check_temi_connection.sh
 ```
 
 用途與參數：
@@ -100,9 +108,9 @@ TEMI_IP=192.168.50.205 PC_IP=192.168.50.236 ./tools/check_temi_connection.sh
 
 正常結果：
 
-- `nc` 對 `192.168.50.205:5555` 成功，代表 ADB over TCP 可連線。
-- `nc` 對 `192.168.50.236:1883`、`:8080`、`:8081` 成功或在後續服務啟動後成功。
-- `adb devices -l` 看到 `192.168.50.205:5555`。
+- `nc` 對 `$TEMI_IP:5555` 成功，代表 ADB over TCP 可連線。
+- `nc` 對 `$PC_IP:1883`、`:8080`、`:8081` 成功或在後續服務啟動後成功。
+- `adb devices -l` 看到 `$TEMI_IP:5555`。
 
 ### 3.2 重啟 LM Studio 並載入預設模型
 
@@ -132,17 +140,22 @@ LMSTUDIO_VISIBLE_GPUS='0' \
 ### 3.3 啟動 MQTT broker
 
 ```bash
-pkill -f 'mosquitto -c /TemiAgent/mqtt/mosquitto.conf' || true
-mosquitto -c /TemiAgent/mqtt/mosquitto.conf -d
+if ss -ltn 'sport = :1883' | grep -q LISTEN; then
+  echo 'Port 1883 already has a listener; verify its PID before deciding whether to reuse it.'
+  ss -ltnp 'sport = :1883'
+else
+  mosquitto -c /TemiAgent/mqtt/mosquitto.conf -d
+fi
 ss -ltnp | grep ':1883'
 ```
 
 用途與參數：
 
-- `pkill -f`：停止目前由專案設定檔啟動的 mosquitto。
+- `ss -ltnp`：確認 `1883` listener 與 PID；既有 listener 必須先核對 command line、working directory 與 executable。
 - `mosquitto -c`：指定 MQTT broker 設定檔。
 - `-d`：daemon mode，讓 broker 在背景執行。
-- `ss -ltnp`：確認 TCP port 是否正在 listen。
+
+需要重啟既有 broker 時，依 [safe service operations](safe_service_operations.md) 只停止已驗證 PID；不得使用 `pkill -f` 或 `killall`。
 
 正常結果：`ss` 顯示 `0.0.0.0:1883` 或等價 listen 狀態。
 
@@ -152,7 +165,7 @@ ss -ltnp | grep ':1883'
 mkdir -p /TemiAgent/logs/manual_stack
 cd /TemiAgent/temi_backend
 setsid uv run python /TemiAgent/tools/temi_overview_adapter.py \
-  --broker 192.168.50.236 \
+  --broker $PC_IP \
   --port 1883 \
   --vision-port 8080 \
   --frame-broadcast-port 8081 \
@@ -231,7 +244,7 @@ grep -E 'default:|context_length:' /root/.hermes/config.yaml
 mkdir -p /TemiAgent/logs/manual_stack /TemiAgent/logs/overview_bridge_resident
 cd /TemiAgent/hermes_temi_bridge
 setsid env \
-  MQTT_BROKER_HOST=192.168.50.236 \
+  MQTT_BROKER_HOST=$PC_IP \
   MQTT_BROKER_PORT=1883 \
   TEMI_SHARED_BRIDGE_PATH=/TemiAgent/temi_shared \
   TEMI_SHARED_HERMES_PATH=/TemiAgent/temi_shared \
@@ -266,7 +279,7 @@ tail -n 80 /TemiAgent/logs/manual_stack/bridge_runtime.log
 ### 3.7 重新開啟 Temi Android app
 
 ```bash
-adb connect 192.168.50.205:5555
+adb connect $TEMI_IP:5555
 adb shell am force-stop com.robotemi.agent
 adb shell am start -n com.robotemi.agent/.MainActivity
 ```
@@ -279,19 +292,19 @@ adb shell am start -n com.robotemi.agent/.MainActivity
 
 正常結果：Temi app logcat 應看到：
 
-- WebSocket 嘗試連 `http://192.168.50.236:8080/`。
+- WebSocket 嘗試連 `http://$PC_IP:8080/`。
 - `WebSocket connected.`
-- MQTT 嘗試連 `tcp://192.168.50.236:1883`。
+- MQTT 嘗試連 `tcp://$PC_IP:1883`。
 - `Connected successfully.`
 - 訂閱 `temi/temi-01/cmd/request`。
 
 快速確認連線：
 
 ```bash
-ss -tn state established | grep -E '192.168.50.205.*:(1883|8080)|:(1883|8080).*192.168.50.205'
+ss -tn state established | grep -E "$TEMI_IP.*:(1883|8080)|:(1883|8080).*$TEMI_IP"
 ```
 
-正常結果應看到 Temi IP `192.168.50.205` 到本機 `1883` 與 `8080` 的 established TCP connection。
+正常結果應看到 Temi IP `$TEMI_IP` 到本機 `1883` 與 `8080` 的 established TCP connection。
 
 ### 3.8 重啟 action viewer
 
@@ -386,20 +399,20 @@ python3 tools/demo_case_runner.py --keep-artifacts
 視窗 A：監看 Temi command request。
 
 ```bash
-timeout 240 mosquitto_sub -h 192.168.50.236 -p 1883 -t 'temi/temi-01/cmd/request' -C 1 -v
+timeout 240 mosquitto_sub -h $PC_IP -p 1883 -t 'temi/temi-01/cmd/request' -C 1 -v
 ```
 
 視窗 B：監看 Temi command result。
 
 ```bash
-timeout 240 mosquitto_sub -h 192.168.50.236 -p 1883 -t 'temi/temi-01/cmd/result' -C 1 -v
+timeout 240 mosquitto_sub -h $PC_IP -p 1883 -t 'temi/temi-01/cmd/result' -C 1 -v
 ```
 
 視窗 C：發送 canonical mock ASR event。
 
 ```bash
 cd /TemiAgent
-BROKER=192.168.50.236 \
+BROKER=$PC_IP \
 PORT=1883 \
 ROBOT_ID=temi-01 \
 EVENT_ID=evt_live_route_$(date +%s) \
@@ -451,7 +464,7 @@ RUN_UNIT_TESTS=0 RUN_LIVE_E2E=0 ./tools/validate_temi_e2e_stack.sh
 MODEL_LOAD_ID='temi/gemma-4-31b-it-qat' MODEL_IDENTIFIER='google/gemma-4-31b' CONTEXT_LENGTH='64000' LMSTUDIO_VISIBLE_GPUS='0' ./tools/validate_temi_e2e_stack.sh
 
 # Temi 或 PC IP 改變時
-PC_IP=192.168.50.236 TEMI_IP=192.168.50.205 ./tools/validate_temi_e2e_stack.sh
+PC_IP=$PC_IP TEMI_IP=$TEMI_IP ./tools/validate_temi_e2e_stack.sh
 ```
 
 腳本會輸出每個階段的 PASS/FAIL，並把服務 log、測試 log、MQTT request/result 存在：
@@ -464,14 +477,14 @@ PC_IP=192.168.50.236 TEMI_IP=192.168.50.205 ./tools/validate_temi_e2e_stack.sh
 
 | 錯誤現象 | 可能原因 | 排除方式 |
 |---|---|---|
-| 檔案變成奇怪 owner，或 host/容器權限錯亂 | 在 host 直接修改 `/home/yiting/TemiAgent` 或啟動服務 | 只在容器 `yiting.TemiAgent_gpu_all` 的 `/TemiAgent` 操作；必要時請管理員修正 owner。 |
+| 檔案變成奇怪 owner，或 host/容器權限錯亂 | 在 host 直接修改 `<host-workspace>` 或啟動服務 | 只在容器 `yiting.TemiAgent_gpu_all` 的 `/TemiAgent` 操作；必要時請管理員修正 owner。 |
 | `google/gemma-4-31b` 和 `google/gemma-4-31b:2` 同時出現 | 同一模型被 LM Studio 重複載入，LM Studio 自動加 suffix 區分 instance | 執行 `lms unload --all` 後重跑 `/TemiAgent/tools/start_lmstudio_3gpu.sh`。 |
 | `lms ps` 或 Hermes config 顯示 context 不是 `64000` | `/root/.hermes/config.yaml` 或 LM Studio 載入參數仍是舊值 | 確認 Hermes config 的 `model.context_length` 與 `auxiliary.compression.context_length`，並用 `LMSTUDIO_CONTEXT_LENGTH=64000` 重啟 LM Studio。 |
 | LM Studio 顯示 `Invalid passkey` 或找不到 daemon | `PATH` 或 `LMSTUDIO_TARGET_DIR` 指到錯的 lms/資料目錄 | 使用 `/TemiAgent/tools/start_lmstudio_3gpu.sh`，確認 `LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data`。 |
 | `curl http://127.0.0.1:8765/health` 失敗 | Hermes resident 沒啟動，或 LM Studio API 未就緒 | 先確認 `curl http://127.0.0.1:1234/v1/models`，再重啟 resident server。 |
-| Bridge 沒有發布 command request | MQTT broker host 錯、Bridge 沒訂閱 ASR、Hermes invoke 失敗、mock event path 不一致 | 檢查 `/TemiAgent/logs/manual_stack/bridge_runtime.log`，確認 `MQTT_BROKER_HOST=192.168.50.236`、`HERMES_HTTP_URL=http://127.0.0.1:8765/invoke`、`TEMI_SHARED_*=/TemiAgent/temi_shared`。 |
+| Bridge 沒有發布 command request | MQTT broker host 錯、Bridge 沒訂閱 ASR、Hermes invoke 失敗、mock event path 不一致 | 檢查 `/TemiAgent/logs/manual_stack/bridge_runtime.log`，確認 `MQTT_BROKER_HOST=$PC_IP`、`HERMES_HTTP_URL=http://127.0.0.1:8765/invoke`、`TEMI_SHARED_*=/TemiAgent/temi_shared`。 |
 | Temi 沒有 command result | Temi app 未連到 MQTT，或沒有訂閱 `cmd/request` | 用 ADB 重啟 app，檢查 logcat 是否有 `Connected successfully` 與 subscribed `temi/temi-01/cmd/request`。 |
-| 影像串流沒有 frame | Temi app 沒連到 `192.168.50.236:8080`，adapter 沒啟動，或 PC IP 設錯 | 檢查 `ss -tn state established` 是否有 Temi 到 `8080`，並看 adapter log。 |
+| 影像串流沒有 frame | Temi app 沒連到 `$PC_IP:8080`，adapter 沒啟動，或 PC IP 設錯 | 檢查 `ss -tn state established` 是否有 Temi 到 `8080`，並看 adapter log。 |
 | action viewer health `source_connected=false` | `8081` frame broadcast 未啟動或 viewer 連錯 source URL | 先重啟 overview adapter，再跑 `/TemiAgent/anomaly_detection/restart_action_viewer_8010.sh`。 |
 | action viewer `llama_server_ready=false` | llama-server 尚未完成載入，或 GPU/模型路徑錯 | 等 1-2 分鐘後重查 health；若仍失敗，檢查 `/TemiAgent/anomaly_detection/action_viewer.log`。 |
 | `uv run pytest` 在 anomaly_detection 找不到 pytest | 該模組未安裝 pytest executable | 使用 `uv run python -m unittest discover -s tests`。 |
@@ -484,7 +497,7 @@ PC_IP=192.168.50.236 TEMI_IP=192.168.50.205 ./tools/validate_temi_e2e_stack.sh
 - `lms ps` 顯示 `google/gemma-4-31b`，context 為 `64000`，沒有多餘 `:2` instance。
 - `curl http://127.0.0.1:8765/health` 顯示 `status=ok`，model/base_url 符合預期；context 用 `lms ps` 與 `/root/.hermes/config.yaml` 確認。
 - `ss -ltnp` 顯示 `1234`、`1883`、`8080`、`8081`、`8765`、`8010`、`8011` 需要的 port 已 listen。
-- Temi `192.168.50.205` 與本機 `192.168.50.236:1883`、`:8080` 有 established connection。
+- Temi `$TEMI_IP` 與本機 `$PC_IP:1883`、`:8080` 有 established connection。
 - Bridge unit tests、temi_backend tests、anomaly_detection tests、local mock E2E、demo case runner 全部通過。
 - action viewer `/health` 顯示 `ok=true`、`source_connected=true`、`frame_count` 增加、`llama_server_ready=true`。
 - live E2E 的 `cmd/request` 與 `cmd/result` 都收到，且 result `status=success`。

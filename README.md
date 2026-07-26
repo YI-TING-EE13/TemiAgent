@@ -1,172 +1,126 @@
 # TemiAgent
 
-最後更新日期：2026-06-01
+TemiAgent 是以 Temi robot 為實體載具、Hermes Agent 為認知核心的 embodied AI 居家照護研究與 Demo 專案。Temi 提供語音、影像與硬體互動；Hermes 負責情境理解、照護記憶推理、Home-ESI 風險分類與行動規劃；HermesTemiBridge 驗證跨模組事件、路徑與行動後才發布 robot command。
 
-TemiAgent 是一套以 Temi robot 為實體載具、Hermes Agent 為認知核心的 embodied AI 居家照護助理專案。目標是讓 Temi 能聽見使用者語音、取得同步影像、透過 Hermes 進行情境理解與照護風險判斷，再由安全橋接層把通過驗證的行動發回 robot。
+本專案不是醫療器材、診斷系統或正式緊急通報服務。照護分級、異常偵測與 caregiver notification 均屬研究或 Demo 範圍，不能取代專業判斷、人工確認或既有緊急流程。
 
-第一年度 Demo 聚焦在可展示、可解釋、可擴充的照護認知架構，而不是一次完成醫療級產品化。
+## Current Scope
 
-## 目前狀態快照
-
-2026-05-31 盤點結果：
-
-- `temi_backend` legacy live route 已完成硬體實測，可展示 Temi ASR、WebSocket 影像、LM Studio/VLM 與 MQTT speak 閉環。
-- `tools/temi_overview_adapter.py` 已調整為 ASR/camera-only adapter：只把 legacy ASR 與 WebSocket camera frames 轉成 canonical ASR event，不再轉發 command，避免 Temi 重複說話。
-- `hermes_temi_bridge` 的 mock/unit/E2E 路線可在 container 內通過，並支援 mock、CLI、resident HTTP 三種 Hermes invocation mode。
-- `tools/hermes_resident_server.py` 已支援多 `--skill-path` preload、`--hermes-home` 與 `--enable-memory`，適合後續真 Hermes Demo。
-- 第一年度照護助理 Demo 的三個 scenario 已完成 scope 與 skill 設計；P1 structured memory demo state 已建立，P2 Bridge memory actions 與 Home-ESI output validation 已完成最小實作，P5 Demo 素材已整理；P4 Navigation 本輪先跳過。
-
-## 快速入口
-
-| 需求 | 文件 |
-|---|---|
-| 全系統架構與 MQTT / payload contract | [docs/architecture/project_overview.md](docs/architecture/project_overview.md) |
-| 照護助理任務 scope 與驗收 | [docs/project/hermes_care_assistant_task_readme.md](docs/project/hermes_care_assistant_task_readme.md) |
-| 持續影像串流與異常行為辨識交接 | [docs/project/continuous_vision_abnormal_behavior_handoff.md](docs/project/continuous_vision_abnormal_behavior_handoff.md) |
-| 第一年度 Demo 階段任務 | [docs/project/first_year_demo_phase_tasks.md](docs/project/first_year_demo_phase_tasks.md) |
-| Demo runbook / 端到端操作 / 腳本 / checklist | [docs/project/first_year_demo_runbook.md](docs/project/first_year_demo_runbook.md)、[docs/project/first_year_demo_e2e_operation_manual.md](docs/project/first_year_demo_e2e_operation_manual.md)、[docs/project/first_year_demo_scenario_script.md](docs/project/first_year_demo_scenario_script.md)、[docs/project/first_year_demo_acceptance_checklist.md](docs/project/first_year_demo_acceptance_checklist.md) |
-| 照護助理完整交接背景 | [docs/project/hermes_care_assistant_handoff.md](docs/project/hermes_care_assistant_handoff.md) |
-| 本地整合 runbook | [docs/operations/temi_integration_runbook.md](docs/operations/temi_integration_runbook.md) |
-| 目前機器的 Temi streaming 狀態 | [docs/operations/temi_streaming_local_runbook.md](docs/operations/temi_streaming_local_runbook.md) |
-| Agent 開發者摘要 | [Agent.md](Agent.md) |
-
-## 系統目標
-
-本專案把傳統「機器人 app + 後端模型」拆成清楚的安全邊界：
-
-- Temi 負責看、聽、說、移動等硬體互動；目前 app 直接訂閱 canonical `temi/{robot_id}/cmd/request` 執行 robot actions。
-- MQTT 負責事件與命令傳遞。
-- Shared volume 負責傳遞 ASR 對齊影像路徑。
-- HermesTemiBridge 負責驗證事件、影像、Hermes JSON 與 action schema。
-- Hermes Agent 負責理解情境、讀取照護記憶、判斷 Home-ESI 風險等級與規劃下一步。
-
-核心原則：
-
-- Hermes 不直接控制硬體。
-- Hermes 不直接 publish MQTT。
-- 圖片不塞進 MQTT，只傳 path。
-- 所有 robot actions 都必須是 JSON，並由 Bridge 驗證後發布到 canonical command topic；adapter 不再翻譯或重發 command。
-- 第一版緊急通知只做 mock notification，不宣稱真實通報 119。
-
-## 模組索引
-
-| 模組 | README | 職責 |
+| Capability | State | Evidence and limits |
 |---|---|---|
-| `hermes_temi_bridge/` | [hermes_temi_bridge/README.md](hermes_temi_bridge/README.md) | Canonical MQTT event receiver、Hermes caller、JSON/action validator、command dispatcher。 |
-| `hermes-agent/` | [hermes-agent/README.TemiAgent.md](hermes-agent/README.TemiAgent.md) | Hermes 認知核心與 resident runtime；上游說明見 `hermes-agent/README.md`。 |
-| `hermes-skills/` | [hermes-skills/README.md](hermes-skills/README.md) | Temi 專用 skill mirror：robot control、care memory、Home-ESI、Discord/gateway 入口。 |
-| `temi_backend/` | [temi_backend/README.md](temi_backend/README.md) | 已驗證 legacy route：WebSocket 影像、ASR、LM Studio/VLM、MQTT actions。 |
-| `mqtt/` | [mqtt/README.md](mqtt/README.md) | Mosquitto broker 設定與 MQTT topic contract。 |
-| `memory/` | [memory/README.md](memory/README.md) | Demo structured memory：男性 persona、提醒、當日狀態、event log、summary artifacts。 |
-| `temi_shared/` | [temi_shared/README.md](temi_shared/README.md) | ASR event 對齊影像與 metadata shared volume。 |
-| `tools/` | [tools/README.md](tools/README.md) | Resident Hermes、Overview adapter、mock E2E、連線檢查與 Demo scripts。 |
-| `docs/` | [docs/README.md](docs/README.md) | 架構、操作、計畫交接、schema 與歷史文件。 |
-| `logs/` | [logs/README.md](logs/README.md) | Runtime logs 與 Demo observation artifacts。 |
-| `計劃書/` | [計劃書/README.md](計劃書/README.md) | 原始研究計畫書與專案背景資料。 |
+| Legacy live route | Verified Demo route | `temi_backend/` 已用於 Temi ASR、影像、local VLM 與 MQTT action 閉環；保留作相容路線。 |
+| Canonical ASR route | Implemented; hardware-free path verified | Overview adapter 產生 canonical ASR event，Bridge 驗證 Hermes output 後發布 command。 |
+| Resident Hermes HTTP mode | Implemented; Demo route verified | `tools/hermes_resident_server.py` 提供 `/health` 與 `/invoke`；預設整合 port 為 `8765`。 |
+| Structured care memory | Demo-only | `memory/` 只應保存合成 Demo 資料；不是病歷或正式個資儲存系統。 |
+| Continuous abnormal perception | Experimental Demo | `anomaly_detection/` 可產生 abnormal event；模型結果未經醫療或安全認證。 |
+| Caregiver notification | Demo-only | Bridge action `notify_caregiver_mock` 不是真實通報。Discord webhook 是 best-effort side channel。 |
 
-## 整體流程
+已知安全缺口：action viewer 的 pre-alert 路線目前可直接發布 canonical `cmd/request`，沒有經過 Bridge service。該路線只可視為既存 Demo-only 例外，不是新整合可沿用的架構模式；詳見 [contract traceability](docs/architecture/contract_traceability.md)。
+
+## Architecture
 
 ```text
-User speaks to Temi
-  -> Temi Android ASR final + video frames
-  -> MQTT ASR event
-  -> shared event images in temi_shared/
-  -> HermesTemiBridge validates event and image paths
-  -> Hermes Agent reasons with Temi skills
-  -> Bridge validates JSON action plan
-  -> MQTT command request
-  -> Temi speaks / turns / navigates / stops
-  -> command result and logs
+Temi Android ASR and camera
+  -> legacy MQTT and WebSocket input
+  -> tools/temi_overview_adapter.py
+  -> canonical ASR event plus allowlisted image paths
+  -> HermesTemiBridge validation
+  -> Hermes JSON-only reasoning
+  -> HermesTemiBridge action validation
+  -> canonical MQTT command
+  -> Temi Android hardware execution
+  -> command result and trace
 ```
 
-目前實作同時保留三條路線：
+Dependency and safety rules:
 
-| 路線 | 狀態 | 用途 |
-|---|---|---|
-| Legacy live route | 已驗證 | `temi_backend` + LM Studio/VLM，適合快速展示 Temi ASR、影像與 TTS 閉環。 |
-| Overview canonical route | 已可運作 | Legacy ASR/camera 經 `tools/temi_overview_adapter.py` 轉成 canonical ASR event；Bridge 呼叫 Hermes 後發布 `cmd/request`，由 Temi app 直接執行。 |
-| Resident Hermes HTTP mode | 已驗證 | 避免 Hermes CLI cold start，Demo 優先使用。 |
+- Hermes MUST return structured plans; Hermes MUST NOT publish MQTT or control hardware directly.
+- Perception and analytics components MUST NOT become hardware dispatchers.
+- Bridge owns event, path, Hermes-output and action validation for the canonical reasoning route.
+- MQTT carries structured metadata and paths, not image binaries.
+- Runtime schemas under `hermes_temi_bridge/schemas/` are authoritative. `docs/schemas/` contains synchronized reader copies with shorter filenames.
+- High-frequency camera ingest, model inference, LLM reasoning and command dispatch remain separate stages.
 
-## 照護助理 Demo Scope
+The detailed module map and payload narrative are in [project_overview.md](docs/architecture/project_overview.md). The authoritative-source and consumer matrix is in [contract_traceability.md](docs/architecture/contract_traceability.md).
 
-第一年度 Demo 聚焦三個 scenario。這裡是目標 scope；實作驗收會在下一階段補齊 structured memory 與 memory action 執行層。
+## Module Index
 
-| Scenario | 目標 | 期望輸出 |
-|---|---|---|
-| 日常提醒 | 個人化提醒與完成紀錄 | `speak`、`mark_reminder_done`、`log_event`。 |
-| 不適 / 求助 | 中風險主動關懷 | `cognitive_state.home_esi_level = L2`、`ask_clarification`、`log_event`。 |
-| 疑似跌倒 / 高風險 | 高風險確認與 mock 通報 | `home_esi_level = L1`、安全確認、`notify_caregiver_mock`、abnormal event。 |
+| Module | Responsibility | Entry point | README | Verification |
+|---|---|---|---|---|
+| `hermes_temi_bridge/` | Canonical safety boundary and command dispatcher | `hermes-temi-bridge` | [README](hermes_temi_bridge/README.md) | `uv run python -m unittest discover -s tests` |
+| `hermes-agent/` | Hermes runtime and upstream code | `tools/hermes_resident_server.py` for Temi Demo | [TemiAgent README](hermes-agent/README.TemiAgent.md) | Bridge/resident integration checks |
+| `hermes-skills/` | Reviewable mirror of Temi-specific Hermes skills | `SKILL.md` files | [README](hermes-skills/README.md) | Mirror diff and skill validators |
+| `temi_backend/` | Verified legacy ASR, video and VLM route | `uv run temi-backend` | [README](temi_backend/README.md) | `uv run pytest` |
+| `anomaly_detection/` | Experimental stream viewer and abnormal-event producer | `temi_action_viewer.py` | [README](anomaly_detection/README.md) | Module tests or documented manual QA |
+| `mqtt/` | Local Mosquitto configuration and topic index | `mosquitto.conf` | [README](mqtt/README.md) | Publish/subscribe smoke test |
+| `temi_shared/` | Runtime image and event-artifact layout | writer/reader contract | [README](temi_shared/README.md) | Bridge path tests and mock event generator |
+| `tools/` | Cross-module adapters, health probes and test runners | individual scripts | [README](tools/README.md) | Script-specific checks |
+| `docs/` | Maintained architecture, operations, project and schema documents | `docs/README.md` | [Documentation index](docs/README.md) | Link, path and consistency checks |
 
-照護認知使用三個核心 Hermes skills，並新增一個 Discord/gateway 入口 skill：
+`memory/` and `logs/` are runtime or Demo-data areas rather than independently deployed services. Their README files define data restrictions.
 
-- `temi-robot-control`：robot action contract 與安全限制。
-- `temi-care-memory`：structured care memory 讀寫規則。
-- `temi-home-esi`：Home-ESI v2 decision-tree 風險分級，主 `SKILL.md` 自含核心決策樹，reference 保留完整審查版。
-- `temi-discord-care-assistant`：Discord/gateway 對話入口提示，負責把「看手勢、看相機、我指的是什麼」等自然語句導向 Temi robot/care skills。
+## Container and Working Directory
 
-Hermes 透過 Discord 對話時，身份與專案上下文由 `hermes-agent/docker/SOUL.md`、`/TemiAgent/.hermes.md` 與 gateway 的 `$HERMES_HOME/SOUL.md` 決定。若使用者請 Hermes 看手勢或相機畫面，Hermes 應先檢查 Discord 圖片附件、`temi_shared/` 圖片路徑或 Bridge frame paths；有影像時使用 vision 與 `temi-robot-control`。若沒有影像且目前 runtime 可用工具，Hermes 可透過 `tools/capture_temi_live_snapshot.py` 從 `8081` decoded JPEG broadcast 按需擷取目前畫面，再用回傳的 `live.snapshot` frame paths 分析；若仍無法取得影像，才要求使用者觸發/傳送 Temi camera event 或附圖。若 Discord/CLI 只產生 Hermes action JSON 而沒有 ASR/Bridge invocation，可用 `tools/dispatch_hermes_action_output.py --publish` 將 JSON 驗證並包成 `temi/{robot_id}/cmd/request`。
+All project edits, searches, tests, builds, runtime inspection and service operations MUST run inside the designated container:
 
+```bash
+docker exec -it yiting.TemiAgent_gpu_all bash
+cd /TemiAgent
+```
 
+Before changing the repository:
 
-### Temi embodied capability mapping
+```bash
+pwd
+git rev-parse --show-toplevel
+git status --short
+```
 
-在 Discord/gateway 中，Hermes 應把使用者說的「看、說、聽」理解為 Temi 身上的能力：看 = camera/vision frames，且可在沒有 ASR frame 時用 `tools/capture_temi_live_snapshot.py` 低頻擷取目前畫面；說 = Temi TTS；聽 = Temi ASR/microphone。若需要讓 Temi 實際說話，不能只回覆 action JSON，必須經 ASR/Bridge route 或 `tools/dispatch_hermes_action_output.py --publish` 發成 `temi/{robot_id}/cmd/request`。
+Do not edit the mounted repository from the host. See [AGENTS.md](AGENTS.md) for the complete human and AI-agent collaboration policy.
 
-## 常用指令
+## Verified Development Checks
 
-Bridge unit tests：
+These checks do not require the Temi robot or a long-running service:
 
 ```bash
 cd /TemiAgent/hermes_temi_bridge
 uv run python -m unittest discover -s tests
 ```
 
-Backend tests：
-
 ```bash
 cd /TemiAgent/temi_backend
 uv run pytest
 ```
-
-Local mock E2E：
 
 ```bash
 cd /TemiAgent
 python3 tools/e2e_test_runner.py
 ```
 
-First-year Demo cases：
+Hardware, GPU, Discord and live-stream acceptance require their documented external dependencies. Do not report those paths as verified unless the corresponding check actually ran.
 
-```bash
-cd /TemiAgent
-python3 tools/demo_case_runner.py --keep-artifacts
-```
+## Operations
 
-Resident Hermes：
+- Cross-module startup, health checks and debugging: [Temi integration runbook](docs/operations/temi_integration_runbook.md)
+- LM Studio headless operation: [LM Studio runbook](docs/operations/lmstudio_headless_3gpu_hdd_manual.md)
+- Safe service targeting, rollback and incident evidence: [Safe service operations](docs/operations/safe_service_operations.md)
+- First-year Demo execution: [Demo runbook](docs/operations/first_year_demo_runbook.md)
+- Documentation index: [docs/README.md](docs/README.md)
 
-```bash
-cd /TemiAgent
-python3 tools/hermes_resident_server.py \
-  --host 127.0.0.1 \
-  --port 8765 \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md
-```
+Runbooks may contain environment-specific placeholders. Supply private IP addresses and secrets at runtime through environment variables or local ignored files; do not add them to reusable scripts or new committed documentation.
 
-Docker mock stack：
+## Change Synchronization
 
-```bash
-cd /TemiAgent
-docker compose up --build
-```
+- Contract changes MUST update the authoritative runtime definition, producers, consumers, tests, module README files, reader schema copies and operational notes together.
+- Documentation-only changes MUST not redefine runtime behavior.
+- Program changes MUST update the owning module README when commands, configuration, contracts, artifacts or limitations change.
+- Files under `logs/`, `temi_shared/`, model caches, checkpoints, local datasets and non-synthetic care data MUST NOT enter Git.
+- Commit, push, merge, release and deployment remain human maintainer decisions unless a task explicitly authorizes them.
 
-## 文件維護規則
+## Known Limitations
 
-- 根 README 只保留系統入口、模組索引與穩定工作流。
-- 模組實作細節寫在各模組 README。
-- 跨模組操作流程寫在 `docs/operations/`。
-- 架構與 payload contract 寫在 `docs/architecture/`。
-- 照護任務與計畫背景寫在 `docs/project/`。
-- 搬移或重新命名文件後，請用 `rg` 搜尋舊路徑並同步更新引用。
+- The Android App source is not maintained in this workspace; Android behavior requires separate source and real-device verification.
+- The canonical topic strings are repeated across producer and consumer code rather than generated from one contract package.
+- Several runbooks capture machine-specific Demo history. Treat observed values as evidence snapshots, not portable defaults.
+- The repository currently tracks some synthetic memory outputs and a model checkpoint. Removing or relocating tracked artifacts requires a separately reviewed migration.
+- No capability in this repository establishes medical-grade accuracy, guaranteed fall detection, real emergency notification or autonomous unsupervised care.

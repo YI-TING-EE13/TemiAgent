@@ -87,3 +87,35 @@ diff -ru hermes-skills/temi-discord-care-assistant hermes-agent/skills/temi-disc
 ```
 
 若刻意不同，請在相關 README 或 task readme 中說明原因。
+
+## Non-responsibilities
+
+- Skills 描述推理與輸出規則，但不執行 MQTT publish 或 Temi hardware action。
+- Skills 不取代 Bridge runtime schema、validator 或 Android command consumer。
+- Home-ESI 與 caregiver action 只屬 Demo policy，不是醫療診斷或正式通報。
+
+## Verification
+
+至少執行本文件前一節的四組 mirror diff。若要檢查一份已產生的 legacy skill
+action JSON，使用：
+
+```bash
+cd /TemiAgent
+python3 hermes-skills/temi-robot-control/scripts/validate_temi_action.py <payload.json>
+```
+
+`<payload.json>` 必須替換為實際待驗證檔案。這個 script 仍採 legacy skill contract；
+目前 canonical action acceptance 以 Bridge `action_validator.py` 與 Bridge tests 為準。
+Skill validation 不能取代 consumer test。
+
+## Contract and Change Checklist
+
+修改 action、Home-ESI、memory 或 gateway routing 時，必須同步更新兩份 skill tree、
+Bridge runtime schema/validator/tests、Hermes prompt integration、reader schema、module
+README 與 [contract traceability](../docs/architecture/contract_traceability.md)。若 mirror
+刻意不同，必須記錄 owner、原因、相容期限與移除條件。
+
+## Known Limitations
+
+Skill preload 與文字規則本身不能證明模型一定遵守 contract。所有 model output 仍需
+Bridge validation。Skills 不保存 secrets、runtime memory、影像或個資。

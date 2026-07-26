@@ -298,3 +298,39 @@ python3 tools/e2e_test_runner.py
 - `invalid_hermes_json`：Hermes 回傳 Markdown、自然語言或破碎 JSON。
 - `navigation_target_not_allowed`：導航目標尚未加入 Bridge allowlist 與 skill schema。
 - 重複事件被忽略：相同 `event_id` 還在 `EVENT_DEDUP_TTL_SECONDS` 內。
+
+## Lifecycle and Health
+
+Bridge 本身目前沒有獨立 HTTP health endpoint。操作人員應確認：
+
+- process command、working directory 與 PID 屬於本模組；
+- MQTT broker 可連線；
+- subscribe topics 與 publish result 有對應 event ID；
+- trace timeline 出現預期 stage 或明確 `event_failed`；
+- resident mode 的 `HERMES_HTTP_URL` health 端點可用。
+
+服務操作必須遵守 [safe service operations](../docs/operations/safe_service_operations.md)。
+不要把 resident Hermes 的 `/health` 誤報為 Bridge health。
+
+## Contract Authority and Update-Together Rule
+
+Runtime schema authority：
+
+```text
+schemas/asr_final_event.schema.json
+schemas/hermes_action_output.schema.json
+schemas/temi_command_request.schema.json
+schemas/temi_command_result.schema.json
+```
+
+`docs/schemas/` 是 reader copy。修改任何 payload、action、path、timeout、dedup、trace
+或 memory format 時，必須同步更新 parser/validator、producer、consumer、tests、
+reader schema、Temi skills、module README 與 operation notes。完整 mapping 見
+[contract traceability](../docs/architecture/contract_traceability.md)。
+
+## Known Limitations
+
+- Abnormal perception event 目前由 `event_models.py` 驗證，但沒有獨立 runtime JSON schema。
+- `.env.example` 未列出 `BridgeConfig` 的每個 optional care-context setting；以 `config.py` 為實作依據。
+- CLI、HTTP、MQTT、Hermes 與 Temi App failure 都可能使事件進入 degraded state；trace completion 不等同 robot action 成功，必須檢查 command result。
+- Bridge 只支援 Demo／研究照護流程，不提供醫療診斷或真實緊急通報。

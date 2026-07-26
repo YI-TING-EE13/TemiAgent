@@ -1,149 +1,138 @@
 # TemiAgent Agent Guide
 
+This file defines the mandatory collaboration boundary for human contributors and AI agents working on TemiAgent.
+
 ## Container-First Rule
 
-All TemiAgent project file edits, service commands, runtime checks, and debugging operations must be performed inside the `yiting.TemiAgent_gpu_all` container unless the user explicitly requests host-side work. This prevents host/container ownership drift and permission problems. Start with:
+All project reads, searches, edits, dependency operations, tests, builds, runtime inspection, debugging and service commands MUST run inside:
+
+```text
+DESIGNATED_CONTAINER=yiting.TemiAgent_gpu_all
+PROJECT_ROOT_IN_CONTAINER=/TemiAgent
+DEFAULT_SHELL_COMMAND=docker exec -it yiting.TemiAgent_gpu_all bash
+```
+
+Enter the environment with:
 
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
 cd /TemiAgent
+pwd
+whoami
+git rev-parse --show-toplevel
+git status --short
 ```
 
-TemiAgent is an embodied AI home-care assistant project for a Temi robot. The robot handles sensing and physical interaction, while Hermes Agent is the cognitive core for situation understanding, care memory reasoning, risk classification, and action planning.
+Do not edit the mounted repository from the host, use another container, or present host-side tests as official evidence. Host work is allowed only when the user explicitly requests it or when the operation inherently manages or repairs the container itself. Report every host-side exception.
 
-## Core Architecture
+## Required Reading Before Modification
 
-- `temi_backend/` provides the verified legacy route: Temi ASR, WebSocket video frames, local VLM reasoning, and MQTT robot actions.
-- `tools/temi_overview_adapter.py` adapts the installed Android app's legacy MQTT topics into the canonical project contract.
-- `hermes_temi_bridge/` is the safety boundary. It validates ASR events, image paths, Hermes JSON output, and action schemas before publishing robot commands.
-- `hermes-agent/` is the Hermes runtime. Read `hermes-agent/README.TemiAgent.md` before touching the upstream Hermes codebase.
-- `hermes-agent/skills/temi-*` and `hermes-skills/temi-*` define robot control, care memory, Home-ESI Lite risk policy, and the Discord/gateway Temi entry skill for camera or gesture requests.
-- `temi_shared/` stores ASR-aligned image snapshots and event metadata. MQTT carries paths, not image binaries.
+Read the following before changing project-wide behavior or documentation:
 
-## Safety Rules
+1. `README.md`
+2. `AGENTS.md`
+3. `docs/README.md`
+4. `docs/architecture/project_overview.md`
+5. `docs/architecture/contract_traceability.md`
+6. The target module README
+7. Relevant runtime schemas, configuration, tests and runbooks
 
-Hermes must not directly control hardware, publish MQTT messages, or bypass the Bridge. It should return JSON-only action plans. The Bridge is responsible for validation and dispatch. Emergency notification is demo-only unless a future task explicitly implements a real notification workflow.
+Read `hermes-agent/README.TemiAgent.md` before changing Temi-specific integration around the upstream Hermes checkout. Read the nested `hermes-agent/AGENTS.md` before any authorized upstream Hermes modification.
 
-## Runtime Defaults
+## Architecture and Safety Boundaries
 
-Run maintenance commands inside the GPU container unless a document explicitly says otherwise. All TemiAgent file edits and operational commands should be performed from inside `yiting.TemiAgent_gpu_all` to avoid host/container ownership drift.
+- `temi_backend/` owns the verified legacy ASR, video, local VLM and legacy MQTT route.
+- `tools/temi_overview_adapter.py` adapts legacy ASR and camera frames to canonical ASR events. It does not own command dispatch.
+- `hermes_temi_bridge/` is the canonical safety boundary. It validates inbound events, robot IDs, paths, Hermes JSON and actions before publishing command requests.
+- `hermes-agent/` owns reasoning runtime behavior. Hermes returns JSON-only action plans and MUST NOT publish MQTT or control hardware directly.
+- `hermes-skills/` mirrors Temi-specific skills for review; the resident runtime uses `hermes-agent/skills/temi-*`.
+- `anomaly_detection/` produces experimental perception events. A perception model MUST NOT become a general hardware dispatcher.
+- `temi_shared/` holds runtime images and event metadata. MQTT carries metadata and allowlisted paths, not image binaries.
+- The Temi Android App owns hardware execution. Its source is outside this workspace unless a task provides and authorizes that source.
 
-```bash
-docker exec -it yiting.TemiAgent_gpu_all bash
-cd /TemiAgent
+Do not bypass `event_models.py`, `image_resolver.py`, `action_validator.py`, the runtime schemas or the Bridge dispatch boundary. The existing action-viewer pre-alert direct publish is a documented Demo-only safety gap, not an approved pattern for new code.
+
+Emergency notification, medical diagnosis, guaranteed fall detection and unsupervised autonomous care are not implemented or verified capabilities. `notify_caregiver_mock` is Demo-only. Discord webhook delivery is a best-effort side channel, not an emergency service.
+
+## Contract Ownership and Synchronization
+
+`docs/architecture/contract_traceability.md` maps every cross-module contract to its authoritative source, producers, consumers and tests.
+
+Runtime JSON schemas under `hermes_temi_bridge/schemas/` are authoritative. Files under `docs/schemas/` are reader copies and MUST remain byte-equivalent to their mapped runtime schema even when filenames differ.
+
+A contract change MUST update, in one reviewable change:
+
+- the authoritative runtime definition;
+- every producer and consumer;
+- validation and compatibility behavior;
+- producer, consumer and invalid-input tests;
+- the relevant module README;
+- the reader schema copy and architecture/operations documentation.
+
+Do not change topics, payloads, shared paths, environment variables, service ports, action types, model I/O, memory formats, health endpoints or runtime artifact layouts from documentation alone.
+
+## Authorized and Protected Files
+
+The current task defines the exact writable scope. An agent MUST list intended files before a multi-file change and preserve unrelated working-tree changes.
+
+Without explicit task authorization, do not modify:
+
+- Android App source or installed packages;
+- upstream Hermes code;
+- Bridge core behavior or validators;
+- model algorithms, prompts that change safety policy, training loops or inference results;
+- MQTT runtime behavior, payload behavior or service ports;
+- dependencies, lockfiles, images or environment versions;
+- runtime memory, logs, images, datasets, caches, checkpoints or user data.
+
+Never delete or overwrite a file that has not been read and classified. Never use `git reset --hard`, `git clean`, checkout-based discard, rebase or broad formatting to hide unrelated changes.
+
+## Runtime Data, Privacy and Secrets
+
+Treat the following as non-source artifacts unless a reviewed, de-identified fixture policy says otherwise:
+
+- `logs/`, PID files and trace output;
+- `temi_shared/` images and metadata;
+- `memory/` state, event logs and summaries;
+- local datasets, video, screenshots and recordings;
+- `.env` files, credentials and gateway state;
+- model caches, downloaded weights and checkpoints.
+
+Do not commit secrets, webhook URLs, credentials, private keys, real care records, identifiable images, private network addresses or user-specific host paths. Use environment-variable names, placeholders and ignored local configuration. Logs MUST avoid full sensitive payloads and unrestricted media, and SHOULD include timestamp, module, severity and event/request/run/trace identifiers.
+
+Any retained fixture MUST document source, consent or synthetic status, de-identification, purpose, retention and access rules.
+
+## Service and High-Risk Operations
+
+Do not start, stop or restart a long-running service unless the task explicitly authorizes service operation.
+
+Before an authorized process operation:
+
+1. Record the target service, port, expected executable and working directory.
+2. Record pre-operation health.
+3. Resolve the exact PID from the port or service manager.
+4. Verify `/proc/<pid>/cmdline`, `/proc/<pid>/cwd` and executable ownership.
+5. Prefer the project script or service manager.
+6. Send `TERM` only to the verified PID.
+7. Use `KILL` only against the same verified PID after a bounded wait.
+8. Verify target health and protected dependent services.
+
+Broad process patterns are prohibited:
+
+```text
+pkill -f <pattern>
+pkill python
+killall python
+killall <service-class>
 ```
 
-LM Studio headless defaults:
+Follow `docs/operations/safe_service_operations.md` for restart, rollback, restore and incident evidence. Bulk data changes, migrations, permissions, secrets, network rules, personal/care data, model thresholds, automated notifications and hardware control require explicit human confirmation and an executable rollback or containment plan.
 
-```bash
-export LMSTUDIO_PROJECT_ROOT=/TemiAgent
-export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
-export LMSTUDIO_MODEL_ID=google/gemma-4-31b
-export LMSTUDIO_CONTEXT_LENGTH=64000
-export LMSTUDIO_VISIBLE_GPUS=0,1,2
-export PATH=/TemiAgent/.lmstudio-data/bin:$PATH
-```
+## Verification
 
-Hermes config lives at `/root/.hermes/config.yaml` in the container. The local LM Studio provider should match the loaded model:
+Use repository commands, not a generic test stack. Run the narrowest relevant check first and broader checks when impact warrants them.
 
-```yaml
-model:
-  provider: custom
-  base_url: http://localhost:1234/v1
-  default: google/gemma-4-31b
-  context_length: 64000
-auxiliary:
-  compression:
-    context_length: 64000
-```
-
-If changing model or context length, update both LM Studio load parameters and Hermes config. Keep `model.context_length` and `auxiliary.compression.context_length` synchronized so Hermes does not reject a local model due to a 4096-token auto-detection fallback.
-
-## LM Studio Restart
-
-Canonical runbook: `docs/operations/lmstudio_headless_3gpu_hdd_manual.md`.
-
-Preferred restart command:
-
-```bash
-cd /TemiAgent
-./tools/start_lmstudio_3gpu.sh
-```
-
-To change the model or context for one run:
-
-```bash
-LMSTUDIO_MODEL_ID=your/model-id LMSTUDIO_CONTEXT_LENGTH=32768 ./tools/start_lmstudio_3gpu.sh
-```
-
-Short restart sequence:
-
-```bash
-cd /TemiAgent
-export LMSTUDIO_PROJECT_ROOT=/TemiAgent
-export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
-export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-google/gemma-4-31b}
-export LMSTUDIO_CONTEXT_LENGTH=${LMSTUDIO_CONTEXT_LENGTH:-64000}
-export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0,1,2}
-export PATH=/TemiAgent/.lmstudio-data/bin:$PATH
-hash -r
-
-lms unload --all
-lms server stop
-lms daemon down
-CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
-lms server start --port 1234
-lms load "$LMSTUDIO_MODEL_ID" --context-length "$LMSTUDIO_CONTEXT_LENGTH" --gpu max
-lms ps
-```
-
-The expected default `lms ps` row is `google/gemma-4-31b` with context `64000`. If LM Studio shows `google/gemma-4-31b:2`, it means another same-name instance was already loaded. Use `lms unload --all` and reload if the unsuffixed default identifier is desired.
-
-## Health Checks
-
-LM Studio:
-
-```bash
-which lms
-readlink -f "$(which lms)"
-ps auxeww | grep -i "llmster" | grep -v grep | grep CUDA_VISIBLE_DEVICES
-curl http://127.0.0.1:1234/v1/models
-lms ps
-nvidia-smi
-```
-
-Hermes resident probe:
-
-```bash
-cd /TemiAgent
-python3 tools/hermes_resident_server.py \
-  --host 127.0.0.1 \
-  --port 8766 \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md
-```
-
-Then verify from another shell:
-
-```bash
-curl http://127.0.0.1:8766/health
-```
-
-Expected fields include `status: ok`, `model: google/gemma-4-31b`, `provider: custom`, and `base_url: http://localhost:1234/v1`.
-
-## Primary Docs
-
-- Project README: `README.md`
-- Docs index: `docs/README.md`
-- Architecture: `docs/architecture/project_overview.md`
-- LM Studio headless runbook: `docs/operations/lmstudio_headless_3gpu_hdd_manual.md`
-- Integration runbook: `docs/operations/temi_integration_runbook.md`
-- Care assistant task scope: `docs/project/hermes_care_assistant_task_readme.md`
-- Full handoff: `docs/project/hermes_care_assistant_handoff.md`
-
-## Useful Commands
+Common hardware-free checks:
 
 ```bash
 cd /TemiAgent/hermes_temi_bridge
@@ -160,4 +149,33 @@ cd /TemiAgent
 python3 tools/e2e_test_runner.py
 ```
 
-For real Hermes demos, prefer resident HTTP mode via `tools/hermes_resident_server.py` and configure the Bridge with `HERMES_INVOKE_MODE=http`.
+Documentation changes also require:
+
+- relative-link validation;
+- stale-path search;
+- schema-copy comparison;
+- Markdown code-fence validation;
+- private-path and secret scan;
+- documented command/path/port/topic/model/environment consistency review;
+- `git diff --check`;
+- final `git status --short`.
+
+Do not start long-running services merely to validate documentation. Mark hardware, GPU, Android, Discord or external-service checks `SKIPPED` when the task does not authorize or provide those dependencies.
+
+## Git and Delivery
+
+Before editing, record branch, HEAD and `git status --short`. After editing, inspect `git diff --stat`, the complete relevant diff and final status.
+
+Do not commit, push, merge, rebase, reset, clean or tag unless the user explicitly requests that Git action. A dirty tree belongs to the user; preserve unrelated changes and identify pre-existing changes separately from task changes.
+
+The final report MUST include:
+
+1. Scope completed and protected scope left unchanged.
+2. Files added, modified, moved and deleted.
+3. Contract, compatibility and safety decisions.
+4. Commands actually run with PASS, FAIL or SKIPPED.
+5. Evidence and remaining coverage gaps.
+6. Deferred work with repository evidence.
+7. Branch, HEAD, pre-existing changes, final changed files, `git diff --check` and `git status --short`.
+
+Never claim completion from inspection alone when the requested result requires executable evidence.

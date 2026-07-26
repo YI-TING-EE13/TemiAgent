@@ -163,8 +163,8 @@ python3 tools/demo_case_runner.py --keep-artifacts
 
 交付項目：
 
-- Demo runbook：`docs/project/first_year_demo_runbook.md`。
-- 端到端串接操作手冊：`docs/project/first_year_demo_e2e_operation_manual.md`。
+- Demo runbook：`docs/operations/first_year_demo_runbook.md`。
+- 端到端串接操作手冊：`docs/operations/first_year_demo_e2e_operation_manual.md`。
 - 三個 scenario 的固定 script：`docs/project/first_year_demo_scenario_script.md`。
 - Acceptance checklist：`docs/project/first_year_demo_acceptance_checklist.md`。
 - Artifact 產生工具：`tools/demo_case_runner.py`。

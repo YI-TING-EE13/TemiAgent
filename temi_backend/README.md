@@ -157,3 +157,32 @@ bytes 16..    JPEG image bytes
 ```
 
 此 broadcast endpoint 只提供 decoded frame output，不取代 `VisionBuffer.get_keyframes()`；ASR 對齊三張 snapshot 路線仍維持原 contract。
+
+## Non-responsibilities
+
+- 不擔任 canonical Hermes output 或 robot action 的安全 validator。
+- 不把 canonical command 重新轉成 legacy action。
+- 不保存正式照護資料，也不提供醫療或緊急通報能力。
+- 不保證 `8081` 下游推論速度；慢速 consumer 必須自行處理 sampling、drop 或 backpressure。
+
+## Lifecycle, Health and Failure Modes
+
+本模組沒有獨立 HTTP health endpoint。維護者應使用 process identity、`8080`／`8081`
+listener、manual frame receiver、MQTT observation 與 tests 組合判斷健康狀態。停止或
+重啟前遵守 [safe service operations](../docs/operations/safe_service_operations.md)，
+不得使用廣泛 `pkill` 或 `killall` pattern。
+
+常見 degraded state：
+
+- MQTT 不可用：legacy ASR/action route 無法交換事件。
+- `8080` 沒有 Temi frame：vision buffer 不會產生新的 ASR-aligned frame。
+- `8081` consumer 過慢或中斷：不應阻塞 `8080` ingest。
+- LM Studio 不可用或 timeout：legacy VLM route 不能產生可信 action；不得繞過錯誤處理直接發送命令。
+
+## Contract and Change Checklist
+
+修改 legacy topic、frame binary layout、port、keyframe timing 或 model environment 時，
+必須同步更新 owning code、tests、`tools/temi_overview_adapter.py`、`mqtt/README.md`、
+`temi_shared/README.md`、[contract traceability](../docs/architecture/contract_traceability.md)
+與相關 runbook。`debug_frames/` 只可作 runtime artifact；測試 fixture 必須另建、
+去識別化並記錄來源。

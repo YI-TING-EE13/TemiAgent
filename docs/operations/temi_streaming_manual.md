@@ -6,8 +6,8 @@
 
 ## 1. 專案環境與架構說明
 
-*   **Android 端專案路徑**: `F:\sdk\TemiAgent`
-*   **Python 後端專案路徑**: `F:\sdk\TemiAgent\temi_backend`
+*   **Android 端專案路徑**: `<android-project-root>`
+*   **Python 後端專案路徑**: `<android-project-root>\temi_backend`
 *   **Android Package**: `com.robotemi.agent`
 *   **視覺傳輸協定**: Pure WebSocket (傳輸 H.264 影像與硬體時間戳)
 *   **控制與語音協定**: MQTT (發布 ASR 結果，訂閱 Speak/Navigate 動作)
@@ -18,17 +18,20 @@
 ## 2. 環境變數設定 (local.properties)
 
 在編譯之前，必須先設定 Temi 要連線的電腦 IP。
-請開啟或建立 `F:\sdk\TemiAgent\local.properties`，並設定以下參數（支援以逗號分隔多組 IP 以開啟 Multicast 功能）：
+請開啟或建立 `<android-project-root>\local.properties`，並設定以下參數（支援以逗號分隔多組 IP 以開啟 Multicast 功能）：
+
+先將 `<android-sdk-path>`、`<pc-ip>` 與 `<secondary-pc-ip>` 替換為目前開發環境的值；
+不要把個人路徑或私人網路位址提交到版本控制。
 
 ```properties
 # 您的 Android SDK 安裝路徑 (編譯時必須)
-sdk.dir=C\:\\Users\\LAB-606\\AppData\\Local\\Android\\Sdk
+sdk.dir=<android-sdk-path>
 
 # WebSocket 影像接收端 IP (可設定多個)
-ws.server.urls=ws://192.168.50.233:8080,ws://192.168.50.236:8080
+ws.server.urls=ws://<secondary-pc-ip>:8080,ws://<pc-ip>:8080
 
 # MQTT 語音與動作中樞 IP (可設定多個)
-mqtt.broker.urls=tcp://192.168.50.233:1883,tcp://192.168.50.236:1883
+mqtt.broker.urls=tcp://<secondary-pc-ip>:1883,tcp://<pc-ip>:1883
 
 # 機器人的 MQTT 客戶端 ID 前綴
 mqtt.client.id=temi-agent
@@ -41,11 +44,11 @@ mqtt.client.id=temi-agent
 每當修改 Java/XML 程式碼，或更新了 `local.properties` 後，請在專案根目錄執行此指令生成安裝檔：
 
 ```powershell
-cd F:\sdk\TemiAgent
+cd <android-project-root>
 ./gradlew assembleDebug
 ```
 
-*   **成功生成檔案路徑**: `F:\sdk\TemiAgent\app\build\outputs\apk\debug\app-debug.apk`
+*   **成功生成檔案路徑**: `<android-project-root>\app\build\outputs\apk\debug\app-debug.apk`
 
 ---
 
@@ -54,12 +57,12 @@ cd F:\sdk\TemiAgent
 ### A. 無線連接 Temi 機器人
 確保您的電腦與 Temi 處於同一個 Wi-Fi 網域。
 ```powershell
-adb connect 192.168.50.205
+adb connect <temi-ip>
 ```
 
 ### B. 安裝 APK 到 Temi
 ```powershell
-adb install -r "F:\sdk\TemiAgent\app\build\outputs\apk\debug\app-debug.apk"
+adb install -r "<android-project-root>\app\build\outputs\apk\debug\app-debug.apk"
 ```
 *   `-r`: 覆蓋安裝，保留原有授權與設定資料。
 
@@ -88,21 +91,28 @@ adb shell am force-stop com.robotemi.agent
 ### A. 啟動 MQTT Broker
 請確保您的電腦上已安裝並運行 Mosquitto (或任何相容的 Broker)，預設 Port 為 `1883`。
 
-### B. 啟動視覺神經中樞 (`vision_server.py`)
-負責接收 WebSocket 影片流並解碼為 `debug_frames/`，供 LLM 取樣：
-```powershell
-cd F:\sdk\TemiAgent\temi_backend
-uv run vision_server.py
-```
-*(注意：若使用 Multicast，兩台 PC 都必須各自啟動 `vision_server.py` 才能看見畫面)*
+### B. 啟動 legacy backend
 
-### C. 啟動大腦路由 (任選一)
-1. **使用內建的 `agent_core.py` (串接 LMStudio)**:
-   ```powershell
-   uv run agent_core.py
-   ```
-2. **使用原生的 Hermes Agent**:
-   將 `F:\sdk\TemiAgent\skills\temi_control` 資料夾放入 Hermes 的全域技能庫中，讓 Hermes 親自呼叫 `scripts/speak.py` 來發號施令。
+`temi_backend` 接收 WebSocket H.264 影像、維護 vision buffer，並提供 legacy
+MQTT／VLM route。請在指定 container 內執行 package entrypoint：
+
+```bash
+docker exec -it yiting.TemiAgent_gpu_all bash
+cd /TemiAgent/temi_backend
+uv run temi-backend
+```
+
+若 Android multicast 同時送往兩台 PC，每台接收端都必須各自啟動相容的
+`temi_backend` 或 Overview adapter。
+
+### C. 啟動 canonical Hermes／Bridge route
+
+Canonical route 使用 `tools/temi_overview_adapter.py`、Hermes resident 與
+HermesTemiBridge。Hermes 只回傳 JSON action plan；Bridge 驗證後才發布
+`temi/{robot_id}/cmd/request`。不要讓 Hermes 直接呼叫硬體 script。
+
+完整啟動順序與 health checks 見
+[`temi_integration_runbook.md`](temi_integration_runbook.md)。
 
 ---
 
@@ -112,9 +122,9 @@ uv run vision_server.py
 1. **修改與設定**: 調整 `local.properties` 或 Java 程式碼。
 2. **一鍵編譯安裝與重啟**:
    ```powershell
-   ./gradlew assembleDebug ; adb install -r "F:\sdk\TemiAgent\app\build\outputs\apk\debug\app-debug.apk" ; adb shell am force-stop com.robotemi.agent ; adb shell am start -n com.robotemi.agent/.MainActivity
+   ./gradlew assembleDebug ; adb install -r "<android-project-root>\app\build\outputs\apk\debug\app-debug.apk" ; adb shell am force-stop com.robotemi.agent ; adb shell am start -n com.robotemi.agent/.MainActivity
    ```
-3. **驗證連線**: 觀察 PC 端的 `vision_server.py` 是否印出接收到 Frame 的紀錄。
+3. **驗證連線**: 觀察 `temi_backend` 或 Overview adapter log 是否收到 frame，並檢查對應 port 與 health evidence。
 
 ---
 

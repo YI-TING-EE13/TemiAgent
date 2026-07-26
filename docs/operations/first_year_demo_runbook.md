@@ -4,7 +4,7 @@
 
 ## 文件索引
 
-這份 runbook 是 Demo day 快速摘要，只放當天最常用的順序、指令與說明。完整啟動、分服務操作與 debug 請看 `docs/project/first_year_demo_e2e_operation_manual.md`。三個情境的完整台詞、預期回應、後台 artifact 與備援說法請看 `docs/project/first_year_demo_scenario_script.md`。驗收勾選請看 `docs/project/first_year_demo_acceptance_checklist.md`。
+這份 runbook 是 Demo day 快速摘要，只放當天最常用的順序、指令與說明。完整啟動、分服務操作與 debug 請看 `docs/operations/first_year_demo_e2e_operation_manual.md`。三個情境的完整台詞、預期回應、後台 artifact 與備援說法請看 `docs/project/first_year_demo_scenario_script.md`。驗收勾選請看 `docs/project/first_year_demo_acceptance_checklist.md`。
 
 ## Demo 定位
 
@@ -19,6 +19,8 @@
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
 cd /TemiAgent
+export PC_IP='<pc-ip>'
+export TEMI_IP='<temi-ip>'
 ```
 
 ### 2. 一鍵重啟全部服務
@@ -49,11 +51,11 @@ curl -sS http://127.0.0.1:8765/health
 curl -sS http://127.0.0.1:8010/health
 /TemiAgent/hermes-agent/venv/bin/hermes gateway status
 python3 -m json.tool /root/.hermes/gateway_state.json | grep -A8 '"discord"'
-adb connect 192.168.50.205:5555
+adb connect $TEMI_IP:5555
 adb devices -l
 ```
 
-最低通過條件：LM Studio 有 `google/gemma-4-31b`、Hermes health OK、Action viewer OK 且 `abnormal_cooldown_seconds = 180.0`、Discord gateway connected、ADB 看到 `192.168.50.205:5555 device`。
+最低通過條件：LM Studio 有 `google/gemma-4-31b`、Hermes health OK、Action viewer OK 且 `abnormal_cooldown_seconds = 180.0`、Discord gateway connected、ADB 看到 `$TEMI_IP:5555 device`。
 
 ### 4. 開始正式錄影
 
@@ -64,7 +66,7 @@ adb devices -l
 ```bash
 cd /TemiAgent
 mkdir -p /TemiAgent/logs/demo_recordings
-scrcpy --serial 192.168.50.205:5555 \
+scrcpy --serial $TEMI_IP:5555 \
   --no-display \
   --no-control \
   --max-size 1280 \
@@ -77,9 +79,9 @@ ADB fallback：
 ```bash
 cd /TemiAgent
 mkdir -p /TemiAgent/logs/demo_recordings
-adb -s 192.168.50.205:5555 shell screenrecord --bugreport --size 720x1280 --bit-rate 2000000 /sdcard/temi-demo.mp4
+adb -s $TEMI_IP:5555 shell screenrecord --bugreport --size 720x1280 --bit-rate 2000000 /sdcard/temi-demo.mp4
 # Ctrl+C 停止後
-adb -s 192.168.50.205:5555 pull /sdcard/temi-demo.mp4 "/TemiAgent/logs/demo_recordings/temi-demo-adb-$(date +%Y%m%d_%H%M%S).mp4"
+adb -s $TEMI_IP:5555 pull /sdcard/temi-demo.mp4 "/TemiAgent/logs/demo_recordings/temi-demo-adb-$(date +%Y%m%d_%H%M%S).mp4"
 ```
 
 若要測 1280x720 橫向輸出，照 E2E 手冊「正式 Demo 錄影」先做短測；直向 `720x1280` 是保守保底。錄完務必 `ls -lh /TemiAgent/logs/demo_recordings/*.mp4` 確認檔案大小合理。

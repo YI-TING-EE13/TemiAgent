@@ -92,8 +92,9 @@ curl -s http://127.0.0.1:8765/health
 
 ```bash
 cd /TemiAgent/temi_backend
+export PC_IP='<pc-ip>'
 uv run python /TemiAgent/tools/temi_overview_adapter.py \
-  --broker 192.168.50.236 \
+  --broker $PC_IP \
   --port 1883 \
   --vision-port 8080 \
   --shared-root /TemiAgent/temi_shared \
@@ -106,3 +107,34 @@ uv run python /TemiAgent/tools/temi_overview_adapter.py \
 - 腳本應保持可從 `/TemiAgent` 絕對路徑執行，方便 runbook 複製。
 - 修改 topic、schema 或 path mapping 時，必須同步更新 `hermes_temi_bridge/README.md` 與 `docs/operations/` runbooks。
 - Demo 用 IP、機器人狀態與臨時結果應放 runbook，不要硬編到 reusable scripts。
+
+## Non-responsibilities
+
+- `tools/` 不擁有照護 domain policy、runtime schema 或 Android hardware behavior。
+- Adapter 不 dispatch canonical command。
+- Manual dispatcher 不取代完整 Bridge service route；只可用於已驗證 JSON 的人工／Demo 操作。
+- Test runner 產生的 logs、images、memory snapshots 與 JSONL 都是 runtime artifacts。
+
+## Configuration and Failure Behavior
+
+Reusable scripts 應以 CLI 或 environment 接收 broker、port、shared root、model endpoint
+與 robot ID。不要加入 private IP、secret 或 user-specific host path 作新預設值。
+External dependency failure 必須產生 non-zero status 或明確 error artifact；不得把
+best-effort publish、Discord delivery 或缺少 command result 報為成功。
+
+## Verification
+
+```bash
+cd /TemiAgent
+python3 tools/e2e_test_runner.py
+```
+
+其他 script 應使用 `--help`、相鄰 unit test 或對應 runbook 的 bounded smoke procedure。
+需要 MQTT、model、GPU、Android 或 Discord 的檢查在依賴不可用時標記 `SKIPPED`，
+不能用 static inspection 取代。
+
+## Contract and Change Checklist
+
+修改 script CLI、topic、port、path、health endpoint、artifact layout 或 service order
+時，同步更新 owning module code/tests、此 README、
+[contract traceability](../docs/architecture/contract_traceability.md) 與跨模組 runbook。

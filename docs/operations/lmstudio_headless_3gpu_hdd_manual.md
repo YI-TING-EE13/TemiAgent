@@ -2,7 +2,7 @@
 
 本手冊用於在 **Linux / headless / container-like environment** 中啟動 LM Studio local server，並將 LM Studio 的資料目錄固定在專案 HDD 路徑 `/TemiAgent/.lmstudio-data`，同時用 LMSTUDIO_VISIBLE_GPUS 控制 LM Studio daemon 與模型 worker 使用單卡、雙卡或三卡。
 
-路徑說明：`/TemiAgent` 是 TemiAgent GPU container 內的專案路徑；host workspace 對應路徑是 `/home/yiting/TemiAgent`。
+路徑說明：`/TemiAgent` 是 TemiAgent GPU container 內的專案路徑；host workspace 對應路徑是 `<host-workspace>`。
 目前預設：載入 QAT 模型 `temi/gemma-4-31b-it-qat`，並用 `--identifier google/gemma-4-31b` 保持 Hermes / Bridge 既有 API model 名稱相容。下載命令：`lms get https://huggingface.co/unsloth/gemma-4-31B-it-qat-GGUF --gguf -y`；底層來源為 `unsloth/gemma-4-31B-it-qat-GGUF` 的 `UD-Q4_K_XL`。
 
 `temi/gemma-4-31b-it-qat` 是專案提供的 LM Studio virtual model。`tools/start_lmstudio_3gpu.sh` 會把 `tools/lmstudio_model_definitions/gemma-4-31b-it-qat.model.yaml` 安裝到 LM Studio hub 目錄；它保留 Google 2026-07-09 canonical template 的 null、thinking、tool response、continuation 與 generation-prompt 修正，同時使用 LM Studio 相容的 tool-schema formatter，避免直接載入 Unsloth GGUF 時出現 Jinja `UndefinedValue` 錯誤。
@@ -523,8 +523,7 @@ Please make sure you are using the lms shipped with LM Studio.
 處理方式：
 
 ```bash
-pkill -f llmster
-pkill -f llmworker
+lms daemon down
 
 export LMSTUDIO_PROJECT_ROOT=/TemiAgent
 export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
@@ -543,6 +542,10 @@ CUDA_VISIBLE_DEVICES="$LMSTUDIO_VISIBLE_GPUS" lms daemon up
 ```bash
 /TemiAgent/.lmstudio-data/bin/lms
 ```
+
+若 `lms daemon down` 失敗，先用 port、PID、`/proc/<pid>/cmdline`、cwd 與 executable
+確認目標，再依 [safe service operations](safe_service_operations.md) 處理同一個
+已驗證 PID。不得使用 `pkill -f llmster`、`pkill -f llmworker` 或 `killall`。
 
 ---
 
@@ -563,10 +566,10 @@ lms daemon down
 
 如果還關不掉：
 
-```bash
-pkill -f llmster
-pkill -f llmworker
-```
+1. 停止擴大操作。
+2. 記錄 `1234` listener、LM Studio daemon/worker PID、command line、cwd 與 executable。
+3. 依 [safe service operations](safe_service_operations.md) 只對已驗證 PID 執行 bounded TERM／KILL。
+4. 重新啟動後驗證 `/v1/models`、`lms ps` 與 protected project ports。
 
 然後重新啟動：
 
@@ -610,7 +613,7 @@ google/gemma-4-31b
 
 ```bash
 lms unload --all
-lms load google/gemma-4-31b --context-length 64000 --gpu max
+lms load temi/gemma-4-31b-it-qat --context-length 64000 --gpu max --identifier google/gemma-4-31b
 lms ps
 ```
 

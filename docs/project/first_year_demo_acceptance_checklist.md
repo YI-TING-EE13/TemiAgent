@@ -35,7 +35,7 @@
 
 ### 正式錄影
 
-- [ ] `adb devices -l` 看到 `192.168.50.205:5555 device`。
+- [ ] `adb devices -l` 看到 `$TEMI_IP:5555 device`。
 - [ ] `scrcpy --version` 可用。
 - [ ] `/TemiAgent/logs/demo_recordings/` 已建立。
 - [ ] 已做 `scrcpy` 8 秒短測，MP4 不是 0 byte，也不是只有數百 byte 的 header。
@@ -55,8 +55,8 @@
 
 ### 文件與口頭說明
 
-- [ ] 能指到 `docs/project/first_year_demo_e2e_operation_manual.md` 作為完整操作與 debug 文件。
-- [ ] 能指到 `docs/project/first_year_demo_runbook.md` 作為 Demo day 快速摘要。
+- [ ] 能指到 `docs/operations/first_year_demo_e2e_operation_manual.md` 作為完整操作與 debug 文件。
+- [ ] 能指到 `docs/operations/first_year_demo_runbook.md` 作為 Demo day 快速摘要。
 - [ ] 能指到 `docs/project/first_year_demo_scenario_script.md` 作為三個情境主持稿。
 - [ ] 能說明為何第一年不做大型知識圖譜，改用 structured memory。
 - [ ] 能說明 Hermes 不直接控制硬體，Bridge 是安全邊界。

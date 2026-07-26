@@ -1,5 +1,23 @@
 # Temi + Hermes Agent 整合專案總覽文件
 
+> 文件狀態：Maintained architecture narrative，最後治理審查日期為 2026-07-26。
+>
+> 本文件包含初期驗證計畫、里程碑與 Coding Agent 任務。第 7–13 節是歷史規劃與
+> 驗收設計，不代表所有項目目前均已實作或驗證。現況能力以根目錄 `README.md`、
+> 各模組 README、runtime code、tests 與實際驗證紀錄為準。
+
+## Authoritative Sources
+
+- Cross-module contract authority、producer、consumer、tests 與同步規則：
+  [contract_traceability.md](contract_traceability.md)
+- Runtime JSON schemas：`hermes_temi_bridge/schemas/`
+- Reader schema copies：`docs/schemas/`
+- Cross-module operations：[docs/operations/](../operations/)
+- Demo/research scope：[docs/project/](../project/)
+
+Architecture narrative 不得取代 runtime validator、schema 或 owning module config。
+若本文與 executable source 不一致，先保留 runtime 行為並把差異列入治理修正。
+
 ## 0. 文件目的
 
 本文件用於說明目前分散的專案模組如何整合成一套完整的 Embodied AI 系統。

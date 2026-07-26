@@ -214,7 +214,7 @@ AI6 Trace / Resident Memory
 Host 對應位置：
 
 ```text
-/home/yiting/TemiAgent
+<host-workspace>
 ```
 
 此目錄存在歷史 dirty changes，不可任意執行：
@@ -998,6 +998,16 @@ app/build.gradle
 ## 8.4 ADB 單一持有者規則
 
 Temi wireless ADB 一次只能由一個開發環境穩定持有。切換操作者或電腦前，原持有者應先執行 `adb disconnect ${TEMI_HOST}:5555`；不要讓多個 ADB client 同時搶占連線。
+
+目前操作基線：
+
+```text
+TEMI_HOST=<temi-ip>
+wireless ADB target=<temi-ip>:5555
+MQTT/WebSocket backend endpoints=<pc-ip>,<secondary-pc-ip>
+```
+
+ADB target 的變更不會自動改動已設定的 MQTT／WebSocket backend endpoints。
 
 ---
 

@@ -68,3 +68,29 @@ python3 tools/create_mock_event_images.py \
   --robot-id temi-01 \
   --event-id evt_mock_001
 ```
+
+## Non-responsibilities
+
+- 不擔任長期影像歸檔、病歷儲存或模型 checkpoint repository。
+- 不接受 MQTT 傳入的任意 host path；Bridge 必須驗證 allowlisted root。
+- 不把 runtime image、metadata 或個資視為可直接提交的 fixture。
+
+## Verification and Failure Modes
+
+建立 mock event 後，使用 Bridge event/image resolver tests 驗證存在性、大小、path
+traversal 與 Bridge-to-Hermes translation。缺檔、超過大小限制、不可讀或 root 外路徑
+必須由 Bridge 拒絕，不能降級成未驗證的模型輸入。
+
+## Retention and Cleanup
+
+`events/`、`live_snapshots/` 與 `abnormal_events/` 都是 runtime roots。保留期限、
+sampling、access 與 cleanup 必須由實際部署環境定義。Incident 進行中不得清除相關
+event/trace evidence。Cleanup 前須 preview 明確 target；不得對 `/TemiAgent` 或
+`temi_shared/` 根目錄執行廣泛遞迴刪除。
+
+## Contract and Change Checklist
+
+修改目錄 layout、filename、metadata、path mapping 或 retention 時，必須同步更新 writer、
+`image_resolver.py`、Bridge config/tests、Docker mount、ASR/abnormal contract、reader docs
+與 runbook。權威 mapping 見
+[contract traceability](../docs/architecture/contract_traceability.md)。

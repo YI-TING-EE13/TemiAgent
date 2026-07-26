@@ -11,7 +11,7 @@
 ```text
 Temi Android app
   -> legacy ASR: temi/event/asr
-  -> WebSocket camera frames: ws://192.168.50.236:8080
+  -> WebSocket camera frames: ws://$PC_IP:8080
   -> ASR/camera-only Overview adapter
   -> canonical ASR event: temi/temi-01/asr/final + temi_shared image paths
   -> HermesTemiBridge
@@ -31,8 +31,8 @@ Temi Android app
 
 ## 已實作功能
 
-- Temi app 可連到 MQTT broker `192.168.50.236:1883`。
-- Temi app 可透過 WebSocket 將 camera frames 送到 PC `192.168.50.236:8080`。
+- Temi app 可連到 MQTT broker `$PC_IP:1883`。
+- Temi app 可透過 WebSocket 將 camera frames 送到 PC `$PC_IP:8080`。
 - Adapter 可在 ASR final 時取 T-1000、T-500、T 三張 keyframes，寫入 `temi_shared/`，並發布 `temi/temi-01/asr/final`。
 - `tools/capture_temi_live_snapshot.py` 可在沒有 ASR event 時按需從 `8081` 擷取目前畫面，寫入 `temi_shared/live_snapshots/`，讓 Hermes 進行低頻主動視覺分析。
 - Bridge 支援 mock、CLI、resident HTTP 三種 Hermes invocation mode。

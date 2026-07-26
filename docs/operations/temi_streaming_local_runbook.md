@@ -2,29 +2,36 @@
 
 This is the local version of `docs/operations/temi_streaming_manual.md` for this machine.
 
+Set the current values in the container shell. Keep actual private addresses in ignored local configuration:
+
+```bash
+export PC_IP='<pc-ip>'
+export TEMI_IP='<temi-ip>'
+```
+
 ## Local Paths And IPs
 
 - Workspace: `/TemiAgent`
 - Backend: `/TemiAgent/temi_backend`
-- PC IP: `192.168.50.236`
-- Temi IP: `192.168.50.205`
-- MQTT broker: `tcp://192.168.50.236:1883`
-- Video ingest receiver: `ws://192.168.50.236:8080`
-- Decoded frame broadcast: `ws://192.168.50.236:8081`
+- PC IP: `$PC_IP`
+- Temi IP: `$TEMI_IP`
+- MQTT broker: `tcp://$PC_IP:1883`
+- Video ingest receiver: `ws://$PC_IP:8080`
+- Decoded frame broadcast: `ws://$PC_IP:8081`
 - Android package: `com.robotemi.agent`
 
 ## Current Verification Status
 
 Verified on this machine:
 
-- ADB: `192.168.50.205:5555 device`
+- ADB: `$TEMI_IP:5555 device`
 - Android package installed: `com.robotemi.agent`
 - Camera permission: granted
-- MQTT from Temi to PC: connected to `tcp://192.168.50.236:1883`
+- MQTT from Temi to PC: connected to `tcp://$PC_IP:1883`
 - MQTT command PC to Temi: `temi/action/speak` received and executed
 - Wakeup command: `temi/action/wakeup` triggers `ASR_LISTENING`
-- WebSocket video ingest: Temi connects to `192.168.50.236:8080`
-- Decoded frame broadcast: downstream consumers can subscribe to `192.168.50.236:8081`
+- WebSocket video ingest: Temi connects to `$PC_IP:8080`
+- Decoded frame broadcast: downstream consumers can subscribe to `$PC_IP:8081`
 - Video packets: Temi logs `Video packets sent`
 - Backend keyframes: saved into `/TemiAgent/temi_backend/debug_frames`
 - LMStudio/VLM route: ASR + frames produces a speak action
@@ -80,13 +87,13 @@ cd /TemiAgent
 Healthy ADB should show:
 
 ```text
-192.168.50.205:5555 device
+$TEMI_IP:5555 device
 ```
 
 Current observed blocker:
 
 ```text
-192.168.50.205:5555 offline
+$TEMI_IP:5555 offline
 ```
 
 `offline` means the Temi ADB daemon is reachable, but this PC is not authorized or the Temi ADB daemon is stuck.
@@ -109,10 +116,10 @@ If no prompt appears:
 5. Run:
 
 ```bash
-adb disconnect 192.168.50.205:5555
+adb disconnect $TEMI_IP:5555
 adb kill-server
 adb start-server
-adb connect 192.168.50.205:5555
+adb connect $TEMI_IP:5555
 adb devices -l
 ```
 
@@ -133,14 +140,14 @@ adb logcat '*:I' | grep -E 'MainActivity|WebSocketClient|MqttManager|CameraManag
 Monitor MQTT:
 
 ```bash
-mosquitto_sub -h 192.168.50.236 -p 1883 -t '#' -v
+mosquitto_sub -h $PC_IP -p 1883 -t '#' -v
 ```
 
 Send a legacy speak command:
 
 ```bash
 cd /TemiAgent/temi_backend
-uv run python scripts/manual_tts.py --broker 192.168.50.236 --port 1883 --text '這是 Temi MQTT 測試' --language ZH_TW
+uv run python scripts/manual_tts.py --broker $PC_IP --port 1883 --text '這是 Temi MQTT 測試' --language ZH_TW
 ```
 
 Expected Temi-side log:
@@ -162,7 +169,7 @@ Vision stream connected.
 Important: `8080` is the Temi upload/input WebSocket. It receives timestamp-prefixed H.264 packets from the Android app and does not automatically fan out decoded frames to other processes. Downstream abnormal-behavior models should subscribe to the decoded-frame broadcast endpoint instead:
 
 ```text
-ws://192.168.50.236:8081
+ws://$PC_IP:8081
 ```
 
 Binary message format after the initial JSON hello:
@@ -178,7 +185,7 @@ Manual receiver:
 ```bash
 cd /TemiAgent/temi_backend
 uv run python scripts/manual_frame_broadcast_receiver.py \
-  --url ws://192.168.50.236:8081 \
+  --url ws://$PC_IP:8081 \
   --output-dir debug_frames/broadcast \
   --max-frames 5
 ```
@@ -199,7 +206,7 @@ To test the `docs/architecture/project_overview.md` ASR/camera contract without 
 ```bash
 cd /TemiAgent/temi_backend
 uv run python /TemiAgent/tools/temi_overview_adapter.py \
-  --broker 192.168.50.236 \
+  --broker $PC_IP \
   --port 1883 \
   --vision-port 8080 \
   --shared-root /TemiAgent/temi_shared \
@@ -210,7 +217,7 @@ Mock Bridge:
 
 ```bash
 cd /TemiAgent/hermes_temi_bridge
-MQTT_BROKER_HOST=192.168.50.236 \
+MQTT_BROKER_HOST=$PC_IP \
 MQTT_BROKER_PORT=1883 \
 HERMES_INVOKE_MODE=mock \
 HERMES_MOCK_RESPONSE_TEXT='重啟後 Overview 快速測試成功。' \
@@ -224,7 +231,7 @@ Real Hermes Bridge:
 
 ```bash
 cd /TemiAgent/hermes_temi_bridge
-MQTT_BROKER_HOST=192.168.50.236 \
+MQTT_BROKER_HOST=$PC_IP \
 MQTT_BROKER_PORT=1883 \
 HERMES_INVOKE_MODE=cli \
 HERMES_CLI_COMMAND='hermes -z {prompt}' \
@@ -286,7 +293,7 @@ Then start the Bridge with HTTP mode:
 
 ```bash
 cd /TemiAgent/hermes_temi_bridge
-MQTT_BROKER_HOST=192.168.50.236 \
+MQTT_BROKER_HOST=$PC_IP \
 TEMI_SHARED_BRIDGE_PATH=/TemiAgent/temi_shared \
 TEMI_SHARED_HERMES_PATH=/TemiAgent/temi_shared \
 HERMES_INVOKE_MODE=http \
@@ -318,11 +325,11 @@ This copied workspace currently does not contain the Android Gradle project:
 - no `app/build/outputs/apk/debug/app-debug.apk`
 - no `AndroidManifest.xml`
 
-Because of that, this machine cannot rebuild or reinstall the Android app yet. Once the Android project is copied into `/TemiAgent`, create `/TemiAgent/local.properties` with:
+Because of that, this machine cannot rebuild or reinstall the Android app yet. Once the Android project is copied into `/TemiAgent`, replace `<pc-ip>` with the current address and create `/TemiAgent/local.properties` with:
 
 ```properties
-ws.server.urls=ws://192.168.50.236:8080
-mqtt.broker.urls=tcp://192.168.50.236:1883
+ws.server.urls=ws://<pc-ip>:8080
+mqtt.broker.urls=tcp://<pc-ip>:1883
 mqtt.client.id=temi-agent
 ```
 

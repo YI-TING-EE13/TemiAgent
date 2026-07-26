@@ -40,4 +40,4 @@ cd /TemiAgent
 python3 tools/e2e_test_runner.py
 ```
 
-For real Hermes demos, prefer resident HTTP mode via `tools/hermes_resident_server.py` and configure the Bridge with `HERMES_INVOKE_MODE=http`. Run maintenance commands from inside the `/TemiAgent` container as documented in `docs/project/first_year_demo_e2e_operation_manual.md`, because several Temi skill mirrors are container-owned.
+For real Hermes demos, prefer resident HTTP mode via `tools/hermes_resident_server.py` and configure the Bridge with `HERMES_INVOKE_MODE=http`. Run maintenance commands from inside the `/TemiAgent` container as documented in `docs/operations/first_year_demo_e2e_operation_manual.md`, because several Temi skill mirrors are container-owned.

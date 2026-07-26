@@ -301,3 +301,52 @@ cd /TemiAgent/anomaly_detection
 - 移除 stale `action_viewer.pid`。
 
 它只會停止經過路徑與 command line 驗證的 anomaly_detection process；不會停止 MQTT `1883`、Temi ingest `8080`、decoded frame broadcast `8081`、Hermes resident `8765`、HermesTemiBridge、Discord/gateway，或其他模組服務。
+
+## Responsibility and Non-responsibility
+
+本模組負責 experimental frame viewing、sampling、pose preprocessing、specialist model
+inference、prediction overlay 與 abnormal perception event production。
+
+本模組不負責：
+
+- 醫療診斷、保證性跌倒偵測或無人監督照護；
+- Home-ESI policy、Hermes reasoning 或正式 caregiver notification；
+- 一般 robot command dispatch；
+- 長期保存 image、video、model output 或照護資料。
+
+## Known Safety Exception
+
+`temi_action_viewer.py` 目前的 `--pre-alert-speak enabled` 會直接 publish
+`temi/{robot_id}/cmd/request`。該路線沒有經過 Bridge service，與 canonical
+「perception → Bridge/Hermes → validation → dispatch」邊界不一致。它只能視為
+既存 Demo-only 例外；新功能不得複製這個模式。正式安全化需要把 pre-alert policy 與
+dispatch 放回 Bridge 或等價 validator/policy boundary，本輪文件治理不修改 runtime。
+
+## Configuration and Artifacts
+
+Runtime configuration 來自 CLI、environment 與 ignored `.env`。`DISCORD_WEBHOOK_URL`
+屬 secret，不能寫入 README、log、fixture 或 Git。Downloaded weights、`*.pt`、
+`*.gguf`、test video、prediction JSONL、evidence frames、logs 與 PID files 都是
+runtime/local artifacts。
+
+## Tests and Health
+
+```bash
+cd /TemiAgent/anomaly_detection
+uv run python -m unittest discover -s tests
+```
+
+`/health` 只證明 viewer 狀態；model、source、MQTT、Discord 與 downstream command
+必須分別檢查。真實影像、GPU、Discord 或 Temi acceptance 需要 manual QA 與
+event/trace evidence。
+
+## Failure and Change Rules
+
+慢速 inference 不得阻塞 `8081` ingest；sampling、queue/drop、timeout、cooldown 與
+duplicate behavior 必須保持明確。MQTT 或 Discord failure 應個別記錄，不能互相冒充
+成功。
+
+修改 frame binary format、action labels、event payload、model revision、port、
+cooldown、pre-alert、artifact layout 或 notification behavior 時，必須同步更新
+producer/consumer、Bridge parser/path tests、model evaluation evidence、本 README、
+[contract traceability](../docs/architecture/contract_traceability.md) 與 runbook。

@@ -4,7 +4,7 @@
 
 ## 文件目的與分工
 
-本手冊是第一年度 Demo 的完整 E2E 操作文件，目標是讓操作者能從零或從當機狀態重新建立整套服務，並能在任一段出問題時定位原因。正式 Demo 當天的短版流程請看 `docs/project/first_year_demo_runbook.md`；三個 Demo 情境的台詞、展示重點與備援 artifact 請看 `docs/project/first_year_demo_scenario_script.md`。
+本手冊是第一年度 Demo 的完整 E2E 操作文件，目標是讓操作者能從零或從當機狀態重新建立整套服務，並能在任一段出問題時定位原因。正式 Demo 當天的短版流程請看 `docs/operations/first_year_demo_runbook.md`；三個 Demo 情境的台詞、展示重點與備援 artifact 請看 `docs/project/first_year_demo_scenario_script.md`。
 
 本手冊分成四個層次：
 
@@ -18,6 +18,8 @@
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
 cd /TemiAgent
+export PC_IP='<pc-ip>'
+export TEMI_IP='<temi-ip>'
 ```
 
 ## 端到端主線
@@ -41,11 +43,11 @@ Temi App ASR + Picture Streaming
 
 | 項目 | 值 |
 |---|---|
-| PC IP | `192.168.50.236` |
-| Temi IP | `192.168.50.205` |
-| MQTT broker | `192.168.50.236:1883` |
-| Picture Streaming WebSocket | `192.168.50.236:8080` |
-| Bridge health / Hermes resident | `http://127.0.0.1:8765/health` |
+| PC IP | `$PC_IP` |
+| Temi IP | `$TEMI_IP` |
+| MQTT broker | `$PC_IP:1883` |
+| Picture Streaming WebSocket | `$PC_IP:8080` |
+| Hermes resident health | `http://127.0.0.1:8765/health` |
 | Hermes resident invoke | `http://127.0.0.1:8765/invoke` |
 | Action viewer health | `http://127.0.0.1:8010/health` |
 | Action viewer UI | `http://127.0.0.1:8010/` |
@@ -168,7 +170,7 @@ Temi command result received
 如果腳本顯示沒有 Temi established connection，但 MQTT live E2E 或手動 TTS 成功，通常只是當下 TCP session 沒被偵測到。Demo 前仍建議重開 Temi App：
 
 ```bash
-adb connect 192.168.50.205:5555
+adb connect $TEMI_IP:5555
 adb shell am start -n com.robotemi.agent/.MainActivity
 ```
 
@@ -186,7 +188,7 @@ adb shell am start -n com.robotemi.agent/.MainActivity
 ```bash
 cd /TemiAgent
 mkdir -p /TemiAgent/logs/demo_recordings
-adb connect 192.168.50.205:5555
+adb connect $TEMI_IP:5555
 adb devices -l
 scrcpy --version
 ```
@@ -194,15 +196,15 @@ scrcpy --version
 通過條件：
 
 ```text
-192.168.50.205:5555 device product:rk3288 model:rk3288 device:rk3288
+$TEMI_IP:5555 device product:rk3288 model:rk3288 device:rk3288
 scrcpy 1.25
 ```
 
 若 `adb devices -l` 看到多台 device，scrcpy 和 adb 指令都要指定 serial：
 
 ```bash
---serial 192.168.50.205:5555
-adb -s 192.168.50.205:5555 ...
+scrcpy --serial $TEMI_IP:5555 ...
+adb -s $TEMI_IP:5555 ...
 ```
 
 ### 2. scrcpy headless 錄影
@@ -212,7 +214,7 @@ adb -s 192.168.50.205:5555 ...
 ```bash
 cd /TemiAgent
 mkdir -p /TemiAgent/logs/demo_recordings
-scrcpy --serial 192.168.50.205:5555 \
+scrcpy --serial $TEMI_IP:5555 \
   --no-display \
   --no-control \
   --max-size 1280 \
@@ -237,7 +239,7 @@ ls -lh /TemiAgent/logs/demo_recordings/temi-demo-*.mp4
 - 幾 MB 以上：通常有實際畫面。
 - 只有數百 byte 或小於 10 KB：多半只有 MP4 header，沒有 frame；不要當正式錄影，改用 ADB fallback 或外部錄影。
 - `ERROR: Failed to open output file`：輸出目錄不存在或路徑不是 container 內可寫路徑；先 `mkdir -p /TemiAgent/logs/demo_recordings`，並使用絕對路徑。
-- `adb: error: more than one device/emulator`：指令未指定 `--serial`，或 adb server 還保留其他 device；加 `--serial 192.168.50.205:5555`。
+- `adb: error: more than one device/emulator`：指令未指定 `--serial`，或 adb server 還保留其他 device；加 `--serial $TEMI_IP:5555`。
 - `adb reverse failed, fallback to adb forward`：Temi Android 6.0.1 上可先視為 warning；只要後續有錄到 frame 即可。
 
 8 秒短測：
@@ -245,7 +247,7 @@ ls -lh /TemiAgent/logs/demo_recordings/temi-demo-*.mp4
 ```bash
 cd /TemiAgent
 mkdir -p /TemiAgent/logs/demo_recordings
-timeout 8s scrcpy --serial 192.168.50.205:5555 \
+timeout 8s scrcpy --serial $TEMI_IP:5555 \
   --no-display \
   --no-control \
   --max-size 1280 \
@@ -265,9 +267,9 @@ Temi 原生直向解析度可能太高，曾出現 `Unable to get output buffers
 ```bash
 cd /TemiAgent
 mkdir -p /TemiAgent/logs/demo_recordings
-adb -s 192.168.50.205:5555 shell screenrecord --bugreport --size 720x1280 --bit-rate 2000000 /sdcard/temi-demo.mp4
+adb -s $TEMI_IP:5555 shell screenrecord --bugreport --size 720x1280 --bit-rate 2000000 /sdcard/temi-demo.mp4
 # Ctrl+C 停止後：
-adb -s 192.168.50.205:5555 pull /sdcard/temi-demo.mp4 "/TemiAgent/logs/demo_recordings/temi-demo-adb-$(date +%Y%m%d_%H%M%S).mp4"
+adb -s $TEMI_IP:5555 pull /sdcard/temi-demo.mp4 "/TemiAgent/logs/demo_recordings/temi-demo-adb-$(date +%Y%m%d_%H%M%S).mp4"
 ls -lh /TemiAgent/logs/demo_recordings/temi-demo-adb-*.mp4
 ```
 
@@ -278,8 +280,8 @@ ls -lh /TemiAgent/logs/demo_recordings/temi-demo-adb-*.mp4
 可以要求 Android encoder 直接輸出橫向尺寸：
 
 ```bash
-adb -s 192.168.50.205:5555 shell screenrecord --bugreport --size 1280x720 --bit-rate 2000000 /sdcard/temi-demo-landscape.mp4
-adb -s 192.168.50.205:5555 pull /sdcard/temi-demo-landscape.mp4 "/TemiAgent/logs/demo_recordings/temi-demo-landscape-$(date +%Y%m%d_%H%M%S).mp4"
+adb -s $TEMI_IP:5555 shell screenrecord --bugreport --size 1280x720 --bit-rate 2000000 /sdcard/temi-demo-landscape.mp4
+adb -s $TEMI_IP:5555 pull /sdcard/temi-demo-landscape.mp4 "/TemiAgent/logs/demo_recordings/temi-demo-landscape-$(date +%Y%m%d_%H%M%S).mp4"
 ```
 
 但 Temi 實際螢幕是直向介面時，`1280x720` 可能會縮放、裁切或旋轉不如預期。正式 Demo 最保守策略是：
@@ -301,8 +303,8 @@ ffmpeg -i input.mp4 -vf "transpose=1,scale=1280:720:force_original_aspect_ratio=
 | `encoder failed` | Temi Android H.264 encoder 狀態或解析度不支援 | 重啟 Temi / 重新開 wireless ADB，改 `--size 720x1280 --bit-rate 2000000 --bugreport` |
 | 0 byte MP4 | screenrecord 沒成功拿到 output buffer | 降低解析度，加 `--bugreport`，或改 scrcpy / 外部錄影 |
 | scrcpy MP4 只有數百 byte | scrcpy server 啟動但沒有拿到 frame | 不用該檔，改 ADB fallback；重新 `adb connect` 後短測 |
-| `more than one device/emulator` | ADB server 有多台 device | 全部指令加 `-s 192.168.50.205:5555` 或 `--serial 192.168.50.205:5555` |
-| `Device disconnected` | Wi-Fi ADB 中斷或 Temi adbd 重啟 | `adb connect 192.168.50.205:5555`，必要時在 Temi 重開 wireless debugging |
+| `more than one device/emulator` | ADB server 有多台 device | 全部指令加 `-s $TEMI_IP:5555` 或 `--serial $TEMI_IP:5555` |
+| `Device disconnected` | Wi-Fi ADB 中斷或 Temi adbd 重啟 | `adb connect $TEMI_IP:5555`，必要時在 Temi 重開 wireless debugging |
 | 錄影沒音軌 | Temi Android 6.0.1 / 權限限制 | 以外部麥克風或螢幕錄製軟體收音；ADB screenrecord 預期沒有原始麥克風音軌 |
 
 ## 第三部分：分服務手動啟動
@@ -323,7 +325,7 @@ adb devices -l
 ss -ltnp | grep -E ':(1234|1883|8080|8765|8010)'
 ```
 
-判讀：`192.168.50.205:5555 device` 代表 Temi ADB 可用；`1883` 是 MQTT；`8080` 是 adapter 或 legacy backend；`8765` 是 Hermes resident / Bridge HTTP；`8010` 是 action viewer。
+判讀：`$TEMI_IP:5555 device` 代表 Temi ADB 可用；`1883` 是 MQTT；`8080` 是 adapter 或 legacy backend；`8765` 是 Bridge 使用的 Hermes resident HTTP service；`8010` 是 action viewer。
 
 ### Terminal 1：LM Studio headless
 
@@ -376,13 +378,13 @@ ss -ltnp | grep ':1883'
 監看所有 topic：
 
 ```bash
-mosquitto_sub -h 192.168.50.236 -p 1883 -t '#' -v
+mosquitto_sub -h $PC_IP -p 1883 -t '#' -v
 ```
 
 ### Terminal 3：Temi App 與 Android log
 
 ```bash
-adb connect 192.168.50.205:5555
+adb connect $TEMI_IP:5555
 adb devices -l
 adb shell am start -n com.robotemi.agent/.MainActivity
 adb logcat '*:I' | grep -E 'MainActivity|WebSocketClient|MqttManager|CameraManager|AgentStateMachine|ACTION_SPEAK'
@@ -402,7 +404,7 @@ MainActivity: ACTION_SPEAK: "..."
 ```bash
 cd /TemiAgent/temi_backend
 uv run python /TemiAgent/tools/temi_overview_adapter.py \
-  --broker 192.168.50.236 \
+  --broker $PC_IP \
   --port 1883 \
   --vision-port 8080 \
   --shared-root /TemiAgent/temi_shared \
@@ -437,7 +439,7 @@ curl -sS http://127.0.0.1:8765/health
 
 ```bash
 cd /TemiAgent/hermes_temi_bridge
-MQTT_BROKER_HOST=192.168.50.236 \
+MQTT_BROKER_HOST=$PC_IP \
 MQTT_BROKER_PORT=1883 \
 TEMI_SHARED_BRIDGE_PATH=/TemiAgent/temi_shared \
 TEMI_SHARED_HERMES_PATH=/TemiAgent/temi_shared \
@@ -514,7 +516,7 @@ temi/temi-01/cmd/result
 ```bash
 cd /TemiAgent/temi_backend
 uv run python scripts/manual_tts.py \
-  --broker 192.168.50.236 \
+  --broker $PC_IP \
   --port 1883 \
   --text '這是 Temi MQTT 語音測試' \
   --language ZH_TW
