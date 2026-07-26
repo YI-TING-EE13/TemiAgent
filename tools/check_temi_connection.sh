@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -u
 
-TEMI_IP="${TEMI_IP:-192.168.50.205}"
-PC_IP="${PC_IP:-192.168.50.236}"
+: "${TEMI_IP:?Set TEMI_IP to the Temi robot address.}"
+: "${PC_IP:?Set PC_IP to the MQTT/video host address.}"
 
 echo "== Local PC network =="
 ip -br addr

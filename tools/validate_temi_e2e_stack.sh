@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 
 ROOT="${ROOT:-/TemiAgent}"
-PC_IP="${PC_IP:-192.168.50.236}"
-TEMI_IP="${TEMI_IP:-192.168.50.205}"
+: "${PC_IP:?Set PC_IP to the MQTT/video host address.}"
+: "${TEMI_IP:?Set TEMI_IP to the Temi robot address.}"
 ROBOT_ID="${ROBOT_ID:-temi-01}"
 MODEL_IDENTIFIER="${MODEL_IDENTIFIER:-google/gemma-4-31b}"
 MODEL_LOAD_ID="${MODEL_LOAD_ID:-temi/gemma-4-31b-it-qat}"
@@ -65,21 +65,65 @@ wait_http() {
   fail "$name did not become ready: $url"
 }
 
-stop_pattern() {
-  local pattern="$1"
-  local label="$2"
-  if pgrep -af "$pattern" > "$LOG_ROOT/${label}_before_stop.log" 2>/dev/null; then
-    log "Stopping $label"
-    pkill -TERM -f "$pattern" || true
-    sleep 2
-    if pgrep -af "$pattern" > /dev/null 2>&1; then
-      log "Forcing $label to stop"
-      pkill -KILL -f "$pattern" || true
-      sleep 1
-    fi
-  else
-    log "$label was not running"
+pid_matches_process() {
+  local pid="$1"
+  local expected_cwd="$2"
+  shift 2
+  local cwd
+  local cmdline
+  local token
+
+  [ -d "/proc/$pid" ] || return 1
+  cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+  cmdline="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+  if [ -n "$expected_cwd" ] && [ "$cwd" != "$expected_cwd" ]; then
+    return 1
   fi
+  for token in "$@"; do
+    [[ "$cmdline" == *"$token"* ]] || return 1
+  done
+}
+
+stop_verified_processes() {
+  local label="$1"
+  local expected_cwd="$2"
+  shift 2
+  local search_token="$1"
+  local pid
+  local cwd
+  local cmdline
+  local -a verified_pids=()
+
+  : > "$LOG_ROOT/${label}_before_stop.log"
+  while read -r pid; do
+    [ -n "$pid" ] || continue
+    [ "$pid" != "$$" ] || continue
+    [ -d "/proc/$pid" ] || continue
+    pid_matches_process "$pid" "$expected_cwd" "$@" || continue
+    cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+    cmdline="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+    printf 'pid=%s cwd=%s cmd=%s\n' "$pid" "$cwd" "$cmdline" \
+      >> "$LOG_ROOT/${label}_before_stop.log"
+    verified_pids+=("$pid")
+  done < <(pgrep -f -- "$search_token" 2>/dev/null || true)
+
+  if [ "${#verified_pids[@]}" -eq 0 ]; then
+    log "$label was not running"
+    return 0
+  fi
+
+  for pid in "${verified_pids[@]}"; do
+    pid_matches_process "$pid" "$expected_cwd" "$@" || continue
+    log "Stopping verified $label PID $pid"
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+  sleep 2
+  for pid in "${verified_pids[@]}"; do
+    if pid_matches_process "$pid" "$expected_cwd" "$@"; then
+      log "Forcing verified $label PID $pid to stop"
+      kill -KILL "$pid" 2>/dev/null || true
+    fi
+  done
 }
 
 require_cmd() {
@@ -165,12 +209,15 @@ fi
 
 if [ "$RESTART_SERVICES" = "1" ]; then
   if [ "$START_GATEWAY" = "1" ]; then
-    stop_pattern "hermes gateway run" "hermes_gateway"
+    stop_verified_processes "hermes_gateway" "$ROOT" "$HERMES_BIN" "gateway" "run"
   fi
-  stop_pattern "hermes-temi-bridge" "bridge"
-  stop_pattern "tools/hermes_resident_server.py" "hermes_resident"
-  stop_pattern "$ROOT/tools/temi_overview_adapter.py" "temi_overview_adapter"
-  stop_pattern "mosquitto -c $ROOT/mqtt/mosquitto.conf" "mosquitto"
+  stop_verified_processes "bridge" "$ROOT/hermes_temi_bridge" "hermes-temi-bridge"
+  stop_verified_processes "hermes_resident" "$ROOT" \
+    "tools/hermes_resident_server.py"
+  stop_verified_processes "temi_overview_adapter" "$ROOT/temi_backend" \
+    "$ROOT/tools/temi_overview_adapter.py"
+  stop_verified_processes "mosquitto" "" \
+    "mosquitto" "-c" "$ROOT/mqtt/mosquitto.conf"
 
   log "Starting MQTT broker"
   mosquitto -c "$ROOT/mqtt/mosquitto.conf" -d
