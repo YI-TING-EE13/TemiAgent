@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:temiagent:schema:care-report-interaction-result:1.0",
+  "title": "CareReportInteractionResult",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "request_id",
+    "report_id",
+    "resident_id",
+    "action",
+    "status",
+    "error_code",
+    "error_message",
+    "timestamp"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "request_id": { "type": "string", "minLength": 1 },
+    "report_id": { "type": "string", "minLength": 1 },
+    "resident_id": { "type": "string", "minLength": 1 },
+    "action": { "type": "string", "enum": ["viewed", "acknowledged"] },
+    "status": { "type": "string", "enum": ["accepted", "rejected", "failed"] },
+    "error_code": {
+      "$ref": "urn:temiagent:schema:cross-service-common:1.0#/$defs/nullableErrorCode"
+    },
+    "error_message": {
+      "oneOf": [
+        { "type": "string", "minLength": 1, "maxLength": 500 },
+        { "type": "null" }
+      ]
+    },
+    "timestamp": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "accepted" } } },
+      "then": {
+        "properties": {
+          "error_code": { "type": "null" },
+          "error_message": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["rejected", "failed"] } } },
+      "then": {
+        "properties": {
+          "error_code": {
+            "$ref": "urn:temiagent:schema:cross-service-common:1.0#/$defs/errorCode"
+          },
+          "error_message": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

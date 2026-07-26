@@ -222,3 +222,15 @@ Expected result: Temi speaks and publishes `temi/temi-01/cmd/result`.
 - Documentation copies: `/TemiAgent/docs/schemas/`
 - Hermes skill source: `/TemiAgent/hermes-agent/skills/temi-robot-control/`
 - Root skill mirror: `/TemiAgent/hermes-skills/temi-robot-control/`
+
+Contract-only schema validation（不啟動 service、不控制 hardware）：
+
+```bash
+cd /TemiAgent/hermes_temi_bridge
+uv run python -m unittest tests.test_cross_service_contract_schemas -v
+```
+
+Identity、video lifecycle、care report 與 report interaction 目前只有 schema contract。
+不得把上述 test 當成 Android、Hermes video tool、MQTT live flow、report generation 或
+real-device acceptance。實作與 rollout gate 見
+[canonical cross-service contract](../architecture/canonical_cross_service_contract.md)。

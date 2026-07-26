@@ -1,19 +1,95 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "TemiCommandResult",
-  "type": "object",
-  "required": ["schema_version", "command_id", "event_id", "robot_id", "status", "results"],
-  "properties": {
-    "schema_version": { "type": "string", "const": "1.0" },
-    "command_id": { "type": "string", "minLength": 1 },
-    "event_id": { "type": "string", "minLength": 1 },
-    "robot_id": { "type": "string", "minLength": 1 },
-    "status": {
-      "type": "string",
-      "enum": ["success", "partial_success", "failed", "cancelled", "timeout"]
+  "oneOf": [
+    { "$ref": "#/$defs/legacyCommandResultV1" },
+    { "$ref": "#/$defs/videoCommandResultV1_1" }
+  ],
+  "$defs": {
+    "legacyCommandResultV1": {
+      "type": "object",
+      "required": ["schema_version", "command_id", "event_id", "robot_id", "status", "results"],
+      "properties": {
+        "schema_version": { "type": "string", "const": "1.0" },
+        "command_id": { "type": "string", "minLength": 1 },
+        "event_id": { "type": "string", "minLength": 1 },
+        "robot_id": { "type": "string", "minLength": 1 },
+        "status": {
+          "type": "string",
+          "enum": ["success", "partial_success", "failed", "cancelled", "timeout"]
+        },
+        "results": { "type": "array" },
+        "finished_at_ms": { "type": "integer" }
+      },
+      "additionalProperties": true
     },
-    "results": { "type": "array" },
-    "finished_at_ms": { "type": "integer" }
-  },
-  "additionalProperties": true
+    "videoCommandResultV1_1": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "message_type",
+        "command_id",
+        "request_id",
+        "event_id",
+        "robot_id",
+        "video_id",
+        "status",
+        "error_code",
+        "error_message",
+        "timestamp"
+      ],
+      "properties": {
+        "schema_version": { "type": "string", "const": "1.1" },
+        "message_type": { "type": "string", "const": "video.command_result" },
+        "command_id": { "type": "string", "minLength": 1 },
+        "request_id": { "type": "string", "minLength": 1 },
+        "event_id": { "type": "string", "minLength": 1 },
+        "robot_id": { "type": "string", "minLength": 1 },
+        "video_id": { "type": "string", "minLength": 1 },
+        "status": {
+          "type": "string",
+          "enum": [
+            "accepted",
+            "started",
+            "paused",
+            "resumed",
+            "completed",
+            "stopped",
+            "rejected",
+            "failed"
+          ]
+        },
+        "error_code": {
+          "$ref": "urn:temiagent:schema:cross-service-common:1.0#/$defs/nullableErrorCode"
+        },
+        "error_message": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "maxLength": 500 },
+            { "type": "null" }
+          ]
+        },
+        "timestamp": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "enum": ["rejected", "failed"] } } },
+          "then": {
+            "properties": {
+              "error_code": {
+                "$ref": "urn:temiagent:schema:cross-service-common:1.0#/$defs/errorCode"
+              },
+              "error_message": { "type": "string", "minLength": 1, "maxLength": 500 }
+            }
+          },
+          "else": {
+            "properties": {
+              "error_code": { "type": "null" },
+              "error_message": { "type": "null" }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    }
+  }
 }

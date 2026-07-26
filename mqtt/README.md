@@ -21,6 +21,19 @@ temi/{robot_id}/cmd/request
 temi/{robot_id}/cmd/result
 ```
 
+Contract-defined routes，尚未有 active producer／consumer：
+
+```text
+temi/{robot_id}/resident/identity/result
+temi/{robot_id}/care/report
+temi/{robot_id}/care/report/interaction/result
+```
+
+Video command/result 沿用 `cmd/request` 與 `cmd/result`，並以 `schema_version=1.1`
+與 `message_type` 區分。現有 v1.0 command route 保持不變。完整 owner、direction、
+correlation 與 rollout gate 見
+[canonical cross-service contract](../docs/architecture/canonical_cross_service_contract.md)。
+
 Reserved topic，尚未確認 active producer／consumer：
 
 ```text
@@ -88,7 +101,9 @@ mosquitto_pub -h localhost -p 1883 \
 ## Non-responsibilities
 
 - Broker 不驗證照護語意、action safety 或 image path。
-- Broker 不儲存 image bytes、secret、完整照護內容或無界 retained message。
+- Broker 不持久保存 image bytes、secret、完整照護內容或無界 retained message。Care
+  report contract 即使經 MQTT 傳送也必須 `retain=false`，並由 producer/consumer 執行
+  授權與最小揭露；目前 unauthenticated local broker 不得承載真實照護資料。
 - `mqtt/` 不擁有 Android hardware execution 或 Bridge policy。
 
 ## Configuration, Health and Stop

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:temiagent:schema:cross-service-common:1.0",
+  "title": "TemiAgentCrossServiceCommon",
+  "$defs": {
+    "errorCode": {
+      "type": "string",
+      "enum": [
+        "invalid_message",
+        "unsupported_schema_version",
+        "unknown_resident",
+        "video_not_found",
+        "video_action_not_allowed",
+        "invalid_video_state",
+        "request_conflict",
+        "report_not_found",
+        "report_no_records",
+        "report_partial_data",
+        "report_delivery_failed",
+        "internal_error"
+      ]
+    },
+    "nullableErrorCode": {
+      "oneOf": [
+        { "$ref": "#/$defs/errorCode" },
+        { "type": "null" }
+      ]
+    }
+  }
+}

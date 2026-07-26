@@ -1,24 +1,70 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "TemiCommandRequest",
-  "type": "object",
-  "required": [
-    "schema_version",
-    "command_id",
-    "event_id",
-    "robot_id",
-    "source",
-    "created_at_ms",
-    "actions"
+  "oneOf": [
+    { "$ref": "#/$defs/legacyCommandV1" },
+    { "$ref": "#/$defs/videoCommandV1_1" }
   ],
-  "properties": {
-    "schema_version": { "type": "string", "const": "1.0" },
-    "command_id": { "type": "string", "minLength": 1 },
-    "event_id": { "type": "string", "minLength": 1 },
-    "robot_id": { "type": "string", "minLength": 1 },
-    "source": { "type": "string", "const": "hermes_temi_bridge" },
-    "created_at_ms": { "type": "integer" },
-    "actions": { "type": "array", "minItems": 1, "maxItems": 5 }
-  },
-  "additionalProperties": true
+  "$defs": {
+    "legacyCommandV1": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "command_id",
+        "event_id",
+        "robot_id",
+        "source",
+        "created_at_ms",
+        "actions"
+      ],
+      "properties": {
+        "schema_version": { "type": "string", "const": "1.0" },
+        "command_id": { "type": "string", "minLength": 1 },
+        "event_id": { "type": "string", "minLength": 1 },
+        "robot_id": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "const": "hermes_temi_bridge" },
+        "created_at_ms": { "type": "integer" },
+        "actions": { "type": "array", "minItems": 1, "maxItems": 5 }
+      },
+      "additionalProperties": true
+    },
+    "videoCommandV1_1": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "message_type",
+        "command_id",
+        "request_id",
+        "event_id",
+        "robot_id",
+        "resident_id",
+        "action",
+        "video_id",
+        "parameters",
+        "source",
+        "timestamp"
+      ],
+      "properties": {
+        "schema_version": { "type": "string", "const": "1.1" },
+        "message_type": { "type": "string", "const": "video.command" },
+        "command_id": { "type": "string", "minLength": 1 },
+        "request_id": { "type": "string", "minLength": 1 },
+        "event_id": { "type": "string", "minLength": 1 },
+        "robot_id": { "type": "string", "minLength": 1 },
+        "resident_id": { "type": "string", "minLength": 1 },
+        "action": {
+          "type": "string",
+          "enum": ["play_video", "pause_video", "resume_video", "stop_video"]
+        },
+        "video_id": { "type": "string", "minLength": 1 },
+        "parameters": { "type": "object" },
+        "source": {
+          "type": "string",
+          "enum": ["hermes_temi_bridge", "temi_app_manual", "remote_operator"]
+        },
+        "timestamp": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
 }

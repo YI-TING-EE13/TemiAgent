@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:temiagent:schema:care-report:1.0",
+  "title": "CareReport",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "report_id",
+    "resident_id",
+    "display_name",
+    "report_date",
+    "generated_at",
+    "status",
+    "summary",
+    "discomfort_events",
+    "abnormal_events",
+    "reminder_status",
+    "important_changes",
+    "follow_up_notes",
+    "data_completeness",
+    "error_code",
+    "error_message"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "report_id": { "type": "string", "minLength": 1 },
+    "resident_id": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "display_name": { "type": "string", "minLength": 1 },
+    "report_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "partial",
+        "no_records",
+        "identity_unknown",
+        "date_not_found",
+        "unsupported_schema_version"
+      ]
+    },
+    "summary": { "type": "string", "maxLength": 4000 },
+    "discomfort_events": { "type": "array", "items": { "type": "object" } },
+    "abnormal_events": { "type": "array", "items": { "type": "object" } },
+    "reminder_status": { "type": "array", "items": { "type": "object" } },
+    "important_changes": { "type": "array", "items": { "type": "string" } },
+    "follow_up_notes": { "type": "array", "items": { "type": "string" } },
+    "data_completeness": {
+      "type": "object",
+      "required": ["status", "missing_sections"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial",
+            "no_records",
+            "identity_unknown",
+            "date_not_found",
+            "unsupported_schema_version"
+          ]
+        },
+        "missing_sections": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "discomfort_events",
+              "abnormal_events",
+              "reminder_status",
+              "important_changes",
+              "follow_up_notes"
+            ]
+          }
+        },
+        "requested_schema_version": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "error_code": {
+      "$ref": "urn:temiagent:schema:cross-service-common:1.0#/$defs/nullableErrorCode"
+    },
+    "error_message": {
+      "oneOf": [
+        { "type": "string", "minLength": 1, "maxLength": 500 },
+        { "type": "null" }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "complete" } } },
+      "then": {
+        "properties": {
+          "resident_id": { "type": "string", "minLength": 1 },
+          "error_code": { "type": "null" },
+          "error_message": { "type": "null" },
+          "data_completeness": {
+            "properties": {
+              "status": { "const": "complete" },
+              "missing_sections": { "maxItems": 0 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "partial" } } },
+      "then": {
+        "properties": {
+          "error_code": { "const": "report_partial_data" },
+          "error_message": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "data_completeness": {
+            "properties": {
+              "status": { "const": "partial" },
+              "missing_sections": { "minItems": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "no_records" } } },
+      "then": {
+        "properties": {
+          "error_code": { "const": "report_no_records" },
+          "error_message": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "data_completeness": {
+            "properties": { "status": { "const": "no_records" } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "date_not_found" } } },
+      "then": {
+        "properties": {
+          "error_code": { "const": "report_not_found" },
+          "error_message": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "data_completeness": {
+            "properties": { "status": { "const": "date_not_found" } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "unsupported_schema_version" } } },
+      "then": {
+        "properties": {
+          "error_code": { "const": "unsupported_schema_version" },
+          "error_message": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "data_completeness": {
+            "required": ["requested_schema_version"],
+            "properties": { "status": { "const": "unsupported_schema_version" } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "identity_unknown" } } },
+      "then": {
+        "properties": {
+          "resident_id": { "type": "null" },
+          "display_name": { "const": "unknown" },
+          "error_code": { "const": "unknown_resident" },
+          "error_message": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "data_completeness": {
+            "properties": { "status": { "const": "identity_unknown" } }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

@@ -23,6 +23,8 @@ Runtime-owned schemas under `hermes_temi_bridge/schemas/` remain authoritative. 
 |---|---|---|---|
 | [project_overview.md](architecture/project_overview.md) | Maintained mixed overview; historical plan sections labeled | Project architecture | Module map, canonical data flow and payload narrative. |
 | [contract_traceability.md](architecture/contract_traceability.md) | Maintained | Bridge and contract owners | Authoritative source, producer, consumer, test and synchronization matrix. |
+| [canonical_cross_service_contract.md](architecture/canonical_cross_service_contract.md) | Contract defined; runtime integration pending | Bridge contract owner | Identity, video and care-report topics, schemas, correlation, safety and migration. |
+| [android_cross_service_contract.md](architecture/android_cross_service_contract.md) | Implementation handoff; Android verification pending | Bridge contract owner and Android owner | LAB606 Android parser, state, privacy and test requirements. |
 
 ## Operations
 

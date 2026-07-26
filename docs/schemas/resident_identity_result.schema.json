@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:temiagent:schema:resident-identity-result:1.0",
+  "title": "ResidentIdentityResult",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "resident_id",
+    "display_name",
+    "identity_status",
+    "confidence",
+    "source",
+    "reason",
+    "timestamp"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "event_id": { "type": "string", "minLength": 1 },
+    "resident_id": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "display_name": { "type": "string", "enum": ["father", "mother", "unknown"] },
+    "identity_status": { "type": "string", "enum": ["father", "mother", "unknown"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "source": {
+      "type": "string",
+      "enum": ["vision_gender_fallback", "manual_selection", "unknown"]
+    },
+    "reason": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "timestamp": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "identity_status": { "const": "unknown" } } },
+      "then": {
+        "properties": {
+          "resident_id": { "type": "null" },
+          "display_name": { "const": "unknown" },
+          "source": { "const": "unknown" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "identity_status": { "const": "father" } } },
+      "then": {
+        "properties": {
+          "resident_id": { "type": "string", "minLength": 1 },
+          "display_name": { "const": "father" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "identity_status": { "const": "mother" } } },
+      "then": {
+        "properties": {
+          "resident_id": { "type": "string", "minLength": 1 },
+          "display_name": { "const": "mother" }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

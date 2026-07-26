@@ -1,6 +1,6 @@
 # HermesTemiBridge 模組 README
 
-最後更新日期：2026-06-12
+最後更新日期：2026-07-26
 
 ## 本文件維護規則
 
@@ -61,7 +61,8 @@ Temi Action Viewer / Video Action Tester
 
 2026-05-31 盤點：
 
-- Hardware-free path 已驗證：`uv run python -m unittest discover -s tests` 通過 38 tests。
+- Hardware-free path 使用 `uv run python -m unittest discover -s tests` 驗證；完成報告必須
+  記錄當次實際 test count 與結果。
 - Root local mock E2E 已驗證：`python3 tools/e2e_test_runner.py` 回傳 `status: ok`。
 - HTTP resident mode 已完成 client 與 server wiring；實機紀錄顯示 warm resident latency 約 7-8 秒級，比 CLI cold start 約 97 秒明顯降低。
 - Action validator 會強制檢查 `cognitive_state.home_esi_level` 與 `cognitive_state.risk_reason`。
@@ -69,6 +70,10 @@ Temi Action Viewer / Video Action Tester
 - Bridge-internal memory/demo actions：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
 - 只有 robot-facing actions 會 publish 到 `temi/{robot_id}/cmd/request`；memory/demo actions 只寫入 `MEMORY_DIR`。
 - Abnormal perception events currently carry only `observation.action_name`, `observation.reason`, and `evidence.frame_paths`; they do not carry model confidence, confidence_source, or severity.
+- Identity、video command lifecycle、care report 與 report interaction 已有 canonical
+  runtime schema 與 schema tests，但 producer、consumer 與 service integration 尚未實作。
+- Video v1.1 沿用 `cmd/request`/`cmd/result` topic。Hermes video action 不在目前
+  `action_validator.py` allowlist，因此 Bridge 尚不能從 Hermes output 產生 video command。
 
 ## Bridge 設計檢視
 
@@ -321,12 +326,18 @@ schemas/asr_final_event.schema.json
 schemas/hermes_action_output.schema.json
 schemas/temi_command_request.schema.json
 schemas/temi_command_result.schema.json
+schemas/cross_service_common.schema.json
+schemas/resident_identity_result.schema.json
+schemas/care_report.schema.json
+schemas/care_report_interaction_result.schema.json
 ```
 
 `docs/schemas/` 是 reader copy。修改任何 payload、action、path、timeout、dedup、trace
 或 memory format 時，必須同步更新 parser/validator、producer、consumer、tests、
 reader schema、Temi skills、module README 與 operation notes。完整 mapping 見
 [contract traceability](../docs/architecture/contract_traceability.md)。
+Identity、video 與 care report 的欄位、topic、correlation、privacy 與 migration 見
+[canonical cross-service contract](../docs/architecture/canonical_cross_service_contract.md)。
 
 ## Known Limitations
 
@@ -334,3 +345,5 @@ reader schema、Temi skills、module README 與 operation notes。完整 mapping
 - `.env.example` 未列出 `BridgeConfig` 的每個 optional care-context setting；以 `config.py` 為實作依據。
 - CLI、HTTP、MQTT、Hermes 與 Temi App failure 都可能使事件進入 degraded state；trace completion 不等同 robot action 成功，必須檢查 command result。
 - Bridge 只支援 Demo／研究照護流程，不提供醫療診斷或真實緊急通報。
+- Bridge runtime 尚未 subscribe/publish 新 identity 或 care-report topics，也尚未處理
+  video v1.1 subtype；本階段只有 contract 與 hardware-free schema validation。

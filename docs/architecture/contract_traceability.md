@@ -21,6 +21,11 @@ When no single generated contract package exists, the producer and consumer impl
 | Hermes action output v1.0 | Implemented; Bridge validation verified | `hermes_temi_bridge/schemas/hermes_action_output.schema.json` and `action_validator.py` | Hermes runtime or mock client | Bridge | `test_action_validation.py`, client tests and fixtures | Schema, validator, Hermes prompt/skills, tests and reader copy |
 | Command request v1.0 | Implemented; hardware-free verified | `hermes_temi_bridge/schemas/temi_command_request.schema.json` and `command_dispatcher.py` | Bridge; manual dispatcher after reusing validator/builder; action-viewer pre-alert is a known Demo-only exception | Temi App | dispatcher/Bridge tests, mock E2E and real-device runbook | Schema, dispatcher, Temi App, tests, reader copy and MQTT docs |
 | Command result v1.0 | Implemented | `hermes_temi_bridge/schemas/temi_command_result.schema.json` and result handler | Temi App or mock publisher | Bridge trace/result handler | Bridge result/trace tests and mock E2E | Schema, Android producer, Bridge consumer/tests and reader copy |
+| Resident identity result v1.0 | Contract defined; runtime integration pending | `hermes_temi_bridge/schemas/resident_identity_result.schema.json` | Future identity adapter; Temi App manual selection | Temi App, future report pipeline and Bridge integration | `test_cross_service_contract_schemas.py`; Android/integration tests pending | Runtime schema, all producers/consumers, Android contract, reader copy and privacy tests |
+| Video command/result v1.1 | Contract defined; runtime integration pending | v1.1 subtypes in `temi_command_request.schema.json` and `temi_command_result.schema.json` | Future validated Bridge/remote producer; Temi App result publisher | Temi App command validator; Bridge/result originator | Schema legal/boundary/invalid and v1.0 compatibility tests; Android/real-device tests pending | Both command schemas, semantic validators, Android, Hermes action path if enabled, tests, reader copies and runbooks |
+| Care report v1.0 | Contract defined; report service not implemented | `hermes_temi_bridge/schemas/care_report.schema.json` | Future report producer behind Bridge/memory boundary | Temi App and authorized reviewer | Schema tests; producer/consumer/privacy tests pending | Runtime schema, report producer/consumer, identity isolation, reader copy and contract docs |
+| Care report interaction result v1.0 | Contract defined; runtime integration pending | `hermes_temi_bridge/schemas/care_report_interaction_result.schema.json` | Temi App or authorized reviewer | Future report owner and Bridge trace adapter | Schema tests; interaction/integration tests pending | Runtime schema, publisher/consumer, idempotency/trace tests, reader copy and Android contract |
+| New cross-service error codes | Contract defined for identity/video/report only | `hermes_temi_bridge/schemas/cross_service_common.schema.json` | New contract producers | New contract consumers | `$ref` compilation and invalid error-state tests | Common schema, every reference, reader copy and error documentation |
 | Robot action allowlist | Implemented; Bridge validation verified | `action_validator.py`, `hermes_action_output.schema.json` and command builder | Hermes plans | Bridge | `test_action_validation.py` | Validator, runtime schema, command builder, Temi skills, tests and docs |
 | Shared event path layout | Implemented; path validation verified | `image_resolver.py`, Bridge config and writer behavior in Overview adapter | Overview adapter, snapshot/anomaly tools | Bridge and Hermes prompt | image resolver/event tests and mock E2E | Writer, resolver, config, Docker mounts, tests and `temi_shared/README.md` |
 | Bridge environment variables | Implemented | `hermes_temi_bridge/src/hermes_temi_bridge/config.py` | Operator/configuration | Bridge | config tests and module startup | `config.py`, `.env.example`, Bridge README and runbooks |
@@ -39,6 +44,19 @@ temi/{robot_id}/perception/abnormal
 temi/{robot_id}/cmd/request
 temi/{robot_id}/cmd/result
 ```
+
+Contract-defined topics without active runtime publishers/subscribers:
+
+```text
+temi/{robot_id}/resident/identity/result
+temi/{robot_id}/care/report
+temi/{robot_id}/care/report/interaction/result
+```
+
+Video v1.1 reuses `cmd/request` and `cmd/result`; it does not create a parallel hardware
+command route. Current Bridge and Android behavior remains v1.0 until consumer validation,
+producer wiring and integration tests are implemented. Direction, owner and rollout rules are
+defined in [canonical_cross_service_contract.md](canonical_cross_service_contract.md).
 
 The current topic strings are repeated across modules. No generated, single-source topic library exists. A topic change therefore requires an explicit repository-wide search and coordinated producer/consumer review.
 
@@ -60,6 +78,18 @@ hermes_temi_bridge/schemas/temi_command_request.schema.json
 
 hermes_temi_bridge/schemas/temi_command_result.schema.json
   -> docs/schemas/command_result.schema.json
+
+hermes_temi_bridge/schemas/cross_service_common.schema.json
+  -> docs/schemas/cross_service_common.schema.json
+
+hermes_temi_bridge/schemas/resident_identity_result.schema.json
+  -> docs/schemas/resident_identity_result.schema.json
+
+hermes_temi_bridge/schemas/care_report.schema.json
+  -> docs/schemas/care_report.schema.json
+
+hermes_temi_bridge/schemas/care_report_interaction_result.schema.json
+  -> docs/schemas/care_report_interaction_result.schema.json
 ```
 
 The filenames differ for three reader copies. Compare the mapped files by content; do not infer drift from filename differences.
@@ -86,6 +116,7 @@ The filenames differ for three reader copies. Compare the mapped files by conten
 - **Demo-only:** Home-ESI care scenarios, synthetic memory actions, mock caregiver notification and manual/demo action dispatch.
 - **Experimental:** continuous abnormal perception and model-driven action classification.
 - **Deprecated compatibility route:** none formally removed; legacy MQTT route remains supported for Demo verification.
+- **Contract defined; integration pending:** first-year resident identity result, video command lifecycle, care report and report interaction result.
 - **Planned/future:** real notification workflow, clinical validation, production identity/access controls and a centralized generated topic contract.
 
 Do not rewrite a planned or experimental item as an implemented, verified or regulated capability.

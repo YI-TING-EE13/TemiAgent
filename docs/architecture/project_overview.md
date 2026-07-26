@@ -152,6 +152,10 @@ temi/{robot_id}/cmd/request
 temi/{robot_id}/cmd/result
 ```
 
+Identity、video lifecycle 與 care report 是 contract-defined future integration。現行
+Android App 不得被描述為已支援這些新 schema；LAB606 實作要求見
+[Android cross-service contract](android_cross_service_contract.md)。
+
 ***
 
 ## 2.2 MQTT Broker
@@ -178,6 +182,18 @@ temi/{robot_id}/cmd/request
 temi/{robot_id}/cmd/result
 temi/{robot_id}/state
 ```
+
+Contract-defined、runtime integration pending：
+
+```text
+temi/{robot_id}/resident/identity/result
+temi/{robot_id}/care/report
+temi/{robot_id}/care/report/interaction/result
+```
+
+Video command/result 沿用 `temi/{robot_id}/cmd/request` 與
+`temi/{robot_id}/cmd/result`，使用 v1.1 discriminator；v1.0 command route 不變。
+完整 contract 見 [canonical_cross_service_contract.md](canonical_cross_service_contract.md)。
 
 ### 可選 topics
 
