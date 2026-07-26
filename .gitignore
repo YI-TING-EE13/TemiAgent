@@ -32,6 +32,24 @@ temi_shared/*
 temi_backend/debug_frames/
 temp_vision_images/
 
+# Demo care-memory runtime state
+memory/*.json
+memory/*.jsonl
+memory/abnormal_events/*.json
+memory/summaries/*.md
+!memory/README.md
+!memory/abnormal_events/README.md
+!memory/summaries/README.md
+
+# Local anomaly datasets, predictions, recordings and model weights
+anomaly_detection/test_video/
+anomaly_detection/*.jsonl
+anomaly_detection/*.mp4
+anomaly_detection/*.pt
+*.gguf
+*.safetensors
+*.ckpt
+
 # LM Studio local state and downloaded models
 .lmstudio
 .lmstudio-data/
