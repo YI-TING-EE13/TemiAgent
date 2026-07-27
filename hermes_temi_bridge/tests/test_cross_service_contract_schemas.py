@@ -286,10 +286,23 @@ class CrossServiceContractSchemaTests(unittest.TestCase):
             actor="app_process",
             result_delivery="restart_reconciliation",
         )
+        restart_replay = {
+            **restart,
+            "result_delivery": "cached_replay",
+        }
         fake_remote_link = {**local_stop, "cancelled_by_command_id": "req_stop_fake"}
+        invalid_restart_actor = {**restart_replay, "actor": "remote_command"}
+        invalid_restart_delivery = {**restart, "result_delivery": "original"}
         self.assert_schema("temi_command_result.schema.json", local_stop)
         self.assert_schema("temi_command_result.schema.json", restart)
+        self.assert_schema("temi_command_result.schema.json", restart_replay)
         self.assert_schema("temi_command_result.schema.json", fake_remote_link, False)
+        self.assert_schema(
+            "temi_command_result.schema.json", invalid_restart_actor, False
+        )
+        self.assert_schema(
+            "temi_command_result.schema.json", invalid_restart_delivery, False
+        )
 
     def test_concurrent_play_rejection_identifies_active_session(self):
         rejected = self.video_result(

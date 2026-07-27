@@ -251,6 +251,7 @@ hardware-free evidence，不得為了驗證文件啟動 robot 或 App：
 - serialized play 與通過三層 validation 後的 active-session control ordering；
 - play accepted/started/terminal lifecycle，以及 pause/resume 不終止原 play；
 - remote stop 的 control result 與 linked play cancellation；local stop 不捏造 remote result；
-- concurrent play rejection、active/terminal duplicate replay、process restart reconciliation；
+- concurrent play rejection、active/terminal duplicate replay、process restart reconciliation，
+  以及 restart terminal 的兩次 `cached_replay` 均不重播或重套 Bridge state；
 - AI6 request、Android receive/player callback、MQTT result 與既有
   `command_result_received` trace 的 correlation/session ID 一致性。

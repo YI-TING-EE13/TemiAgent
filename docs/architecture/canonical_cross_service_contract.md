@@ -199,8 +199,11 @@ command。
   payload digest、session state 與最後結果。Process restart 不自動續播；先前 active play
   必須以 `cancel_reason=app_process_restart` 產生 terminal cancelled，或以
   `APP_PROCESS_RESTART` 產生 failed，並保存 terminal result，避免 backend retry 重新播放。
-- `result_delivery=restart_reconciliation` 標示 restart 補發。持久資料不得包含 media bytes、
-  URL、private path 或 raw log。
+- 首次 restart terminal result 使用 `result_delivery=restart_reconciliation`。相同 command
+  的後續 duplicate 保留原 terminal status、session、actor、cancel reason、link 與 error
+  fields，只將 delivery 改為 `cached_replay`。Bridge restart 後可能先觀察到 replay，因此
+  consumer 必須接受符合該 invariant 的 cached result，但不得重新套用已記錄的 side effect。
+  持久資料不得包含 media bytes、URL、private path 或 raw log。
 
 Trace 沿用 `command_result_received`，不增加 record type/topic。Trace payload 必須保留
 command/action、`terminal`、session IDs、playback state、result delivery 與 cancellation

@@ -349,6 +349,10 @@ Video v1.1 不新增 trace stage。Media result consumer 在既有
 `playback_state`、`result_delivery`、`cancelled_by_command_id`、`cancel_reason` 與 `actor`。
 Trace 另記 `result_disposition`、`side_effect_applied` 與 originating play command。拒絕的
 schema、correlation 或 lifecycle result 也使用相同 stage，且不改變 registry state。
+Process restart 的首次 terminal delivery 使用 `restart_reconciliation`；相同 command 的
+後續 terminal duplicate 使用 `cached_replay`，並保留原 cancellation actor、reason、link
+與 session。`side_effect_applied` 只存在於 Bridge internal disposition/trace，不是 MQTT
+payload 欄位。
 
 Resident deterministic Media dispatch 同樣不新增 trace stage；Bridge 在
 `hermes_invocation_finished.payload.resident_dispatch` 記錄 `dispatch_mode`、`intent`、

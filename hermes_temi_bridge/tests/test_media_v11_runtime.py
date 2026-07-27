@@ -132,6 +132,33 @@ class MediaContractRuntimeTests(unittest.TestCase):
                 {**result(play, "accepted"), "schema_version": "9.0"}
             )
 
+    def test_restart_cancellation_accepts_reconciliation_and_cached_replay_only(self):
+        play = command()
+        restart = result(
+            play,
+            "cancelled",
+            cancel_reason="app_process_restart",
+            actor="app_process",
+            result_delivery="restart_reconciliation",
+        )
+        validate_media_command_result(restart)
+        validate_media_command_result(
+            {**restart, "result_delivery": "cached_replay"}
+        )
+        for invalid in (
+            {**restart, "result_delivery": "original"},
+            {**restart, "result_delivery": "cached_replay", "actor": "remote_command"},
+            {
+                **restart,
+                "result_delivery": "cached_replay",
+                "cancelled_by_command_id": "cmd_stop_invalid",
+            },
+            {**result(play, "started"), "result_delivery": "cached_replay"},
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(MediaContractError):
+                    validate_media_command_result(invalid)
+
 
 class MediaRegistryLifecycleTests(unittest.TestCase):
     def setUp(self):
@@ -274,7 +301,7 @@ class MediaRegistryLifecycleTests(unittest.TestCase):
         self.assertEqual(disposition.disposition, "cached_replay_applied")
         self.assertIsNone(self.registry.active_session_id("temi-01"))
 
-    def test_app_restart_cancellation_is_terminal(self):
+    def test_app_restart_cancellation_and_two_replays_apply_state_once(self):
         self.accept_and_start()
         restart = result(
             self.play,
@@ -283,8 +310,19 @@ class MediaRegistryLifecycleTests(unittest.TestCase):
             actor="app_process",
             result_delivery="restart_reconciliation",
         )
-        disposition = self.registry.consume_result(restart)
-        self.assertTrue(disposition.command_terminal)
+        original = self.registry.consume_result(restart)
+        first_replay = self.registry.consume_result(
+            {**restart, "result_delivery": "cached_replay"}
+        )
+        second_replay = self.registry.consume_result(
+            {**restart, "result_delivery": "cached_replay"}
+        )
+        self.assertTrue(original.command_terminal)
+        self.assertTrue(original.side_effect_applied)
+        self.assertEqual(first_replay.disposition, "cached_replay")
+        self.assertFalse(first_replay.side_effect_applied)
+        self.assertEqual(second_replay.disposition, "cached_replay")
+        self.assertFalse(second_replay.side_effect_applied)
         self.assertIsNone(self.registry.active_session_id("temi-01"))
 
 

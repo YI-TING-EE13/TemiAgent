@@ -418,11 +418,13 @@ def _validate_cancellation(payload: dict[str, Any], status: str) -> None:
         if (
             cancelled_by is not None
             or actor != "app_process"
-            or payload["result_delivery"] != "restart_reconciliation"
+            or payload["result_delivery"]
+            not in {"restart_reconciliation", "cached_replay"}
         ):
             raise MediaContractError(
                 "MEDIA_CONTROL_CONFLICT",
-                "app_process_restart requires restart reconciliation without a command link",
+                "app_process_restart requires restart reconciliation or cached replay "
+                "without a command link",
             )
     else:
         raise MediaContractError(
