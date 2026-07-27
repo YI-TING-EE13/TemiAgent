@@ -159,6 +159,53 @@ class MediaContractRuntimeTests(unittest.TestCase):
                 with self.assertRaises(MediaContractError):
                     validate_media_command_result(invalid)
 
+    def test_restart_failure_accepts_reconciliation_and_cached_replay_only(self):
+        play = command()
+        restart_failure = result(
+            play,
+            "failed",
+            actor="app_process",
+            result_delivery="restart_reconciliation",
+            error_code="APP_PROCESS_RESTART",
+            error_message="Playback cannot resume after application restart.",
+        )
+        validate_media_command_result(restart_failure)
+        validate_media_command_result(
+            {**restart_failure, "result_delivery": "cached_replay"}
+        )
+        for invalid in (
+            {**restart_failure, "result_delivery": "original"},
+            {**restart_failure, "result_delivery": "cached_replay", "actor": "remote_command"},
+            {
+                **restart_failure,
+                "result_delivery": "cached_replay",
+                "playback_session_id": None,
+                "playback_state": None,
+            },
+            {
+                **restart_failure,
+                "result_delivery": "cached_replay",
+                "cancel_reason": "app_process_restart",
+            },
+            {
+                **restart_failure,
+                "status": "rejected",
+                "result_delivery": "cached_replay",
+                "playback_session_id": None,
+                "playback_state": None,
+            },
+            {
+                **result(play, "started"),
+                "actor": "app_process",
+                "result_delivery": "restart_reconciliation",
+                "error_code": "APP_PROCESS_RESTART",
+                "error_message": "Playback cannot resume after application restart.",
+            },
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(MediaContractError):
+                    validate_media_command_result(invalid)
+
 
 class MediaRegistryLifecycleTests(unittest.TestCase):
     def setUp(self):
@@ -290,7 +337,6 @@ class MediaRegistryLifecycleTests(unittest.TestCase):
         self.assertEqual(self.registry.active_session_id("temi-01"), "session_media_001")
 
     def test_cached_replay_can_supply_the_first_observed_terminal_result(self):
-        self.accept_and_start()
         completed = result(
             self.play,
             "completed",
@@ -299,9 +345,12 @@ class MediaRegistryLifecycleTests(unittest.TestCase):
         disposition = self.registry.consume_result(completed)
         self.assertTrue(disposition.side_effect_applied)
         self.assertEqual(disposition.disposition, "cached_replay_applied")
+        state = self.registry.command_state(self.play["command_id"])
+        self.assertTrue(state.terminal)
+        self.assertEqual(state.playback_session_id, "session_media_001")
         self.assertIsNone(self.registry.active_session_id("temi-01"))
 
-    def test_app_restart_cancellation_and_two_replays_apply_state_once(self):
+    def test_app_restart_reconciliation_is_terminal(self):
         self.accept_and_start()
         restart = result(
             self.play,
@@ -310,20 +359,55 @@ class MediaRegistryLifecycleTests(unittest.TestCase):
             actor="app_process",
             result_delivery="restart_reconciliation",
         )
-        original = self.registry.consume_result(restart)
-        first_replay = self.registry.consume_result(
-            {**restart, "result_delivery": "cached_replay"}
+        disposition = self.registry.consume_result(restart)
+        self.assertTrue(disposition.command_terminal)
+        self.assertIsNone(self.registry.active_session_id("temi-01"))
+
+    def test_fresh_registry_applies_restart_replay_once_then_deduplicates(self):
+        replay = result(
+            self.play,
+            "cancelled",
+            cancel_reason="app_process_restart",
+            actor="app_process",
+            result_delivery="cached_replay",
         )
-        second_replay = self.registry.consume_result(
-            {**restart, "result_delivery": "cached_replay"}
-        )
-        self.assertTrue(original.command_terminal)
-        self.assertTrue(original.side_effect_applied)
+        first = self.registry.consume_result(replay)
+        first_replay = self.registry.consume_result(replay)
+        second_replay = self.registry.consume_result(replay)
+        self.assertTrue(first.command_terminal)
+        self.assertTrue(first.side_effect_applied)
+        self.assertEqual(first.disposition, "cached_replay_applied")
         self.assertEqual(first_replay.disposition, "cached_replay")
         self.assertFalse(first_replay.side_effect_applied)
         self.assertEqual(second_replay.disposition, "cached_replay")
         self.assertFalse(second_replay.side_effect_applied)
+        state = self.registry.command_state(self.play["command_id"])
+        self.assertEqual(state.playback_session_id, "session_media_001")
         self.assertIsNone(self.registry.active_session_id("temi-01"))
+        with self.assertRaises(MediaContractError):
+            self.registry.consume_result(
+                {**replay, "playback_session_id": "session_media_other"}
+            )
+        with self.assertRaises(MediaContractError):
+            self.registry.consume_result(
+                {
+                    **replay,
+                    "command_id": "cmd_play_other",
+                    "request_id": "cmd_play_other",
+                }
+            )
+        with self.assertRaises(MediaContractError):
+            self.registry.consume_result(
+                {
+                    **replay,
+                    "command_action": "pause_video",
+                    "status": "succeeded",
+                    "target_playback_session_id": "session_media_001",
+                    "playback_state": "paused",
+                    "cancel_reason": None,
+                    "actor": "remote_command",
+                }
+            )
 
 
 class MediaBridgeServiceTests(unittest.TestCase):

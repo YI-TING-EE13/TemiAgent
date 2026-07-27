@@ -90,6 +90,8 @@ remote stop 必須發布 stop command `succeeded` 及原 play `cancelled`，後�
   `APP_PROCESS_RESTART`），首次傳送使用 `result_delivery=restart_reconciliation` 並保存該
   terminal result。之後相同 command 的 duplicate retry 只能原樣 replay terminal outcome，
   並將 delivery 改為 `cached_replay`；actor、reason、link 與 session 不得改變。
+  Failed shape 必須保留原 play session、使用 `playback_state=failed`、
+  `actor=app_process`，且 cancellation reason/link 為 null。
 
 每個 result 原樣回傳 correlation fields，並包含 action、terminal、session IDs、state、
 actor 與 delivery mode。`rejected`/`failed` 使用 media error allowlist；其他 result 的 error

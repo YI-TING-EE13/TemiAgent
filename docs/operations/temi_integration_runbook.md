@@ -253,5 +253,7 @@ hardware-free evidence，不得為了驗證文件啟動 robot 或 App：
 - remote stop 的 control result 與 linked play cancellation；local stop 不捏造 remote result；
 - concurrent play rejection、active/terminal duplicate replay、process restart reconciliation，
   以及 restart terminal 的兩次 `cached_replay` 均不重播或重套 Bridge state；
+- Bridge restart 後重新註冊相同 play request，第一筆 terminal cached replay 可建立缺失的
+  session correlation 並直接終結 command，且不得建立 active session；
 - AI6 request、Android receive/player callback、MQTT result 與既有
   `command_result_received` trace 的 correlation/session ID 一致性。

@@ -363,11 +363,30 @@ class CrossServiceContractSchemaTests(unittest.TestCase):
             error_code="APP_PROCESS_RESTART",
             error_message="Playback cannot resume after application restart.",
         )
+        restart_failure_replay = {
+            **restart_failure,
+            "result_delivery": "cached_replay",
+        }
         legacy_media_error = {
             **restart_failure,
             "error_code": "invalid_video_state",
         }
         self.assert_schema("temi_command_result.schema.json", restart_failure)
+        self.assert_schema("temi_command_result.schema.json", restart_failure_replay)
+        for invalid in (
+            {**restart_failure, "result_delivery": "original"},
+            {**restart_failure_replay, "actor": "remote_command"},
+            {**restart_failure_replay, "playback_session_id": None},
+            {**restart_failure_replay, "cancel_reason": "app_process_restart"},
+            {
+                **restart_failure_replay,
+                "status": "rejected",
+                "playback_session_id": None,
+                "playback_state": None,
+            },
+        ):
+            with self.subTest(invalid=invalid):
+                self.assert_schema("temi_command_result.schema.json", invalid, False)
         self.assert_schema("temi_command_result.schema.json", legacy_media_error, False)
 
     def test_care_report_legal_boundary_and_illegal(self):

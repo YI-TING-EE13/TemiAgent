@@ -270,6 +270,29 @@
         {
           "if": {
             "properties": {
+              "error_code": { "const": "APP_PROCESS_RESTART" }
+            },
+            "required": ["error_code"]
+          },
+          "then": {
+            "properties": {
+              "status": { "const": "failed" },
+              "command_action": { "const": "play_video" },
+              "terminal": { "const": true },
+              "playback_session_id": { "type": "string", "minLength": 1 },
+              "playback_state": { "const": "failed" },
+              "cancelled_by_command_id": { "type": "null" },
+              "cancel_reason": { "type": "null" },
+              "actor": { "const": "app_process" },
+              "result_delivery": {
+                "enum": ["restart_reconciliation", "cached_replay"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
               "status": { "const": "rejected" },
               "error_code": { "const": "MEDIA_SESSION_ACTIVE" }
             },

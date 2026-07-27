@@ -114,6 +114,7 @@ class MediaSessionRegistry:
                 return self._disposition(command, result, replay, False)
 
             if result["command_action"] == "play_video":
+                self._establish_terminal_replay_session(command, result)
                 self._apply_play_result(command, result)
             else:
                 self._apply_control_result(command, result)
@@ -258,6 +259,32 @@ class MediaSessionRegistry:
             return "duplicate_result"
         return None
 
+    def _establish_terminal_replay_session(
+        self,
+        command: MediaCommandState,
+        result: dict[str, Any],
+    ) -> None:
+        """Recover a missing play/session correlation from a terminal cached replay."""
+        if (
+            command.status != "published"
+            or result["result_delivery"] != "cached_replay"
+            or not result["terminal"]
+        ):
+            return
+        session_id = result["playback_session_id"]
+        if session_id is None:
+            return
+        if result["cancel_reason"] == "remote_stop":
+            self._validate_remote_stop_link(command, result)
+        mapped_command = self._session_to_play_command.get(session_id)
+        if mapped_command not in {None, result["command_id"]}:
+            raise MediaContractError(
+                "MEDIA_CONTROL_CONFLICT",
+                "cached terminal replay session is mapped to another command",
+            )
+        command.playback_session_id = session_id
+        self._session_to_play_command[session_id] = result["command_id"]
+
     def _apply_play_result(
         self,
         command: MediaCommandState,
@@ -310,7 +337,14 @@ class MediaSessionRegistry:
             self._clear_active_play(command)
         elif status in {"completed", "cancelled"}:
             self._require_play_session(command, result)
-            if command.status not in {"accepted", "started"}:
+            first_observed_terminal_replay = (
+                command.status == "published"
+                and result["result_delivery"] == "cached_replay"
+            )
+            if (
+                command.status not in {"accepted", "started"}
+                and not first_observed_terminal_replay
+            ):
                 raise MediaContractError(
                     "MEDIA_CONTROL_CONFLICT",
                     f"{status} result requires an active play command",

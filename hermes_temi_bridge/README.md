@@ -352,7 +352,9 @@ schema、correlation 或 lifecycle result 也使用相同 stage，且不改變 r
 Process restart 的首次 terminal delivery 使用 `restart_reconciliation`；相同 command 的
 後續 terminal duplicate 使用 `cached_replay`，並保留原 cancellation actor、reason、link
 與 session。`side_effect_applied` 只存在於 Bridge internal disposition/trace，不是 MQTT
-payload 欄位。
+payload 欄位。Bridge restart 後第一次觀察到 terminal cached replay 時，registry 可用該
+result 建立缺失的 command/session correlation 並直接記為 terminal；registry 不建立 active
+session，也不代表 Android player 再次執行。後續相同 replay 不再改變 registry state。
 
 Resident deterministic Media dispatch 同樣不新增 trace stage；Bridge 在
 `hermes_invocation_finished.payload.resident_dispatch` 記錄 `dispatch_mode`、`intent`、

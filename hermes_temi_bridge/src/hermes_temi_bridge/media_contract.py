@@ -303,6 +303,7 @@ def validate_media_command_result(payload: dict[str, Any]) -> dict[str, Any]:
 
     _validate_result_state(payload, action, status, session_id, state)
     _validate_cancellation(payload, status)
+    _validate_app_process_restart_failure(payload, action, status, session_id, state)
 
     active_session_id = payload["active_playback_session_id"]
     is_active_rejection = status == "rejected" and payload["error_code"] == "MEDIA_SESSION_ACTIVE"
@@ -430,6 +431,31 @@ def _validate_cancellation(payload: dict[str, Any], status: str) -> None:
         raise MediaContractError(
             "MEDIA_CONTROL_CONFLICT",
             "cancelled play requires an allowlisted cancel_reason",
+        )
+
+
+def _validate_app_process_restart_failure(
+    payload: dict[str, Any],
+    action: str,
+    status: str,
+    session_id: Any,
+    state: Any,
+) -> None:
+    if payload["error_code"] != "APP_PROCESS_RESTART":
+        return
+    if (
+        status != "failed"
+        or action != "play_video"
+        or not session_id
+        or state != "failed"
+        or payload["actor"] != "app_process"
+        or payload["result_delivery"]
+        not in {"restart_reconciliation", "cached_replay"}
+    ):
+        raise MediaContractError(
+            "MEDIA_CONTROL_CONFLICT",
+            "APP_PROCESS_RESTART requires a failed terminal play result with a "
+            "session and restart reconciliation or cached replay delivery",
         )
 
 
