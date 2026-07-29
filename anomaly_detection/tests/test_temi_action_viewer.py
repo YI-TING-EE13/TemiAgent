@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+import requests
 from unittest import mock
 
 import numpy as np
@@ -10,6 +11,8 @@ import numpy as np
 from temi_action_viewer import (
     ActionState,
     BufferedFrame,
+    DISCORD_DELIVERY_TEST_MESSAGE,
+    DiscordDeliveryError,
     LlamaCppBackend,
     PosePreprocessor,
     abnormal_cooldown_elapsed,
@@ -21,9 +24,11 @@ from temi_action_viewer import (
     load_env_value,
     maybe_publish_abnormal_event,
     maybe_publish_pre_alert_speak,
+    notification_health,
     notify_discord_webhook,
     normalize_action_response,
     parse_action_response,
+    run_discord_delivery_test,
     sample_uniform_frames,
     save_abnormal_evidence_frames,
     should_publish_abnormal_event,
@@ -243,6 +248,7 @@ class PromptParserTests(unittest.TestCase):
         class FakeResponse:
             status_code = 204
             text = ""
+            headers = {}
 
         with tempfile.TemporaryDirectory() as tmp:
             env_path = Path(tmp) / ".env"
@@ -260,8 +266,108 @@ class PromptParserTests(unittest.TestCase):
 
         self.assertEqual(result["status_code"], 204)
         self.assertEqual(result["file_count"], 1)
+        self.assertEqual(result["failure_code"], "DISCORD_DELIVERED")
         self.assertEqual(post.call_count, 1)
         self.assertIn("files", post.call_args.kwargs)
+
+    def test_discord_http_failures_have_safe_codes(self) -> None:
+        class FakeResponse:
+            def __init__(self, status_code: int, headers: dict[str, str] | None = None) -> None:
+                self.status_code = status_code
+                self.headers = headers or {}
+
+        cases = {
+            401: "DISCORD_UNAUTHORIZED",
+            403: "DISCORD_FORBIDDEN",
+            404: "DISCORD_WEBHOOK_NOT_FOUND",
+            429: "DISCORD_RATE_LIMITED",
+            500: "DISCORD_BAD_RESPONSE",
+        }
+        webhook = "https://example.invalid/private-webhook"
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / ".env"
+            env_path.write_text(f"DISCORD_WEBHOOK_URL={webhook}\n", encoding="utf-8")
+            for status_code, expected_code in cases.items():
+                headers = {"Retry-After": "3"} if status_code == 429 else {}
+                with self.subTest(status_code=status_code):
+                    with mock.patch("temi_action_viewer.requests.post", return_value=FakeResponse(status_code, headers)):
+                        with self.assertRaises(DiscordDeliveryError) as raised:
+                            notify_discord_webhook("[TEST] delivery", [], env_path.as_posix(), 0)
+                    self.assertEqual(raised.exception.failure_code, expected_code)
+                    self.assertNotIn(webhook, str(raised.exception))
+                    if status_code == 429:
+                        self.assertEqual(raised.exception.retry_after_seconds, 3.0)
+
+    def test_discord_timeout_and_connection_failures_have_safe_codes(self) -> None:
+        webhook = "https://example.invalid/private-webhook"
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / ".env"
+            env_path.write_text(f"DISCORD_WEBHOOK_URL={webhook}\n", encoding="utf-8")
+            for error, expected_code in (
+                (requests.Timeout("late"), "DISCORD_TIMEOUT"),
+                (requests.ConnectionError("offline"), "DISCORD_CONNECTION_FAILED"),
+            ):
+                with self.subTest(expected_code=expected_code):
+                    with mock.patch("temi_action_viewer.requests.post", side_effect=error):
+                        with self.assertRaises(DiscordDeliveryError) as raised:
+                            notify_discord_webhook("[TEST] delivery", [], env_path.as_posix(), 0)
+                    self.assertEqual(raised.exception.failure_code, expected_code)
+                    self.assertNotIn(webhook, str(raised.exception))
+
+    def test_discord_webhook_unset_and_empty_payload_are_classified(self) -> None:
+        with self.assertRaises(DiscordDeliveryError) as unset:
+            notify_discord_webhook("[TEST] delivery", [], "/does/not/exist", 0)
+        self.assertEqual(unset.exception.failure_code, "DISCORD_WEBHOOK_UNSET")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / ".env"
+            env_path.write_text("DISCORD_WEBHOOK_URL=https://example.invalid/hook\n", encoding="utf-8")
+            with self.assertRaises(DiscordDeliveryError) as malformed:
+                notify_discord_webhook("   ", [], env_path.as_posix(), 0)
+        self.assertEqual(malformed.exception.failure_code, "DISCORD_BAD_RESPONSE")
+
+    def test_notification_health_reports_booleans_without_webhook(self) -> None:
+        class Args:
+            abnormal_publish = "enabled"
+            discord_notify = "enabled"
+            discord_env_path = ""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / ".env"
+            webhook = "https://example.invalid/private-webhook"
+            env_path.write_text(f"DISCORD_WEBHOOK_URL={webhook}\n", encoding="utf-8")
+            Args.discord_env_path = env_path.as_posix()
+            result = notification_health(Args)
+
+        self.assertEqual(
+            result,
+            {
+                "abnormal_publish_enabled": True,
+                "discord_notify_enabled": True,
+                "discord_webhook_configured": True,
+            },
+        )
+        self.assertNotIn(webhook, repr(result))
+
+    def test_controlled_discord_delivery_test_uses_production_sender(self) -> None:
+        class Args:
+            discord_notify = "enabled"
+            discord_env_path = "/private/.env"
+
+        with mock.patch("temi_action_viewer.notify_discord_webhook", return_value={"failure_code": "DISCORD_DELIVERED"}) as sender:
+            result = run_discord_delivery_test(Args)
+
+        self.assertEqual(result["failure_code"], "DISCORD_DELIVERED")
+        sender.assert_called_once_with(DISCORD_DELIVERY_TEST_MESSAGE, [], Args.discord_env_path, 0)
+
+    def test_disabled_abnormal_publish_skips_persistence_and_notification(self) -> None:
+        class Args:
+            abnormal_publish = "disabled"
+
+        parsed = parse_action_response("Action: falls down\nEvidence/Reason: The person is on the floor.")
+        with mock.patch("temi_action_viewer.save_abnormal_evidence_frames") as save:
+            self.assertIsNone(maybe_publish_abnormal_event(parsed, [make_frame(1, 1.0)], Args))
+        save.assert_not_called()
 
     def test_abnormal_publish_continues_to_discord_when_mqtt_fails(self) -> None:
         class Args:

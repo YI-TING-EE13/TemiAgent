@@ -23,12 +23,16 @@ SPEC.loader.exec_module(demo)
 
 
 class DemoLifecycleConfigTests(unittest.TestCase):
-    def make_config(self, root: Path, *, flags: tuple[str, str, str] = ("true", "true", "true")) -> Path:
+    def make_config(
+        self,
+        root: Path,
+        *,
+        flags: tuple[str, str, str] = ("true", "true", "true"),
+        viewer_enabled: bool = False,
+    ) -> Path:
         runtime = root / "runtime"
         config = root / "demo.env"
-        config.write_text(
-            "\n".join(
-                [
+        lines = [
                     f"TEMIAGENT_RUNTIME_ROOT={runtime}",
                     "MQTT_BROKER_HOST=127.0.0.1",
                     "MQTT_BROKER_PORT=1883",
@@ -44,8 +48,20 @@ class DemoLifecycleConfigTests(unittest.TestCase):
                     f"HERMES_MEDIA_TOOL_ENABLED={flags[1]}",
                     f"HERMES_MEDIA_FAST_PATH_ENABLED={flags[2]}",
                 ]
+        if viewer_enabled:
+            lines.extend(
+                [
+                    "DEMO_ACTION_VIEWER_ENABLED=true",
+                    "DEMO_ACTION_VIEWER_MODEL=test-model",
+                    "DEMO_ACTION_VIEWER_GGUF_MODEL_PATH=/tmp/test.gguf",
+                    "DEMO_ACTION_VIEWER_MMPROJ_PATH=/tmp/test.mmproj",
+                    "DEMO_ACTION_VIEWER_LLAMA_SERVER=/tmp/llama-server",
+                    "DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH=enabled",
+                    "DEMO_ACTION_VIEWER_DISCORD_NOTIFY=enabled",
+                ]
             )
-            + "\n",
+        config.write_text(
+            "\n".join(lines) + "\n",
             encoding="utf-8",
         )
         config.chmod(0o600)
@@ -74,6 +90,22 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             config = self.make_config(Path(temporary), flags=("true", "true", "false"))
             with self.assertRaisesRegex(demo.DemoError, "HERMES_MEDIA_FAST_PATH_ENABLED"):
                 demo.load_config(config)
+
+    def test_viewer_flags_are_forwarded_after_private_config_reload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config_path = self.make_config(Path(temporary), viewer_enabled=True)
+            config = demo.load_config(config_path)
+            viewer_argv = demo._service_argv(config, "viewer")
+
+        self.assertTrue(config.viewer_enabled)
+        self.assertEqual(
+            viewer_argv[viewer_argv.index("--abnormal-publish") + 1],
+            "enabled",
+        )
+        self.assertEqual(
+            viewer_argv[viewer_argv.index("--discord-notify") + 1],
+            "enabled",
+        )
 
     def test_source_gate_allows_both_index_and_worktree_memory_changes(self) -> None:
         source = {

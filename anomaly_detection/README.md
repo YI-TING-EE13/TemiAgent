@@ -206,6 +206,37 @@ Discord 通知由以下參數控制：
 
 MQTT 和 Discord 發布彼此獨立。若 MQTT 不可用，event result 會記錄 `mqtt_error`，並仍會嘗試 Discord 通知。若 Discord 失敗，event result 會記錄 `discord_error`，不會停止 viewer/tester。
 
+Discord sender only records a non-secret delivery code: `DISCORD_DELIVERED`,
+`DISCORD_WEBHOOK_UNSET`, `DISCORD_UNAUTHORIZED`, `DISCORD_FORBIDDEN`,
+`DISCORD_WEBHOOK_NOT_FOUND`, `DISCORD_RATE_LIMITED`, `DISCORD_TIMEOUT`,
+`DISCORD_CONNECTION_FAILED`, or `DISCORD_BAD_RESPONSE`. For HTTP 429, the
+viewer records a valid `Retry-After` value for operator-controlled retry and
+does not retry alerts automatically.
+
+`/health` also returns three readiness booleans without the webhook or channel ID:
+
+```json
+{
+  "abnormal_publish_enabled": true,
+  "discord_notify_enabled": true,
+  "discord_webhook_configured": true
+}
+```
+
+After recording has ended and a human has explicitly authorized it, the operator
+may run one controlled delivery test. It bypasses detector, MQTT, TTS, and care
+memory, sends the fixed `[TEST]` message, and calls the production sender:
+
+```bash
+cd /TemiAgent/anomaly_detection
+.venv/bin/python temi_action_viewer.py \
+  --discord-delivery-test \
+  --discord-notify enabled \
+  --discord-env-path /TemiAgent/anomaly_detection/.env
+```
+
+The command outputs only the delivery code, HTTP status, and available retry-after value.
+
 ## 影片動作測試工具
 
 `temi_video_action_tester.py` 會在本機影片檔上執行同一套八幀推論策略：

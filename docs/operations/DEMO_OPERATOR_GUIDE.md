@@ -189,6 +189,16 @@ request published、Android accepted、Android started/playing、螢幕播放。
 `DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK` 從 private env 傳入；沒有明確人類授權時三者必須是
 `disabled`。這避免 action-viewer 的已知 Demo-only direct pre-alert gap 繞過 Bridge。
 
+When an operator explicitly authorizes abnormal MQTT publication and Discord
+notification, viewer `/health` must show `abnormal_publish_enabled=true`,
+`discord_notify_enabled=true`, and `discord_webhook_configured=true`. These
+fields are booleans only and never disclose the webhook or channel ID. After
+recording ends, the operator may run one `temi_action_viewer.py` invocation
+with `--discord-delivery-test` using the fixed `[TEST]` message. That
+entry bypasses detector, MQTT, TTS, Bridge, and care memory but uses the same
+production webhook sender; it requires a configured private webhook and explicit
+authorization for this operation.
+
 結束 Demo 的唯一停止指令是：
 
 ```bash

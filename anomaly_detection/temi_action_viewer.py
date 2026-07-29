@@ -59,6 +59,35 @@ PRE_ALERT_SPEAK_TEXT = {
 DEFAULT_DISCORD_ENV_PATH = "/TemiAgent/anomaly_detection/.env"
 DISCORD_WEBHOOK_ENV_VAR = "DISCORD_WEBHOOK_URL"
 DISCORD_USERNAME = "HABD-Agent"
+DISCORD_DELIVERY_TEST_MESSAGE = (
+    "[TEST] TemiAgent abnormal-event Discord delivery verification.\n"
+    "No real care incident occurred."
+)
+
+
+class DiscordDeliveryError(RuntimeError):
+    """A safe, machine-readable Discord delivery failure."""
+
+    def __init__(
+        self,
+        failure_code: str,
+        *,
+        status_code: int | None = None,
+        retry_after_seconds: float | None = None,
+        detail: str | None = None,
+    ) -> None:
+        self.failure_code = failure_code
+        self.status_code = status_code
+        self.retry_after_seconds = retry_after_seconds
+        self.detail = detail
+        parts = [failure_code]
+        if status_code is not None:
+            parts.append(f"HTTP {status_code}")
+        if retry_after_seconds is not None:
+            parts.append(f"retry_after_seconds={retry_after_seconds:g}")
+        if detail:
+            parts.append(detail)
+        super().__init__("; ".join(parts))
 
 
 @dataclass(frozen=True)
@@ -1004,6 +1033,28 @@ def format_publish_error(exc: Exception) -> str:
     return str(exc)
 
 
+def _discord_failure_code_for_http_status(status_code: int) -> str:
+    """Map a Discord webhook HTTP status to a stable, non-secret failure code."""
+    return {
+        401: "DISCORD_UNAUTHORIZED",
+        403: "DISCORD_FORBIDDEN",
+        404: "DISCORD_WEBHOOK_NOT_FOUND",
+        429: "DISCORD_RATE_LIMITED",
+    }.get(status_code, "DISCORD_BAD_RESPONSE")
+
+
+def _discord_retry_after_seconds(response: requests.Response) -> float | None:
+    """Return a non-negative Retry-After value when Discord provides one."""
+    raw_value = str(getattr(response, "headers", {}).get("Retry-After", "")).strip()
+    if not raw_value:
+        return None
+    try:
+        value = float(raw_value)
+    except ValueError:
+        return None
+    return value if value >= 0 else None
+
+
 def notify_discord_webhook(
     message: str,
     file_paths: list[str],
@@ -1013,35 +1064,49 @@ def notify_discord_webhook(
     """Send an abnormal event notification to Discord using a webhook from .env."""
     webhook_url = load_env_value(env_path, DISCORD_WEBHOOK_ENV_VAR)
     if not webhook_url:
-        raise RuntimeError(f"missing {DISCORD_WEBHOOK_ENV_VAR} in {env_path}")
+        raise DiscordDeliveryError("DISCORD_WEBHOOK_UNSET")
+    if not message.strip():
+        raise DiscordDeliveryError("DISCORD_BAD_RESPONSE", detail="empty message")
     paths = [Path(path) for path in file_paths[: max(0, max_files)]]
     for path in paths:
         if not path.is_file():
-            raise FileNotFoundError(path)
+            raise DiscordDeliveryError("DISCORD_BAD_RESPONSE", detail="evidence file unavailable")
 
     payload = {"username": DISCORD_USERNAME, "content": message.strip()}
-    if paths:
-        with contextlib.ExitStack() as stack:
-            files = {
-                f"files[{index}]": (path.name, stack.enter_context(path.open("rb")))
-                for index, path in enumerate(paths)
-            }
+    try:
+        if paths:
+            with contextlib.ExitStack() as stack:
+                files = {
+                    f"files[{index}]": (path.name, stack.enter_context(path.open("rb")))
+                    for index, path in enumerate(paths)
+                }
+                response = requests.post(
+                    webhook_url,
+                    data={"payload_json": json.dumps(payload, ensure_ascii=False)},
+                    files=files,
+                    timeout=60,
+                )
+        else:
             response = requests.post(
                 webhook_url,
-                data={"payload_json": json.dumps(payload, ensure_ascii=False)},
-                files=files,
-                timeout=60,
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=15,
             )
-    else:
-        response = requests.post(
-            webhook_url,
-            headers={"Content-Type": "application/json"},
-            json=payload,
-            timeout=15,
+    except requests.Timeout as exc:
+        raise DiscordDeliveryError("DISCORD_TIMEOUT") from exc
+    except requests.ConnectionError as exc:
+        raise DiscordDeliveryError("DISCORD_CONNECTION_FAILED") from exc
+    except requests.RequestException as exc:
+        raise DiscordDeliveryError("DISCORD_CONNECTION_FAILED") from exc
+    if not 200 <= response.status_code < 300:
+        raise DiscordDeliveryError(
+            _discord_failure_code_for_http_status(response.status_code),
+            status_code=response.status_code,
+            retry_after_seconds=_discord_retry_after_seconds(response),
         )
-    if response.status_code not in (200, 204):
-        raise RuntimeError(f"discord webhook failed: {response.status_code} {response.text}")
     return {
+        "failure_code": "DISCORD_DELIVERED",
         "status_code": response.status_code,
         "file_count": len(paths),
     }
@@ -1063,6 +1128,29 @@ def load_env_value(env_path: str, key: str) -> str:
         if name.strip() == key:
             return raw_value.strip().strip('"').strip("'")
     return ""
+
+
+def notification_health(args: argparse.Namespace) -> dict[str, bool]:
+    """Return safe direct-webhook readiness booleans without disclosing the webhook."""
+    return {
+        "abnormal_publish_enabled": getattr(args, "abnormal_publish", "disabled") == "enabled",
+        "discord_notify_enabled": getattr(args, "discord_notify", "disabled") == "enabled",
+        "discord_webhook_configured": bool(
+            load_env_value(getattr(args, "discord_env_path", DEFAULT_DISCORD_ENV_PATH), DISCORD_WEBHOOK_ENV_VAR)
+        ),
+    }
+
+
+def run_discord_delivery_test(args: argparse.Namespace) -> dict[str, Any]:
+    """Send one clearly marked test using the production Discord sender only."""
+    if getattr(args, "discord_notify", "disabled") != "enabled":
+        return {"failure_code": "DISCORD_DISABLED", "file_count": 0}
+    return notify_discord_webhook(
+        DISCORD_DELIVERY_TEST_MESSAGE,
+        [],
+        getattr(args, "discord_env_path", DEFAULT_DISCORD_ENV_PATH),
+        0,
+    )
 
 
 def build_discord_abnormal_message(event: dict[str, Any], topic: str) -> str:
@@ -1425,6 +1513,7 @@ def build_app(args: argparse.Namespace) -> web.Application:
                 "discord_notify": args.discord_notify,
                 "discord_env_path": args.discord_env_path,
                 "discord_max_files": args.discord_max_files,
+                **notification_health(args),
                 "prediction_count": snapshot_data["prediction_count"],
                 "prediction_age_ms": prediction_age_ms,
                 "average_inference_ms": snapshot_data["average_inference_ms"],
@@ -1500,6 +1589,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--discord-notify", choices=["enabled", "disabled"], default="enabled")
     parser.add_argument("--discord-env-path", default=DEFAULT_DISCORD_ENV_PATH)
     parser.add_argument("--discord-max-files", type=int, default=8)
+    parser.add_argument(
+        "--discord-delivery-test",
+        action="store_true",
+        help="Send one [TEST] Discord webhook message without detector, MQTT, TTS, or care-memory activity.",
+    )
     parser.add_argument("--pre-alert-speak", choices=["enabled", "disabled"], default="enabled")
     parser.add_argument("--pre-alert-language", default="zh-TW")
     parser.add_argument("--log-level", default="INFO")
@@ -1527,6 +1621,22 @@ def main() -> None:
         raise SystemExit("--inference-jpeg-quality must be in 1-100")
     if args.inference_long_side < 0:
         raise SystemExit("--inference-long-side must be non-negative")
+    if args.discord_delivery_test:
+        try:
+            result = run_discord_delivery_test(args)
+        except DiscordDeliveryError as exc:
+            result: dict[str, Any] = {"test": "discord_delivery", "failure_code": exc.failure_code}
+            if exc.status_code is not None:
+                result["status_code"] = exc.status_code
+            if exc.retry_after_seconds is not None:
+                result["retry_after_seconds"] = exc.retry_after_seconds
+            print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+            raise SystemExit(1) from exc
+        result["test"] = "discord_delivery"
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        if result["failure_code"] != "DISCORD_DELIVERED":
+            raise SystemExit(1)
+        return
 
     app = build_app(args)
     LOGGER.info("open http://127.0.0.1:%s/ to view action predictions", args.port)
