@@ -102,6 +102,7 @@ def _profile(resident_id: str) -> dict[str, Any]:
             "早晚血壓量測提醒；Temi 不自行量測血壓。",
             "手部與腿部運動提醒僅依既定照護計畫。",
             "既定時間的用藥或營養提醒不修改藥物、劑量或療程。",
+            "如果有身體不適、不舒服，就要提醒量血壓，不要問東問西",
         ]
     return {
         "user_id": resident_id,
