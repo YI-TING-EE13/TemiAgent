@@ -16,6 +16,7 @@
 |---|---|
 | `hermes_resident_server.py` | 啟動低延遲 resident Hermes HTTP worker，供 Bridge `HERMES_INVOKE_MODE=http` 使用。 |
 | `hermes_media_fast_path.py` | Resident-only pure exact matcher；只在 private Demo flag 開啟時將受控中文 Media phrase 送入既有 native tool。 |
+| `demo_lifecycle.py` / `scripts/demo` | current Demo 的 exact-PID lifecycle；private external runtime、health gate、status 與 trace export。 |
 | `temi_overview_adapter.py` | ASR/camera-only adapter：接 legacy `temi/event/asr` 與 WebSocket camera frames，產生 canonical `temi/{robot_id}/asr/final` 與三張 keyframe path；不轉發 command。 |
 | `e2e_test_runner.py` | 不需硬體的本地 mock E2E smoke test。 |
 | `media_v11_fake_e2e.py` | 以 in-memory MQTT 與 fake Android 驗證 media v1.1 lifecycle、stop linkage、replay 與 trace。 |
@@ -48,6 +49,27 @@ python3 tools/media_v11_fake_e2e.py
 
 此腳本將 `MEDIA_V11_ENABLED` 只套用在 process 內的 test service，並使用 temporary
 directory。腳本不啟動 MQTT broker、Hermes、Android 或 robot，也不保留 trace artifact。
+
+### Canonical Demo lifecycle
+
+`scripts/demo` 是 current branch 的唯一 lifecycle。它要求 Git worktree 外、mode `0600`
+private env；`TEMIAGENT_RUNTIME_ROOT`、Bridge `LOG_DIR`、memory、shared ASR artifact、PID,
+socket、logs 和 trace 都必須在該 external root。它會保留 LM Studio 與健康的 existing MQTT
+broker，且只停止以 recorded exact PID identity 證明 ownership 的 adapter、resident、Bridge
+與 optional viewer。
+
+```bash
+cd /TemiAgent
+./scripts/demo --config <private-demo-env> doctor
+./scripts/demo --config <private-demo-env> restart
+./scripts/demo --config <private-demo-env> status
+./scripts/demo --config <private-demo-env> trace-export
+./scripts/demo --config <private-demo-env> stop
+```
+
+`restart` 只在 current user-authorized transition 中採用已由 cwd、command line、start identity
+及 listener 驗證的 existing Demo process；它不使用 broad kill。詳細的 private config、Android
+evidence、Media phrase 和故障定位在 `docs/operations/demo_warm_start_runbook.md`。
 
 ### Demo case runner
 

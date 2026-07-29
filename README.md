@@ -103,6 +103,7 @@ Hardware, GPU, Discord and live-stream acceptance require their documented exter
 ## Operations
 
 - Cross-module startup, health checks and debugging: [Temi integration runbook](docs/operations/temi_integration_runbook.md)
+- Canonical current Demo lifecycle and real-device Media checks: [Demo operator guide](docs/operations/DEMO_OPERATOR_GUIDE.md)
 - LM Studio headless operation: [LM Studio runbook](docs/operations/lmstudio_headless_3gpu_hdd_manual.md)
 - Safe service targeting, rollback and incident evidence: [Safe service operations](docs/operations/safe_service_operations.md)
 - First-year Demo execution: [Demo runbook](docs/operations/first_year_demo_runbook.md)

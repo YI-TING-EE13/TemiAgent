@@ -1,428 +1,155 @@
-# Demo 暖啟動操作手冊
+# Demo 暖啟動與真機 Media 驗收手冊
 
 最後更新日期：2026-07-29
 
-## 適用情境與邊界
+狀態：Maintained Demo-only runbook。適用於 LM Studio 已載入模型且 MQTT broker 已可用的
+AI6 Demo。這份手冊不重啟 LM Studio；健康且 endpoint 未變的 broker 也會保留。
 
-本手冊適用於 LM Studio 已經在 `127.0.0.1:1234` 載入模型，且 MQTT broker 已經在 `1883` 運作時，啟動第一年度 Demo 的 canonical 主線：Overview adapter、resident Hermes、HermesTemiBridge、Hermes Discord gateway 與 action viewer。
+## 事前條件
 
-本手冊會保留既有的 LM Studio 與 broker，不會停止、重載或接管它們。若需要從零建立或完整重啟整套環境，使用 [第一年度 Demo 端到端串接操作手冊](first_year_demo_e2e_operation_manual.md) 的一鍵流程；該流程會重啟 LM Studio、broker 與其他 Demo service，不適合正在使用中的暖啟動情境。
-
-本手冊不啟動 legacy `temi-backend`。canonical 主線的 Overview adapter 使用 `8080` 接收 Picture Streaming，並在 `8081` 提供 decoded JPEG frame broadcast；legacy backend 也會使用 `8080`，兩者不得同時啟動。
-
-異常偵測是 Experimental Demo。action viewer 預設在判定 `falls down`、`lies on the floor` 或 `fights` 時發布 abnormal event、直接發布一則 Demo-only pre-alert `cmd/request`，並嘗試透過既有 Discord webhook 通知。這條 pre-alert 路徑是已知的 Demo-only safety gap，並未經 Bridge dispatch；Discord 是 best-effort side channel，不是緊急服務。操作員必須在啟動 viewer 前確認這些預設行為符合當次展示授權。
-
-## 服務與啟動順序
-
-| Component | Port | 本手冊動作 | 健康證據 |
-|---|---:|---|---|
-| LM Studio | `1234` | 保留既有 service | `/v1/models`、`lms ps` |
-| MQTT broker | `1883` | 保留既有 listener | `mosquitto_pub` transport probe |
-| Overview adapter | `8080`, `8081` | 啟動 | 兩個 listener；viewer frame source connected |
-| resident Hermes | `8765` | 啟動 | `/health` 回傳 `status: ok` |
-| HermesTemiBridge | 無 HTTP port | 啟動 | log 顯示已連線 MQTT |
-| Hermes Discord gateway | gateway runtime | 若未在運作則啟動 | gateway status 與 `discord.state=connected` |
-| action viewer | `8010`, `8011` | 啟動 | `/health`、llama.cpp backend ready |
-
-執行中的 broker 如果不是目前 worktree 的 `mqtt/mosquitto.conf` 所啟動，或無法由 `ss` 取得 PID，視為 external listener。只驗證 transport；不要停止、重啟或替換它。
-
-## 1. 進入指定容器
-
-所有指令必須在指定 container 內執行：
+在指定 container 中執行：
 
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
 cd /TemiAgent
-pwd
-whoami
-git rev-parse --show-toplevel
-git status --short
 ```
 
-預期工作目錄是 `/TemiAgent`。保留既有未提交修改；不要用 reset、clean 或 checkout 丟棄它們。
-
-## 2. 唯讀預檢
-
-先確認模型、broker 與將要使用的 port。以下 probe 不會發送 canonical ASR、command 或 abnormal event。
-
-```bash
-cd /TemiAgent
-PATH=/TemiAgent/.lmstudio-data/bin:$PATH lms ps
-curl --max-time 5 -fsS http://127.0.0.1:1234/v1/models
-
-ss -ltnp 'sport = :1883' || true
-ps -efww | rg '[m]osquitto' || true
-timeout 5 mosquitto_pub -h 127.0.0.1 -p 1883 \
-  -t 'temi/demo-health/probe' \
-  -m 'warm-start-probe'
-
-for port in 8080 8081 8765 8010 8011; do
-  echo "=== port $port ==="
-  ss -ltnp "sport = :$port" || true
-done
-```
-
-繼續前必須符合下列條件：
-
-- LM Studio API 可回應，`lms ps` 顯示當次 Demo 要使用的 model identifier 與 context length。
-- `1883` 有可連線的 broker，且 transport probe 成功。
-- `8080`、`8081`、`8765`、`8010`、`8011` 沒有未知 listener。若任一 port 已被使用，先依 [safe service operations](safe_service_operations.md) 驗證 PID、command line、cwd 與 executable；不要啟動第二個 service，也不要用 `pkill` 或 `killall`。
-
-若 Temi Android app 已連線，adapter 啟動後應使用 PC 對 Temi 可達的 IP 作為 Android MQTT 與 Picture Streaming endpoint。下方 PC 端 service 彼此使用 `127.0.0.1` 連 broker；這不會取代 Android 的網路設定。
-
-## 3. 建立本次啟動的 log 目錄
-
-每次暖啟動使用新的 log root。請在同一個 shell 保留 `DEMO_LOG_ROOT`，直到停止本次啟動的 services。
-
-```bash
-cd /TemiAgent
-export DEMO_LOG_ROOT="/TemiAgent/logs/demo_runtime_$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$DEMO_LOG_ROOT" /TemiAgent/logs/overview_bridge_resident
-printf '%s\n' "$DEMO_LOG_ROOT"
-```
-
-### 3.1 受控 generic Media Demo 的 private config
-
-一般暖啟動仍可維持所有 feature default 為 `false`。只有要展示 resident 的自然語言
-Media route 時，才在 repository 外、權限為 owner-only 的 private env file 設定下列欄位。
-`HERMES_MEDIA_CALLBACK_SOCKET` 必須是絕對路徑；此 generic route 不需要 identity producer
-或 Care Memory，且不會讀寫 father／mother partition。
+準備 Git worktree 外的 private env，mode 必須是 `0600`，並設定一個 worktree 外、mode
+`0700` 的 `TEMIAGENT_RUNTIME_ROOT`。該 env 必須把所有 writable runtime path 放在 root 內：
 
 ```text
-MEDIA_V11_ENABLED=true
-HERMES_MEDIA_TOOL_ENABLED=true
-HERMES_MEDIA_FAST_PATH_ENABLED=true
-HERMES_MEDIA_CALLBACK_SOCKET=<private-absolute-demo-runtime-root>/bridge_media_callback.sock
-DEMO_CARE_SCENARIO_PROMPT_ENABLED=false
-DEMO_RESIDENT_VISUAL_ROUTING_ENABLED=false
+TEMIAGENT_RUNTIME_ROOT=<external-runtime-root>
+LOG_DIR=<external-runtime-root>/logs/bridge
+MEMORY_DIR=<external-runtime-root>/data/care-memory
+TEMI_SHARED_BRIDGE_PATH=<external-runtime-root>/data/shared
+TEMI_SHARED_HERMES_PATH=<external-runtime-root>/data/shared
+HERMES_MEDIA_CALLBACK_SOCKET=<external-runtime-root>/tmp/sockets/bridge_media_callback.sock
 ```
 
-在同一個 shell 載入 private config，確認其 mode。只有另行展示 Mother dialysis-care workflow
-時，才把 `DEMO_CARE_SCENARIO_PROMPT_ENABLED=true`、
-`DEMO_RESIDENT_VISUAL_ROUTING_ENABLED=true`、`DEMO_CARE_MEMORY_ROOT` 與
-`DEMO_RESIDENT_VISUAL_MINIMUM_CONFIDENCE` 加入 private env，然後建立 synthetic seed。這個 tool
-只寫入 private root 的 `father` 與 `mother` partition；它會拒絕 tracked `memory/`。
+Media route 的三個 flags 必須是 `true`；tracked `.env.example` 的 defaults 維持 `false`。
+Generic playback 可維持所有 care/visual flags `false`，因為它在 `unknown` resident 下也只可
+播放 allowlisted `elderly_hand_exercise`。這不放寬 Mother dialysis-care 的 identity、症狀與
+同意 gate。
+
+若本次需要 abnormal viewer，設定 `DEMO_ACTION_VIEWER_ENABLED=true` 與其必要 model paths。
+除非當次人類明確授權自動 alert/notification，以下三個 private values 必須是 `disabled`：
+
+```text
+DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH=disabled
+DEMO_ACTION_VIEWER_DISCORD_NOTIFY=disabled
+DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK=disabled
+```
+
+## Lifecycle
+
+先執行 read-only doctor：
 
 ```bash
-test -n "${DEMO_PRIVATE_ENV:-}" && test -r "$DEMO_PRIVATE_ENV"
-test "$(stat -c '%a' "$DEMO_PRIVATE_ENV")" = 600
+./scripts/demo --config <private-demo-env> doctor
+```
+
+doctor 檢查 branch、HEAD、dirty files（允許三個既有 memory runtime files）、nested Hermes、
+private env mode、external runtime root、entrypoints、broker listener/transport、LM Studio、port
+conflict、effective flags、socket parent、runtime path 權限及 fresh Android MQTT activity。它不建立
+directory、停止 process 或發布 MQTT。
+
+首次在沒有既有 Demo process 的情況下啟動：
+
+```bash
+./scripts/demo --config <private-demo-env> start
+```
+
+將既有的本 Demo adapter/resident/Bridge/viewer 切換到 current HEAD 時，只使用：
+
+```bash
+./scripts/demo --config <private-demo-env> restart
+```
+
+restart 先在 external runtime root 保存 process、health、flags、socket、port 與 source evidence。
+它只對以 exact PID start identity、cwd、executable、command line 及 listener 確認的 service
+送 `TERM`，順序是 Bridge、resident、adapter、viewer；之後依 Adapter、resident、Bridge、
+viewer 啟動。它不使用 `pkill`、`killall` 或 raw MQTT，並保留 LM Studio 和 reviewed external
+broker。每個新 service 的 stdout/stderr、PID ownership、last-run、socket 與 trace 都在 external
+runtime root。
+
+每次確認 readiness：
+
+```bash
+./scripts/demo --config <private-demo-env> status
+```
+
+`status` 回報 source branch/commit、runtime root、private env path（不輸出 credentials）、PID
+identity、effective flags、Resident health/media toolset、fast path、Bridge callback socket、broker
+session、robot id、latest trace 與 log paths。`BACKEND_READY_WAITING_ANDROID` 表示 backend 已就緒
+但尚未觀察到 fresh remote Android MQTT session；只有 remote session evidence 才能顯示
+`DEMO_READY`。這兩者都不能取代 Android command result。
+
+## 真實 Temi Media E2E
+
+使用 private env 載入 host、port 與 robot id，開啟 ASR、cmd/request、cmd/result observer：
+
+```bash
 set -a
-. "$DEMO_PRIVATE_ENV"
+. <private-demo-env>
 set +a
+robot_id="${ROBOT_ID_ALLOWLIST%%,*}"
 
-if [ "${DEMO_CARE_SCENARIO_PROMPT_ENABLED:-false}" = true ]; then
-  python3 /TemiAgent/tools/seed_demo_care_context.py --root "$DEMO_CARE_MEMORY_ROOT"
-  python3 /TemiAgent/tools/seed_demo_care_context.py --root "$DEMO_CARE_MEMORY_ROOT" --verify
-fi
+mosquitto_sub -h "$MQTT_BROKER_HOST" -p "$MQTT_BROKER_PORT" -t "temi/$robot_id/asr/final" -v
+mosquitto_sub -h "$MQTT_BROKER_HOST" -p "$MQTT_BROKER_PORT" -t "temi/$robot_id/cmd/request" -v
+mosquitto_sub -h "$MQTT_BROKER_HOST" -p "$MQTT_BROKER_PORT" -t "temi/$robot_id/cmd/result" -v
 ```
 
-private config 只會被目前 shell 繼承；不要把 endpoint、credential、private path 或它的內容
-寫回 `.env.example`、log、commit 或 MQTT payload。
-
-若 callback socket path 已存在，Bridge 會拒絕啟動而不刪除它。先依 safe-service operations
-確認沒有仍在使用該 path 的本次/外部 process，再由操作員明確處理 stale private socket；不要
-用 broad delete 或 process kill。
-
-此 checkout **沒有**上游 VLM／Identity Provider 的 runtime producer。Bridge 只消費既有
-`temi/{robot_id}/resident/identity/result`，並且在 flag 開啟時只接受 fresh、canonical 的
-`source=vision_gender_fallback`、confirmed `father`／`mother`，且 confidence 不低於
-`DEMO_RESIDENT_VISUAL_MINIMUM_CONFIDENCE`。若 producer 尚未部署，active resident 必為
-`unknown`。這不阻擋 allowlisted generic direct hand-exercise Media route：它固定使用
-`elderly_hand_exercise`、不讀寫 private Care Memory，並保留 canonical Bridge validation。
-Mother dialysis-care route 仍需要 confirmed `mother`、已記錄 care event、明確無不適與本人
-明確同意；不得用語音、姓名或 raw MQTT payload 偽造 identity result。
-
-## 4. 啟動 canonical Demo services
-
-在執行下列區塊前，重跑 port 預檢並確認 `8080`、`8081`、`8765`、`8010`、`8011` 都沒有 listener。此區塊不碰 `1234` 或 `1883`。
-
-### 4.1 Overview adapter：ASR 與 WebSocket frame route
+在另一個 terminal 檢視 current Bridge trace：
 
 ```bash
-cd /TemiAgent/temi_backend
-setsid uv run python /TemiAgent/tools/temi_overview_adapter.py \
-  --broker 127.0.0.1 \
-  --port 1883 \
-  --vision-port 8080 \
-  --frame-broadcast-port 8081 \
-  --shared-root /TemiAgent/temi_shared \
-  --bridge-root /TemiAgent/temi_shared \
-  --conversation-id conv_first_year_demo \
-  > "$DEMO_LOG_ROOT/overview_adapter.log" 2>&1 < /dev/null &
-echo $! > "$DEMO_LOG_ROOT/overview_adapter.pid"
+python3 /TemiAgent/tools/show_temi_trace.py --log-dir "$LOG_DIR" --latest --full
 ```
 
-adapter 只處理 legacy `temi/event/asr` 與 camera frames，並發布 canonical `temi/{robot_id}/asr/final`。它不會將 command 轉發到 legacy TTS route。
-
-### 4.2 resident Hermes：HTTP reasoning worker
-
-```bash
-cd /TemiAgent
-setsid python3 tools/hermes_resident_server.py \
-  --host 127.0.0.1 \
-  --port 8765 \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md \
-  --skill-path /TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md \
-  > "$DEMO_LOG_ROOT/hermes_resident.log" 2>&1 < /dev/null &
-echo $! > "$DEMO_LOG_ROOT/hermes_resident.pid"
-```
-
-### 4.3 HermesTemiBridge：canonical validation and dispatch boundary
-
-```bash
-cd /TemiAgent/hermes_temi_bridge
-setsid env \
-  MQTT_BROKER_HOST=127.0.0.1 \
-  MQTT_BROKER_PORT=1883 \
-  TEMI_SHARED_BRIDGE_PATH=/TemiAgent/temi_shared \
-  TEMI_SHARED_HERMES_PATH=/TemiAgent/temi_shared \
-  HERMES_INVOKE_MODE=http \
-  HERMES_HTTP_URL=http://127.0.0.1:8765/invoke \
-  HERMES_TIMEOUT_SECONDS=180 \
-  MEMORY_DIR=/TemiAgent/memory \
-  LOG_DIR=/TemiAgent/logs/overview_bridge_resident \
-  uv run --extra mqtt hermes-temi-bridge \
-  --env-file /TemiAgent/hermes_temi_bridge/.env.example \
-  > "$DEMO_LOG_ROOT/bridge.log" 2>&1 < /dev/null &
-echo $! > "$DEMO_LOG_ROOT/bridge.pid"
-```
-
-Bridge 沒有獨立 HTTP health endpoint。不要把 resident Hermes `/health` 當成 Bridge health；使用 MQTT connection log 與 event trace 檢查 Bridge。
-
-### 4.4 Hermes Discord gateway
-
-先確認 gateway 是否已經在運作。既有 gateway 視為 external service，保留它即可。
-
-```bash
-cd /TemiAgent
-if /TemiAgent/hermes-agent/venv/bin/hermes gateway status 2>&1 | grep -q 'Gateway is running'; then
-  echo 'Gateway is already running; preserving the existing process.'
-else
-  setsid env HERMES_ACCEPT_HOOKS=1 \
-    /TemiAgent/hermes-agent/venv/bin/hermes gateway run \
-    > "$DEMO_LOG_ROOT/hermes_gateway.log" 2>&1 < /dev/null &
-  echo $! > "$DEMO_LOG_ROOT/hermes_gateway.pid"
-fi
-```
-
-### 4.5 action viewer：實驗性異常偵測
-
-確認本次 Demo 授權 pre-alert 與 Discord best-effort notification 後，以 GPU `3` 執行 managed llama.cpp server 與 pose preprocessing：
-
-```bash
-cd /TemiAgent/anomaly_detection
-export YOLO_CONFIG_DIR=/tmp/Ultralytics
-setsid .venv/bin/python ./temi_action_viewer.py \
-  --host 0.0.0.0 \
-  --port 8010 \
-  --source-url ws://127.0.0.1:8081 \
-  --model gemma-4-e4b-finetuned@q8_0 \
-  --gguf-model-path /TemiAgent/.lmstudio-data/models/lmstudio-community/gemma-4-E4B-finetuned-GGUF/local_unsloth_gemma4.Q8_0.gguf \
-  --mmproj-path /TemiAgent/.lmstudio-data/models/lmstudio-community/gemma-4-E4B-finetuned-GGUF/local_unsloth_gemma4.BF16-mmproj.gguf \
-  --llama-server /TemiAgent/anomaly_detection/third_party/llama.cpp/build/bin/llama-server \
-  --llama-server-port 8011 \
-  --llama-cuda-visible-devices 3 \
-  --pose-mode auto \
-  --pose-model yolo26x-pose.pt \
-  --pose-device 3 \
-  --max-output-tokens 96 \
-  --inference-interval 4 \
-  --abnormal-cooldown-seconds 180 \
-  --abnormal-publish enabled \
-  --discord-notify enabled \
-  --pre-alert-speak enabled \
-  > "$DEMO_LOG_ROOT/action_viewer.log" 2>&1 < /dev/null &
-echo $! > "$DEMO_LOG_ROOT/action_viewer.pid"
-```
-
-若當次展示只允許觀察影像，不允許自動 pre-alert 或 Discord notification，將最後三個參數改為：
-
-```text
---abnormal-publish disabled
---discord-notify disabled
---pre-alert-speak disabled
-```
-
-`anomaly_detection/restart_action_viewer_8010.sh` 是已存在的 targeted restart utility。它適合在已驗證 `8010` listener 屬於正確 viewer 後使用；本手冊的 fresh-start command 避免把既有 listener 視為本次 service。
-
-## 5. 健康檢查與可開始 Demo 的條件
-
-等待 service 啟動後執行以下檢查：
-
-```bash
-cd /TemiAgent
-curl --max-time 5 -fsS http://127.0.0.1:8765/health
-curl --max-time 5 -fsS http://127.0.0.1:8010/health
-ss -ltnp | rg ':(1234|1883|8080|8081|8765|8010|8011)'
-tail -n 40 "$DEMO_LOG_ROOT/overview_adapter.log"
-tail -n 40 "$DEMO_LOG_ROOT/bridge.log"
-/TemiAgent/hermes-agent/venv/bin/hermes gateway status
-```
-
-當且僅當 private media config 已載入時，resident `/health` 還必須顯示：
-
-```text
-media_tool_enabled: true
-media_tool_names: [play_video, pause_video, resume_video, stop_video]
-demo_care_scenario_prompt_enabled: true
-```
-
-Bridge startup log 必須顯示已連 MQTT；它的 private Unix callback socket 是本機 process
-boundary，不是新的 TCP service port。不要以 resident health、socket 存在或 MQTT publish
-success 宣稱 Android 已播放；必須收到 Android `cmd/result` 的 `accepted` 與 `started`／
-`playing` 才可確認開始播放。
-
-viewer health 應至少滿足：
-
-- `ok` 是 `true`。
-- `source_connected` 是 `true`。
-- `frame_count` 持續增加，表示 adapter 的 `8081` broadcast 有 frames。
-- `llama_server_ready` 是 `true`。
-- `abnormal_cooldown_seconds` 是 `180.0`。
-- `abnormal_publish` 與 `discord_notify` 的設定符合當次授權。
-- 啟動 command 中的 `--pre-alert-speak` 值符合當次授權；目前 viewer health 不回傳這個欄位。
-
-Discord 狀態只讀取 state，不輸出設定內容或 credential：
-
-```bash
-python3 - <<'PY'
-import json
-from pathlib import Path
-
-path = Path('/root/.hermes/gateway_state.json')
-if not path.exists():
-    print('gateway state file is absent')
-else:
-    state = json.loads(path.read_text(encoding='utf-8'))
-    discord = (state.get('platforms') or {}).get('discord') or {}
-    print('discord.state=' + str(discord.get('state')))
-PY
-```
-
-只有 gateway status 顯示 running 且 `discord.state=connected` 時，Discord gateway 才算 ready。Bridge 只證明已連上 broker；本手冊不發布 mock ASR、TTS 或 command result，因此不把 service startup 宣稱為完整硬體 E2E。開始情境前，可先從 viewer health 確認 Temi camera frame 正在流入。
-
-action viewer UI：`http://127.0.0.1:8010/`。若從其他裝置查看，使用當次 PC 對該裝置可達的 IP；不要把私人 IP 寫入 tracked documentation。
-
-## 5.1 resident Media Demo 的語句、監看與驗證
-
-在 Android media mapping 已驗收的前提下，generic direct route 不需要 identity producer；對 Temi 說：
+對 Temi 依序說：
 
 ```text
 小安小安，請幫我播放手部運動影片。
-```
-
-這是 Resident Hermes 的 deterministic Media dispatch，不是 LLM model tool selection：受控文字
-命中後，在模型推論前呼叫既有 native `play_video` tool，再經 Unix callback 與 Bridge。`unknown`
-可播放這個低風險 allowlisted 教學內容，但不會讀取或寫入任何 Care Memory。
-
-王太太 dialysis-care workflow 仍是另一條嚴格流程：先說「小安小安，我今天洗腎結束了，幫我紀錄。」；
-必須由 confirmed `mother` 記錄 dialysis-return，再確認沒有頭暈、明顯疲倦、疼痛、呼吸不適或其他
-不適，且取得本人明確同意後，才可提出播放。generic direct command 不可當作這個 care gate 的證明。
-
-播放 request 只允許 canonical `video_id=elderly_hand_exercise`；沒有 URL、檔案路徑或 Android
-intent 可從 prompt 或 MQTT 取得。控制語句依序為：
-
-```text
 小安小安，請暫停影片。
 小安小安，請繼續播放影片。
 小安小安，請停止影片。
 ```
 
-在另一個只監看的 terminal 執行。這些命令不發布 payload：
+play 必須顯示 canonical `video.command` v1.1 request，並至少有
+`action=play_video` 與 `video_id=elderly_hand_exercise`。確認鏈條是：fresh ASR → Resident
+`deterministic_media_fast_path` → native Media tool → Unix callback accepted → Bridge validation →
+cmd/request → Android `accepted` → Android `started`/`playing` → 實際畫面。記錄 Android playback
+session ID。pause、resume、stop 分別確認 `paused`、`playing`、control `succeeded`，以及 original
+play session 的 `cancelled`/`remote_stop` linkage。
+
+缺少任何一段時，依最後成功 stage 分類：`ASR_NOT_RECEIVED`、`FAST_PATH_NOT_MATCHED`、
+`NATIVE_TOOL_NOT_LOADED`、`MEDIA_CALLBACK_SOCKET_MISSING`、`MEDIA_CALLBACK_REJECTED`、
+`BRIDGE_MEDIA_DISABLED`、`CMD_REQUEST_NOT_PUBLISHED`、`ANDROID_NO_ACCEPTED_RESULT`、
+`ANDROID_ACCEPTED_NOT_STARTED`、`ANDROID_PLAYER_MAPPING_FAILURE` 或
+`PAUSE_RESUME_STOP_FAILURE`。保留 timestamp、command ID、session ID、trace 和最後成功 stage；
+不得以 raw publish 偽造結果。
+
+## Evidence、停止與回復
+
+匯出 owner-only evidence bundle：
 
 ```bash
-mosquitto_sub -h 127.0.0.1 -p 1883 -t 'temi/temi-01/asr/final' -v
-mosquitto_sub -h 127.0.0.1 -p 1883 -t 'temi/temi-01/cmd/request' -v
-mosquitto_sub -h 127.0.0.1 -p 1883 -t 'temi/temi-01/cmd/result' -v
-python3 /TemiAgent/tools/show_temi_trace.py \
-  --log-dir /TemiAgent/logs/overview_bridge_resident --latest --full
+./scripts/demo --config <private-demo-env> trace-export
 ```
 
-驗證順序：
+bundle 包含 branch/commit、recorded processes、flags（不含 credentials）、Bridge/Resident/adapter/
+viewer logs、Bridge traces、最近 ASR metadata、checksums 與 archive SHA-256；不複製影像 binaries。
 
-1. ASR topic 有最終 transcript；generic route 的 `active_resident=unknown` 是允許狀態。
-2. resident health 顯示四個 native media tools 和 `media_fast_path_enabled=true`。既有
-   `hermes_invocation_finished.payload.resident_dispatch` 應含 `dispatch_mode`、`intent`、
-   `video_id`、`resident_id`、`callback_status`、`bridge_command_id` 與 `dispatch_latency_ms`；
-   resident 本身不會 publish MQTT。
-3. `cmd/request` 是 schema `1.1`、`message_type=video.command`、`action=play_video`、
-   `video_id=elderly_hand_exercise`；其後 Android 回 `accepted` 再回 `started`／`playing`。
-4. pause 成功後 Android 回 control `succeeded` 且 play session state 為 `paused`；resume 回 `playing`。
-5. stop 回 control `succeeded`，原 play command 再回 `cancelled`、`cancel_reason=remote_stop` 與
-   `cancelled_by_command_id=<stop command id>`。
-
-缺少 Android asset/URI mapping、Android MQTT client、`cmd/result` 或真機 trace 中任一項時，停止
-在對應前置條件，不得用 `mosquitto_pub` 手刻 command 或 result 取代真機驗收。
-
-## 6. 正常停止與恢復
-
-先停止 action viewer。現有 stop utility 會用 `8010`／`8011` listener、cwd 與 command line 確認目標，不會用 broad process pattern：
+正常停止：
 
 ```bash
-cd /TemiAgent/anomaly_detection
-./stop_action_viewer_8010.sh
+./scripts/demo --config <private-demo-env> stop
 ```
 
-對本次由 `DEMO_LOG_ROOT` 記錄的 adapter、resident Hermes、Bridge 和 gateway，先驗證 PID 的 cwd 與 command line，再發送 `TERM`。以下 function 只接受同時符合預期 cwd 與 command token 的 PID：
+stop 是 idempotent，只停止 lifecycle current ownership record；不停止 LM Studio、external Broker
+或 Android App。若 restart/start health gate 失敗，lifecycle 只 rollback 本次剛啟動的 exact PID。
+若 identity、socket 或 port 無法安全確認，停止擴大操作並依
+[安全服務操作](safe_service_operations.md) 保留 evidence 後調查。
 
-```bash
-stop_recorded_service() {
-  local label="$1"
-  local pid_file="$2"
-  local expected_cwd="$3"
-  local token="$4"
-  local pid cwd cmdline
-
-  [ -f "$pid_file" ] || { echo "$label was preserved or not started by this run"; return 0; }
-  pid="$(cat "$pid_file")"
-  [ -d "/proc/$pid" ] || { echo "$label PID $pid is already gone"; return 0; }
-  cwd="$(readlink -f "/proc/$pid/cwd")"
-  cmdline="$(tr '\0' ' ' < "/proc/$pid/cmdline")"
-  if [ "$cwd" != "$expected_cwd" ] || [[ "$cmdline" != *"$token"* ]]; then
-    echo "Refusing to stop $label PID $pid: identity mismatch" >&2
-    return 1
-  fi
-  ps -p "$pid" -o pid,ppid,user,lstart,etime,args
-  kill -TERM "$pid"
-}
-
-stop_recorded_service adapter \
-  "$DEMO_LOG_ROOT/overview_adapter.pid" \
-  /TemiAgent/temi_backend \
-  temi_overview_adapter.py
-stop_recorded_service resident_hermes \
-  "$DEMO_LOG_ROOT/hermes_resident.pid" \
-  /TemiAgent \
-  tools/hermes_resident_server.py
-stop_recorded_service bridge \
-  "$DEMO_LOG_ROOT/bridge.pid" \
-  /TemiAgent/hermes_temi_bridge \
-  hermes-temi-bridge
-stop_recorded_service gateway \
-  "$DEMO_LOG_ROOT/hermes_gateway.pid" \
-  /TemiAgent \
-  'hermes gateway run'
-```
-
-Gateway 的 PID file 只會在本手冊啟動新 gateway 時建立；若 gateway 原本已在運作，停止流程會保留它。LM Studio 與 broker 沒有 PID file，必須保留。最後確認本次 service 的 listener 已消失，且保護中的 `1234` 和 `1883` 仍維持：
-
-```bash
-sleep 2
-ss -ltnp | rg ':(1234|1883|8080|8081|8765|8010|8011)' || true
-```
-
-若任何 PID identity 不符、健康檢查失敗或 runtime service 表現異常，停止本次已驗證的 PID，保留 LM Studio／broker，並依 [safe service operations](safe_service_operations.md) 進行 recovery。不要刪除 runtime logs、發送測試 command 或用廣泛的 process kill 來掩蓋問題。
-
-## 7. 已驗證範圍與限制
-
-2026-07-29 在指定 container 內執行本手冊的流程時，已驗證：
-
-- 既有 LM Studio API 可回應，resident Hermes health 回傳 `status: ok`。
-- 既有 broker transport probe 成功；該 broker 被保留，沒有重啟。
-- adapter 取得 Temi camera frames，`8080`、`8081` listener 可用。
-- action viewer health 顯示 source connected、llama.cpp backend ready 與 pose enabled。
-- Bridge log 顯示已連上 MQTT，Discord gateway status 為 running 且 Discord state 為 connected。
-
-本次沒有發布 mock ASR、manual TTS 或 command result，也沒有執行 Android hardware E2E。因此，服務啟動與 camera ingest 已有 evidence；語音至 `cmd/result` 的完整硬體閉環仍需在獲得當次硬體操作授權後，依 [第一年度 Demo 端到端串接操作手冊](first_year_demo_e2e_operation_manual.md) 的驗證程序執行。
+Demo 錄製後才處理完整 runtime/canonical worktree decoupling，包括正式 Broker ownership、
+Android runtime exporter、runtime retention/cleanup、historical worktree cleanup，以及將 external
+runtime policy 提煉成長期 release procedure。這些工作不是本次快速 Media 驗收的前置條件。

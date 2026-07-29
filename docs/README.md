@@ -29,14 +29,14 @@ Runtime-owned schemas under `hermes_temi_bridge/schemas/` remain authoritative. 
 ## Operations
 
 > `DEMO_QUICK_REFERENCE.md` 與 `demo_operations_runbook.md` 是
-> `codex/demo-operations-v1` 的 reference mirror；其中 `./scripts/demo` 指令不適用於
-> 目前 branch。現行操作入口是 `DEMO_OPERATOR_GUIDE.md` 與
-> `demo_warm_start_runbook.md`。
+> `codex/demo-operations-v1` 的 reference mirror。current branch 的唯一 lifecycle 是
+> `./scripts/demo`；請使用 `DEMO_OPERATOR_GUIDE.md` 與
+> `demo_warm_start_runbook.md`，不要套用 reference mirror 的舊 config contract。
 
 | Document | Status | Owner | Purpose |
 |---|---|---|---|
 | [safe_service_operations.md](operations/safe_service_operations.md) | Maintained policy | All service owners | Exact PID/port targeting, rollback, restore, retention and incident evidence. |
-| [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md) | Maintained, Demo-only | Demo operator | Current entrypoint and capability boundary; redirects to the warm-start runbook. |
+| [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md) | Maintained, Demo-only | Demo operator | `scripts/demo` canonical lifecycle, Media capability boundary and live observers. |
 | [DEMO_QUICK_REFERENCE.md](operations/DEMO_QUICK_REFERENCE.md) | Reference mirror; Demo-only | Demo operator | Compact command, status, evidence and recovery card. |
 | [demo_operations_runbook.md](operations/demo_operations_runbook.md) | Reference mirror; Demo-only | Demo operator | Exact-PID expert lifecycle and static/live Android gate boundaries. |
 | [temi_integration_runbook.md](operations/temi_integration_runbook.md) | Maintained | Integration | Hardware-free through real-device integration sequence. |
@@ -45,7 +45,7 @@ Runtime-owned schemas under `hermes_temi_bridge/schemas/` remain authoritative. 
 | [temi_streaming_manual.md](operations/temi_streaming_manual.md) | Maintained, environment-dependent | Temi streaming | Android/PC streaming deployment. |
 | [temi_streaming_local_runbook.md](operations/temi_streaming_local_runbook.md) | Machine-specific evidence | Temi streaming | Local ADB, MQTT and WebSocket observations. |
 | [temi_e2e_stack_validation_manual.md](operations/temi_e2e_stack_validation_manual.md) | Maintained, environment-dependent | Integration | Full-stack validation and evidence collection. |
-| [demo_warm_start_runbook.md](operations/demo_warm_start_runbook.md) | Maintained, Demo-only | Demo operator | Preserve a ready LM Studio and broker while starting the canonical Demo services. |
+| [demo_warm_start_runbook.md](operations/demo_warm_start_runbook.md) | Maintained, Demo-only | Demo operator | External runtime layout, exact-PID restart, health gates and real Temi Media evidence. |
 | [first_year_demo_runbook.md](operations/first_year_demo_runbook.md) | Demo-only | Demo operator | Cross-module Demo startup and fallback. |
 | [first_year_demo_e2e_operation_manual.md](operations/first_year_demo_e2e_operation_manual.md) | Demo-only | Demo operator | Detailed Demo and recording procedure. |
 
