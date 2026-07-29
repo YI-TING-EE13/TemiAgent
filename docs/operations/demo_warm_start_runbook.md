@@ -128,10 +128,10 @@ play session 的 `cancelled`/`remote_stop` linkage。
 `PAUSE_RESUME_STOP_FAILURE`。保留 timestamp、command ID、session ID、trace 和最後成功 stage；
 不得以 raw publish 偽造結果。
 
-若 observer 顯示 legacy ASR 將「手部運動」完整轉寫成「首都運動」或「守護運動」，或縮成
-「播放影片」，current fast path 只接受這三個已驗證的完整 alias，並且仍固定 dispatch 到
-`elderly_hand_exercise`。任何其他錯轉寫仍不匹配，會保留一般 LLM route；不要以 fuzzy matching
-或 raw MQTT 擴張這個 allowlist。
+若 observer 顯示 legacy ASR 將「手部運動」轉寫成「首都運動」或「守護運動」，current fast
+path 對這三個已審查表面詞和固定播放句型建立有限組合，並且仍固定 dispatch 到
+`elderly_hand_exercise`。它也接受已驗收的縮寫「播放影片」。任何其他錯轉寫（例如「背部運動」）
+不匹配，會保留一般 LLM route；不要以泛用讀音／fuzzy matching 或 raw MQTT 擴張 allowlist。
 
 ## Evidence、停止與回復
 

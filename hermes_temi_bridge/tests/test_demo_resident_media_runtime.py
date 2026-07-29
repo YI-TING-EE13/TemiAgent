@@ -338,6 +338,9 @@ class DeterministicMediaFastPathTests(unittest.TestCase):
             "播放手部運動影片": "play_video",
             "幫我播放首都運動影片": "play_video",
             "幫我播放守護運動影片": "play_video",
+            "播放首都運動影片": "play_video",
+            "播放守護運動影片": "play_video",
+            "請幫我放守護運動影片": "play_video",
             "播放影片": "play_video",
             "我要做手部運動": "play_video",
             "暫停影片": "pause_video",
@@ -358,6 +361,7 @@ class DeterministicMediaFastPathTests(unittest.TestCase):
             "播放 https://example.invalid/video.mp4",
             "播放 /sdcard/video.mp4",
             "播放腿部運動影片",
+            "播放背部運動影片",
             "幫我找一部影片",
         ):
             with self.subTest(transcript=transcript):

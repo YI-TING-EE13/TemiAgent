@@ -29,18 +29,23 @@ class MediaIntent:
         return {"video_id": self.video_id} if self.action == "play_video" else {}
 
 
+_PLAY_INTENT = MediaIntent("play_video", VIDEO_ID)
+# These are reviewed ASR surface forms observed in the real Demo.  The
+# expansion is deliberately finite: only the hand-exercise noun phrase can be
+# substituted, only fixed playback templates are accepted, and every match
+# still targets the one allowlisted video ID.  This is not phonetic/fuzzy search.
+_HAND_EXERCISE_SURFACES = ("手部運動", "首都運動", "守護運動")
+_PLAY_WITH_VIDEO_PREFIXES = ("播放", "幫我播放", "請幫我播放", "幫我放")
+
 _INTENTS = {
-    "播放手部運動影片": MediaIntent("play_video", VIDEO_ID),
-    "請幫我播放手部運動影片": MediaIntent("play_video", VIDEO_ID),
-    # Exact legacy-ASR transcripts observed during the current real-device
-    # hand-exercise acceptance.  These are bounded acoustic substitutions for
-    # 手部, not a fuzzy semantic rewrite or a general video search feature.
-    "幫我播放首都運動影片": MediaIntent("play_video", VIDEO_ID),
-    "幫我播放守護運動影片": MediaIntent("play_video", VIDEO_ID),
-    "播放影片": MediaIntent("play_video", VIDEO_ID),
-    "我要做手部運動": MediaIntent("play_video", VIDEO_ID),
-    "播放手部運動": MediaIntent("play_video", VIDEO_ID),
-    "幫我放手部運動影片": MediaIntent("play_video", VIDEO_ID),
+    **{
+        f"{prefix}{surface}影片": _PLAY_INTENT
+        for surface in _HAND_EXERCISE_SURFACES
+        for prefix in _PLAY_WITH_VIDEO_PREFIXES
+    },
+    **{f"播放{surface}": _PLAY_INTENT for surface in _HAND_EXERCISE_SURFACES},
+    **{f"我要做{surface}": _PLAY_INTENT for surface in _HAND_EXERCISE_SURFACES},
+    "播放影片": _PLAY_INTENT,
     "暫停影片": MediaIntent("pause_video", VIDEO_ID),
     "先暫停": MediaIntent("pause_video", VIDEO_ID),
     "幫我暫停影片": MediaIntent("pause_video", VIDEO_ID),

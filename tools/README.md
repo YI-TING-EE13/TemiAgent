@@ -128,9 +128,10 @@ curl -s http://127.0.0.1:8765/health
 Bridge，不得改為 raw MQTT 或 Bridge 外部 fallback；完整啟動與真機觀察步驟見
 `docs/operations/demo_warm_start_runbook.md`。
 
-2026-07-29 真機 ASR 曾將「手部運動」完整轉寫為「首都運動」或「守護運動」，也曾縮成
-「播放影片」。`hermes_media_fast_path.py` 只為這三個完整、已驗收的 ASR transcript 增加 exact
-alias，仍固定到 `elderly_hand_exercise`；它不做模糊比對、語意改寫或任意影片搜尋。
+2026-07-29 真機 ASR 曾將「手部運動」轉寫為「首都運動」或「守護運動」，也曾縮成
+「播放影片」。`hermes_media_fast_path.py` 對三個已審查表面詞、四個固定播放句型建立有限
+組合，仍固定到 `elderly_hand_exercise`；它不做泛用讀音／模糊比對、語意改寫或任意影片搜尋。
+例如「背部運動」不會命中 hand-exercise allowlist。
 
 ### Legacy ASR/camera to canonical contract
 
