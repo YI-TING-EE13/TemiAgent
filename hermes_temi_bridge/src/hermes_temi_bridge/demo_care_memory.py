@@ -69,10 +69,20 @@ def verify_demo_care_memory(root: str | Path) -> dict[str, Any]:
     for resident_id in ("father", "mother"):
         partition = resident_memory_dir(root_path, resident_id)
         profile = StructuredMemoryStore.read_seed_marker(partition)
+        store = StructuredMemoryStore(partition)
         expected = profile.get("seed_id") == DEMO_SEED_ID and profile.get("resident_id") == resident_id
+        synthetic_headache = (
+            store.find_latest_synthetic_headache(
+                seed_id=DEMO_SEED_ID,
+                event_id="demo_father_headache_two_days_ago",
+            )
+            if resident_id == "father"
+            else None
+        )
         verification["residents"][resident_id] = {
-            "status": "ok" if expected else "missing_or_invalid",
+            "status": "ok" if expected and (resident_id != "father" or synthetic_headache is not None) else "missing_or_invalid",
             "path": partition.as_posix(),
+            "synthetic_headache_present": synthetic_headache is not None,
         }
     return verification
 

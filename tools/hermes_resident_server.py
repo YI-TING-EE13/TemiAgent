@@ -12,7 +12,8 @@ small localhost-only HTTP API:
 from __future__ import annotations
 
 import argparse
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import ExitStack, redirect_stderr, redirect_stdout
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import importlib.util
 import io
@@ -31,11 +32,23 @@ HERMES_AGENT_ROOT = ROOT / "hermes-agent"
 DEFAULT_SKILL_PATH = HERMES_AGENT_ROOT / "skills" / "temi-robot-control" / "SKILL.md"
 DEFAULT_SKILL_PATHS = [DEFAULT_SKILL_PATH]
 MEDIA_TOOL_MODULE_PATH = ROOT / "tools" / "hermes_resident_media_tools.py"
+IDENTITY_TOOL_MODULE_PATH = ROOT / "tools" / "hermes_resident_identity_tools.py"
+REPEATED_DISCOMFORT_TOOL_MODULE_PATH = ROOT / "tools" / "hermes_resident_repeated_discomfort_tools.py"
 TOOLS_ROOT = ROOT / "tools"
 if TOOLS_ROOT.as_posix() not in sys.path:
     sys.path.insert(0, TOOLS_ROOT.as_posix())
 
+from hermes_demo_identity_fast_path import (
+    DISPATCH_MODE as IDENTITY_DISPATCH_MODE,
+    DemoIdentityIntent,
+    match_demo_identity_intent,
+)
 from hermes_media_fast_path import DISPATCH_MODE, MediaIntent, match_media_intent
+from hermes_repeated_discomfort_fast_path import (
+    DISPATCH_MODE as REPEATED_DISCOMFORT_DISPATCH_MODE,
+    RepeatedDiscomfortIntent,
+    match_repeated_discomfort_intent,
+)
 
 
 def _ensure_hermes_import_path() -> None:
@@ -123,15 +136,32 @@ cmd/result lifecycle. Do not claim success when a tool returns rejected.
 """.strip()
 
 
-def _load_resident_media_tools() -> Any:
-    """Load the root-owned tool registration module without editing Hermes upstream."""
-    spec = importlib.util.spec_from_file_location("temi_resident_media_tools", MEDIA_TOOL_MODULE_PATH)
+def _load_resident_tool_module(module_name: str, path: Path) -> Any:
+    """Load one root-owned registration module without editing Hermes upstream."""
+    spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
-        raise RuntimeError("unable to load root-owned resident media tools")
+        raise RuntimeError(f"unable to load root-owned resident tool module: {module_name}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _load_resident_media_tools() -> Any:
+    """Load the root-owned Media tool registration module."""
+    return _load_resident_tool_module("temi_resident_media_tools", MEDIA_TOOL_MODULE_PATH)
+
+
+def _load_resident_identity_tools() -> Any:
+    """Load the root-owned operator identity tool registration module."""
+    return _load_resident_tool_module("temi_resident_identity_tools", IDENTITY_TOOL_MODULE_PATH)
+
+
+def _load_resident_repeated_discomfort_tools() -> Any:
+    """Load the root-owned repeated-discomfort tool registration module."""
+    return _load_resident_tool_module(
+        "temi_resident_repeated_discomfort_tools", REPEATED_DISCOMFORT_TOOL_MODULE_PATH
+    )
 
 
 class ResidentHermes:
@@ -151,6 +181,10 @@ class ResidentHermes:
         media_v11_enabled: bool | None = None,
         media_fast_path_enabled: bool | None = None,
         media_callback_socket: str | None = None,
+        demo_operator_identity_enabled: bool | None = None,
+        demo_repeated_discomfort_enabled: bool | None = None,
+        identity_callback_socket: str | None = None,
+        repeated_discomfort_callback_socket: str | None = None,
     ):
         """Create and warm the resident Hermes runtime.
 
@@ -222,8 +256,42 @@ class ResidentHermes:
             else media_fast_path_enabled
         )
         self.media_fast_path_enabled = configured_media_fast_path and self.media_tool_enabled
+        legacy_identity_enabled = _env_truthy("DEMO_OPERATOR_IDENTITY_ENABLED")
+        configured_identity = _env_truthy_with_legacy(
+            "RESIDENT_IDENTITY_ENABLED", legacy_identity_enabled
+        )
+        configured_identity_tool = _env_truthy_with_legacy(
+            "HERMES_DEMO_IDENTITY_TOOL_ENABLED", legacy_identity_enabled
+        )
+        configured_identity_fast_path = _env_truthy_with_legacy(
+            "HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED", legacy_identity_enabled
+        )
+        if demo_operator_identity_enabled is not None:
+            configured_identity = demo_operator_identity_enabled
+            configured_identity_tool = demo_operator_identity_enabled
+            configured_identity_fast_path = demo_operator_identity_enabled
+        configured_repeated_discomfort = (
+            os.getenv("DEMO_REPEATED_DISCOMFORT_ENABLED", "").lower() in {"1", "true", "yes", "on"}
+            if demo_repeated_discomfort_enabled is None
+            else demo_repeated_discomfort_enabled
+        )
+        self.resident_identity_enabled = configured_identity
+        self.identity_tool_enabled = configured_identity and configured_identity_tool
+        self.demo_operator_identity_enabled = self.identity_tool_enabled
+        self.identity_fast_path_enabled = configured_identity_fast_path and self.identity_tool_enabled
+        self.care_memory_v2_enabled = _env_truthy("CARE_MEMORY_V2_ENABLED")
+        self.demo_repeated_discomfort_enabled = (
+            configured_repeated_discomfort
+            and self.demo_operator_identity_enabled
+            and self.care_memory_v2_enabled
+        )
+        self.repeated_discomfort_fast_path_enabled = self.demo_repeated_discomfort_enabled
         self.media_tool_names: list[str] = []
+        self.identity_tool_names: list[str] = []
+        self.repeated_discomfort_tool_names: list[str] = []
         self._media_tools = None
+        self._identity_tools = None
+        self._repeated_discomfort_tools = None
         effective_toolsets = list(toolsets)
         if self.media_tool_enabled:
             resolved_socket = media_callback_socket or os.getenv("HERMES_MEDIA_CALLBACK_SOCKET", "")
@@ -232,6 +300,20 @@ class ResidentHermes:
                 callback_socket=resolved_socket
             )
             effective_toolsets.append(self._media_tools.TOOLSET)
+        if self.identity_tool_enabled:
+            resolved_identity_socket = identity_callback_socket or os.getenv("HERMES_DEMO_IDENTITY_CALLBACK_SOCKET", "")
+            self._identity_tools = _load_resident_identity_tools()
+            self.identity_tool_names = self._identity_tools.install_identity_tools(
+                callback_socket=resolved_identity_socket
+            )
+            effective_toolsets.append(self._identity_tools.TOOLSET)
+        if self.demo_repeated_discomfort_enabled:
+            resolved_care_socket = repeated_discomfort_callback_socket or os.getenv("HERMES_DEMO_CARE_CALLBACK_SOCKET", "")
+            self._repeated_discomfort_tools = _load_resident_repeated_discomfort_tools()
+            self.repeated_discomfort_tool_names = self._repeated_discomfort_tools.install_repeated_discomfort_tools(
+                callback_socket=resolved_care_socket
+            )
+            effective_toolsets.append(self._repeated_discomfort_tools.TOOLSET)
         self.toolsets = effective_toolsets
         self.skill_paths = skill_paths
         self.hermes_home = os.environ.get("HERMES_HOME", "")
@@ -273,17 +355,32 @@ class ResidentHermes:
         context = invocation_context or {}
         with self._lock:
             self.request_count += 1
+            identity_intent = match_demo_identity_intent(asr_text) if getattr(self, "identity_fast_path_enabled", False) else None
+            if identity_intent is not None and self._identity_tools is not None:
+                return self._invoke_deterministic_identity_intent(identity_intent, context, started)
+            repeated_intent = (
+                match_repeated_discomfort_intent(asr_text)
+                if getattr(self, "repeated_discomfort_fast_path_enabled", False)
+                and context.get("resident_id") == "father"
+                else None
+            )
+            if repeated_intent is not None and self._repeated_discomfort_tools is not None:
+                return self._invoke_deterministic_repeated_discomfort_intent(
+                    repeated_intent, context, started, asr_text
+                )
             intent = match_media_intent(asr_text) if self.media_fast_path_enabled else None
             if intent is not None and self._media_tools is not None:
                 return self._invoke_deterministic_media_intent(intent, context, started)
             stdout = io.StringIO()
             stderr = io.StringIO()
-            with redirect_stdout(stdout), redirect_stderr(stderr):
-                if self._media_tools is None:
-                    raw_output = self._agent.chat(prompt) or ""
-                else:
-                    with self._media_tools.invocation_context(context):
-                        raw_output = self._agent.chat(prompt) or ""
+            with redirect_stdout(stdout), redirect_stderr(stderr), ExitStack() as callbacks:
+                if self._media_tools is not None:
+                    callbacks.enter_context(self._media_tools.invocation_context(context))
+                if getattr(self, "_identity_tools", None) is not None:
+                    callbacks.enter_context(self._identity_tools.invocation_context(context))
+                if getattr(self, "_repeated_discomfort_tools", None) is not None:
+                    callbacks.enter_context(self._repeated_discomfort_tools.invocation_context(context))
+                raw_output = self._agent.chat(prompt) or ""
         latency_ms = int((time.monotonic() - started) * 1000)
         return {
             "status": "ok",
@@ -334,6 +431,61 @@ class ResidentHermes:
             "dispatch_metadata": dispatch,
         }
 
+    def _invoke_deterministic_identity_intent(
+        self,
+        intent: DemoIdentityIntent,
+        context: dict[str, str],
+        started: float,
+    ) -> dict[str, Any]:
+        """Invoke the identity native tool before LLM inference."""
+        assert self._identity_tools is not None
+        arguments = {"identity_status": intent.identity_status} if intent.identity_status else {}
+        with self._identity_tools.invocation_context(context):
+            callback = self._identity_tools.invoke_registered_identity_tool(intent.action, arguments)
+        status = str(callback.get("status") or "rejected")
+        selected = str(callback.get("identity_status") or intent.identity_status or "unknown")
+        text = {
+            "father": "Demo 身分已切換為爸爸。",
+            "mother": "Demo 身分已切換為媽媽。",
+            "unknown": "Demo 身分已清除。",
+        }.get(selected, "Demo 身分目前為未知。")
+        if intent.action == "get_demo_identity_status":
+            text = {"father": "Demo 目前身分為爸爸。", "mother": "Demo 目前身分為媽媽。", "unknown": "Demo 目前沒有已選定的身分。"}.get(selected, "Demo 身分目前為未知。")
+        accepted = status in {"published", "ok"}
+        return _deterministic_callback_response(
+            event_id=context.get("event_id", ""), robot_id=context.get("robot_id", ""), text=text,
+            accepted=accepted, dispatch_mode=IDENTITY_DISPATCH_MODE, intent=intent.action,
+            callback_status=status, started=started,
+        )
+
+    def _invoke_deterministic_repeated_discomfort_intent(
+        self,
+        intent: RepeatedDiscomfortIntent,
+        context: dict[str, str],
+        started: float,
+        asr_text: str,
+    ) -> dict[str, Any]:
+        """Invoke the father-only synthetic-memory flow before LLM inference."""
+        assert self._repeated_discomfort_tools is not None
+        arguments: dict[str, Any] = {}
+        if intent.action == "record_repeated_blood_pressure":
+            arguments = {"systolic": intent.systolic, "diastolic": intent.diastolic, "asr_text": asr_text}
+        with self._repeated_discomfort_tools.invocation_context(context):
+            callback = self._repeated_discomfort_tools.invoke_registered_repeated_discomfort_tool(intent.action, arguments)
+        status = str(callback.get("status") or "rejected")
+        text = {
+            "confirmed": "好的，請告訴我這次量到的血壓，例如血壓128/78。",
+            "recorded": "已記錄您目前頭痛，以及剛才提供的血壓數值。請先停止手邊工作並坐著休息；若症狀持續、加重，或出現其他不適，請聯絡照護者或醫療人員。",
+        }.get(status, "抱歉，目前無法完成這個 Demo 記錄，請稍後再試。")
+        if status == "retrieved":
+            text = _retrieved_discomfort_text(callback)
+        return _deterministic_callback_response(
+            event_id=context.get("event_id", ""), robot_id=context.get("robot_id", ""), text=text,
+            accepted=status in {"retrieved", "confirmed", "recorded"},
+            dispatch_mode=REPEATED_DISCOMFORT_DISPATCH_MODE, intent=intent.action,
+            callback_status=status, started=started,
+        )
+
     def health(self) -> dict[str, Any]:
         """Return health and configuration metadata for operational checks."""
         return {
@@ -350,6 +502,15 @@ class ResidentHermes:
             "media_tool_enabled": self.media_tool_enabled,
             "media_tool_names": self.media_tool_names,
             "media_fast_path_enabled": self.media_fast_path_enabled,
+            "demo_operator_identity_enabled": self.demo_operator_identity_enabled,
+            "resident_identity_enabled": self.resident_identity_enabled,
+            "identity_tool_enabled": self.identity_tool_enabled,
+            "identity_tool_names": self.identity_tool_names,
+            "identity_fast_path_enabled": self.identity_fast_path_enabled,
+            "care_memory_v2_enabled": self.care_memory_v2_enabled,
+            "demo_repeated_discomfort_enabled": self.demo_repeated_discomfort_enabled,
+            "repeated_discomfort_tool_names": self.repeated_discomfort_tool_names,
+            "repeated_discomfort_fast_path_enabled": self.repeated_discomfort_fast_path_enabled,
             "uptime_seconds": int(time.time() - self.started_at),
             "request_count": self.request_count,
         }
@@ -443,6 +604,86 @@ def _parse_toolsets(raw: str) -> list[str]:
 def _combine_system_prompt(base: str, overlay: str) -> str:
     """Combine optional production prompt components without empty separators."""
     return "\n\n---\n\n".join(item for item in (base, overlay) if item)
+
+
+def _env_truthy(name: str) -> bool:
+    """Read one explicit boolean feature flag from the process environment."""
+    return os.getenv(name, "").lower() in {"1", "true", "yes", "on"}
+
+
+def _env_truthy_with_legacy(name: str, legacy_value: bool) -> bool:
+    """Prefer an explicit flag while preserving old private Demo configs temporarily."""
+    return _env_truthy(name) if name in os.environ else legacy_value
+
+
+def _retrieved_discomfort_text(callback: dict[str, Any]) -> str:
+    """Describe only the timestamp returned by the canonical retrieval callback."""
+    prior = callback.get("prior_event")
+    if not isinstance(prior, dict) or prior.get("event_id") != "demo_father_headache_two_days_ago":
+        return "我目前無法取得先前的照護紀錄。請告訴我現在是哪裡不舒服。"
+    raw_timestamp = prior.get("timestamp")
+    if not isinstance(raw_timestamp, str):
+        return "我目前無法取得先前的照護紀錄。請告訴我現在是哪裡不舒服。"
+    try:
+        occurred_at = datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return "我目前無法取得先前的照護紀錄。請告訴我現在是哪裡不舒服。"
+    local_occurred_at = occurred_at.astimezone()
+    local_today = datetime.now().astimezone().date()
+    days_ago = (local_today - local_occurred_at.date()).days
+    if days_ago == 0:
+        relative = "今天"
+    elif days_ago == 1:
+        relative = "昨天"
+    elif days_ago == 2:
+        relative = "前天"
+    elif days_ago > 2:
+        relative = f"{days_ago} 天前"
+    else:
+        relative = local_occurred_at.strftime("%Y 年 %m 月 %d 日")
+    hour = local_occurred_at.hour
+    period = "上午" if hour < 12 else "下午"
+    display_hour = hour % 12 or 12
+    return (
+        f"王先生，紀錄顯示您{relative}{period} {display_hour}:{local_occurred_at.minute:02d}"
+        "曾回報頭痛。請問您現在也是頭痛嗎？"
+    )
+
+
+def _deterministic_callback_response(
+    *,
+    event_id: str,
+    robot_id: str,
+    text: str,
+    accepted: bool,
+    dispatch_mode: str,
+    intent: str,
+    callback_status: str,
+    started: float,
+) -> dict[str, Any]:
+    """Build a normal Bridge-validated speak acknowledgement after a callback."""
+    latency_ms = int((time.monotonic() - started) * 1000)
+    output = {
+        "schema_version": "1.0",
+        "event_id": event_id,
+        "robot_id": robot_id,
+        "confidence": 1.0 if accepted else 0.0,
+        "cognitive_state": {
+            "intent": intent,
+            "home_esi_level": "Normal",
+            "risk_reason": "Native Demo callback accepted the reviewed request." if accepted else "Native Demo callback rejected the reviewed request.",
+            "next_step": "acknowledge_demo_callback" if accepted else "report_demo_callback_unavailable",
+        },
+        "reasoning_summary": "Resident Hermes deterministic Demo callback dispatch.",
+        "actions": [{"action_id": "act_001", "type": "speak", "text": text, "language": "zh-TW"}],
+    }
+    return {
+        "status": "ok",
+        "raw_output": json.dumps(output, ensure_ascii=False, separators=(",", ":")),
+        "latency_ms": latency_ms,
+        "request_count": 0,
+        "dispatch_metadata": {"dispatch_mode": dispatch_mode, "intent": intent, "callback_status": callback_status, "dispatch_latency_ms": latency_ms},
+    }
 
 
 def _fast_path_action_output(

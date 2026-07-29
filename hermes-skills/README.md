@@ -119,3 +119,7 @@ README 與 [contract traceability](../docs/architecture/contract_traceability.md
 
 Skill preload 與文字規則本身不能證明模型一定遵守 contract。所有 model output 仍需
 Bridge validation。Skills 不保存 secrets、runtime memory、影像或個資。
+
+## Root-owned private Demo skills
+
+temi-demo-identity and temi-demo-repeated-discomfort are intentionally root-owned additions, not mirrors of hermes-agent/skills/temi-*. The lifecycle loads them only when their private Demo flags are true. They define exact operator and father-only synthetic-memory callback routes; neither skill permits MQTT publication, direct memory-file access, visual identity inference, or Android control.

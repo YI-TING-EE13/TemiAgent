@@ -31,6 +31,30 @@ Generic playback 可維持所有 care/visual flags `false`，因為它在 `unkno
 播放 allowlisted `elderly_hand_exercise`。這不放寬 Mother dialysis-care 的 identity、症狀與
 同意 gate。
 
+### Optional controlled identity and repeated-discomfort route
+
+Only for this bounded Demo, add these private values under the same external root:
+
+```text
+RESIDENT_IDENTITY_ENABLED=true
+HERMES_DEMO_IDENTITY_TOOL_ENABLED=true
+HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED=true
+CARE_MEMORY_V2_ENABLED=true
+DEMO_REPEATED_DISCOMFORT_ENABLED=true
+DEMO_CARE_SCENARIO_PROMPT_ENABLED=true
+DEMO_CARE_MEMORY_ROOT=<external-runtime-root>/data/care-memory
+HERMES_DEMO_IDENTITY_CALLBACK_SOCKET=<external-runtime-root>/tmp/sockets/bridge_demo_identity_callback.sock
+HERMES_DEMO_CARE_CALLBACK_SOCKET=<external-runtime-root>/tmp/sockets/bridge_demo_care_callback.sock
+DEMO_IDENTITY_STATE_DIR=<external-runtime-root>/state/demo-identity
+DEMO_IDENTITY_REFRESH_SECONDS=10
+DEMO_IDENTITY_MAX_DURATION_SECONDS=900
+```
+
+The two callback paths are Unix sockets owned by Bridge, not MQTT credentials or Android paths.
+The operator selection is process-scoped; it refreshes a canonical existing identity v1.0 result
+every 10 seconds and expires to `unknown` after 900 seconds. Restart never restores an old
+selection. No generic phrase, self-identification, name, or appearance selects a resident.
+
 若本次需要 abnormal viewer，設定 `DEMO_ACTION_VIEWER_ENABLED=true` 與其必要 model paths。
 除非當次人類明確授權自動 alert/notification，以下三個 private values 必須是 `disabled`：
 
@@ -132,6 +156,45 @@ play session 的 `cancelled`/`remote_stop` linkage。
 path 對這三個已審查表面詞和固定播放句型建立有限組合，並且仍固定 dispatch 到
 `elderly_hand_exercise`。它也接受已驗收的縮寫「播放影片」。任何其他錯轉寫（例如「背部運動」）
 不匹配，會保留一般 LLM route；不要以泛用讀音／fuzzy matching 或 raw MQTT 擴張 allowlist。
+
+## Controlled identity and repeated-discomfort E2E
+
+After `restart` returns ready, use the Bridge callback rather than raw MQTT to establish the Demo
+context, then seed the synthetic private partitions:
+
+```bash
+./scripts/demo --config <private-demo-env> identity father
+./scripts/demo --config <private-demo-env> identity status
+./scripts/demo --config <private-demo-env> seed repeated-discomfort
+./scripts/demo --config <private-demo-env> verify repeated-discomfort
+```
+
+Observe the existing identity result topic in addition to ASR and command topics:
+
+```bash
+set -a
+. <private-demo-env>
+set +a
+robot_id="${ROBOT_ID_ALLOWLIST%%,*}"
+mosquitto_sub -h "$MQTT_BROKER_HOST" -p "$MQTT_BROKER_PORT" \
+  -t "temi/$robot_id/resident/identity/result" -v
+```
+
+Optional voice verification of the same root-owned skill (after a start or restart) accepts only
+the exact commands `Demo切換為爸爸` / `Demo設定為爸爸`, corresponding mother forms, the two clear
+forms, and the two status forms. `我是爸爸` must not change identity. For the father sequence, say:
+
+```text
+小安小安，我又不舒服了。
+對。
+血壓128/78。
+```
+
+Evidence must show: ASR → `deterministic_repeated_discomfort_fast_path` → native callback →
+father-only synthetic prior event retrieval → confirmation → `StructuredMemoryStore` append.
+The final acknowledgement is valid only when callback status is `recorded`; it records a
+user-provided number and is not a clinical assessment. A mother or unknown context must not reach
+that callback or read any father data.
 
 ## Evidence、停止與回復
 

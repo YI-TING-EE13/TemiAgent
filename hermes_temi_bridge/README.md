@@ -65,6 +65,11 @@ Temi Action Viewer / Video Action Tester
 - Resident 的 `HERMES_MEDIA_FAST_PATH_ENABLED=true` 僅啟用受控中文 phrase 的 deterministic
   generic Media dispatch；它在 LLM inference 前重用 native tool → Unix callback → Bridge，
   預設為 `false`，不恢復 Bridge 外部 fallback。
+- `RESIDENT_IDENTITY_ENABLED=true`、`HERMES_DEMO_IDENTITY_TOOL_ENABLED=true` 與 `HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED=true` 時，root resident 才接受固定的示範管理 phrase，經 native tool 和 private Unix callback 呼叫 Bridge。Bridge 以現有 identity v1.0 schema 建構、驗證後才以 QoS 1 / `retain=false` 發布 `resident/identity/result`；它不從一般語句推論身分。選擇為 process-scoped，10 秒 refresh 與 max duration 都由 private env 明定，restart 不會 restore 舊身分。
+- `CARE_MEMORY_V2_ENABLED=true` 與 `DEMO_REPEATED_DISCOMFORT_ENABLED=true` 時，只有 active `father` 的三段精確語句可經
+  native callback 讀取固定 synthetic prior-headache event、確認、再以 canonical
+  `StructuredMemoryStore` 寫入使用者提供的血壓數值。它不讀 mother / unknown partition，也不
+  做醫療判斷。
 
 ## 目前狀態與限制
 
@@ -80,10 +85,10 @@ Temi Action Viewer / Video Action Tester
 - 只有 robot-facing actions 會 publish 到 `temi/{robot_id}/cmd/request`；memory/demo actions 只寫入 `MEMORY_DIR`。
 - Abnormal perception events currently carry only `observation.action_name`, `observation.reason`, and `evidence.frame_paths`; they do not carry model confidence, confidence_source, or severity.
 - Identity、care report 與 report interaction 已有 canonical runtime schema 與 schema tests。
-  Bridge 現在只在 `DEMO_RESIDENT_VISUAL_ROUTING_ENABLED=true` 時消費 identity result，且僅接受
-  `vision_gender_fallback` 的 confirmed `father`／`mother`，且 confidence 不低於
-  `DEMO_RESIDENT_VISUAL_MINIMUM_CONFIDENCE`；無結果、manual selection、衝突、低信心或過期
-  都會變成 `unknown`。本 checkout 仍沒有上游 VLM/Identity Provider producer。
+  Visual route 只在 `DEMO_RESIDENT_VISUAL_ROUTING_ENABLED=true` 時接受
+  `vision_gender_fallback`；另有預設關閉的 Demo operator route 才接受相同 existing schema 的
+  `manual_selection`。無結果、衝突、低信心或過期都會變成 `unknown`。本 checkout 仍沒有上游
+  VLM/Identity Provider producer，也不把 Demo operator selection 當作 face recognition。
 - Video v1.1 沿用 `cmd/request`/`cmd/result` topic。Media 不會擴張 generic
   `action_validator.py` allowlist；native tool callback 先經獨立 allowlist（目前僅
   `elderly_hand_exercise`），再呼叫既有 `publish_media_play()`／`publish_media_control()`。
@@ -126,6 +131,11 @@ hermes_temi_bridge/
     idempotency.py          # event_id dedup
     hermes_media_tool.py    # native Hermes media callback validation/dispatch adapter
     media_callback_socket.py # private local transport between resident and Bridge
+    demo_callback_socket.py  # private local transport for identity/care callbacks
+    identity_contract.py     # existing identity v1.0 builder and validator
+    demo_identity.py         # process-scoped operator selection / refresh controller
+    demo_repeated_discomfort.py # father-only synthetic retrieval / confirm / record flow
+    hermes_demo_tools.py     # Bridge callback adapters for resident native tools
     resident_context.py     # canonical identity-result to active resident, fail closed
     demo_care_memory.py     # private synthetic Demo seed and resident partitions
     media_contract.py       # media v1.1 builder and strict boundary validation
@@ -242,6 +252,17 @@ uv run --extra mqtt hermes-temi-bridge --env-file .env.example
 | `MEDIA_V11_ENABLED` | 啟用 isolated media v1.1 producer/consumer；預設 `false`。 |
 | `HERMES_MEDIA_TOOL_ENABLED` | 接受 root-owned native tool callback；預設 `false`。 |
 | `HERMES_MEDIA_FAST_PATH_ENABLED` | Resident-only exact Media matcher；需兩個 Media flag，預設 `false`。 |
+| `RESIDENT_IDENTITY_ENABLED` | Bridge Demo-only `manual_selection` admission；需 identity callback 與 state dir，預設 `false`。 |
+| `HERMES_DEMO_IDENTITY_TOOL_ENABLED` | Resident root-owned identity native tool registration；預設 `false`。 |
+| `HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED` | Resident deterministic exact operator matcher；預設 `false`。 |
+| `DEMO_OPERATOR_IDENTITY_ENABLED` | Deprecated private-config compatibility fallback；新 Demo 應使用三個 canonical identity flags，預設 `false`。 |
+| `HERMES_DEMO_IDENTITY_CALLBACK_SOCKET` | Root resident → Bridge identity Unix socket；必須是 private absolute path。 |
+| `DEMO_IDENTITY_STATE_DIR` | Process-scoped operator identity status artifact directory；restart 不讀回舊值。 |
+| `DEMO_IDENTITY_REFRESH_SECONDS` / `DEMO_IDENTITY_MAX_DURATION_SECONDS` | Canonical identity refresh 與 bounded session duration；預設 `10` / `900`。 |
+| `CARE_MEMORY_V2_ENABLED` | Enables the canonical private Care Memory v2 Demo store; default `false`. |
+| `DEMO_REPEATED_DISCOMFORT_ENABLED` | Father-only synthetic repeated-discomfort callback flow；需 canonical identity 與 Care Memory v2，預設 `false`。 |
+| `HERMES_DEMO_CARE_CALLBACK_SOCKET` | Root resident → Bridge repeated-discomfort Unix socket；必須是 private absolute path。 |
+| `DEMO_CARE_MEMORY_ROOT` | Private father/mother partition root；repeated-discomfort seed/read/write 都經 `StructuredMemoryStore`。 |
 
 ## Trace log schema
 

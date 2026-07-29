@@ -73,6 +73,13 @@ class TemiMqttClient:
         self.client.publish(topic, json.dumps(payload, ensure_ascii=False), qos=1)
         LOGGER.info("published command to %s", topic)
 
+    def publish_identity_result(self, robot_id: str, payload: dict[str, Any]) -> None:
+        """Publish the existing canonical resident identity result contract."""
+        topic = f"temi/{robot_id}/resident/identity/result"
+        self.client.publish(topic, json.dumps(payload, ensure_ascii=False), qos=1, retain=False)
+        LOGGER.info("published identity result to %s", topic)
+
+
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
         """Subscribe to Bridge topics after a successful connection."""
         if not _is_success_reason_code(reason_code):

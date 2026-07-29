@@ -95,10 +95,17 @@ class BridgeConfig:
     hermes_media_tool_enabled: bool = False
     demo_care_scenario_prompt_enabled: bool = False
     demo_resident_visual_routing_enabled: bool = False
+    demo_operator_identity_enabled: bool = False
+    demo_repeated_discomfort_enabled: bool = False
     demo_care_memory_root: str = ""
     demo_resident_context_ttl_seconds: int = 300
     demo_resident_visual_minimum_confidence: float = 0.70
     hermes_media_callback_socket: str = ""
+    hermes_demo_identity_callback_socket: str = ""
+    hermes_demo_care_callback_socket: str = ""
+    demo_identity_state_dir: str = ""
+    demo_identity_refresh_seconds: int = 10
+    demo_identity_max_duration_seconds: int = 900
 
     def __post_init__(self) -> None:
         """Reject partial Demo-media configuration before connecting to MQTT."""
@@ -112,10 +119,26 @@ class BridgeConfig:
             raise ValueError(
                 "DEMO_CARE_SCENARIO_PROMPT_ENABLED=true requires DEMO_CARE_MEMORY_ROOT"
             )
+        if self.demo_operator_identity_enabled:
+            if not self.hermes_demo_identity_callback_socket:
+                raise ValueError("RESIDENT_IDENTITY_ENABLED=true requires HERMES_DEMO_IDENTITY_CALLBACK_SOCKET")
+            if not self.demo_identity_state_dir:
+                raise ValueError("RESIDENT_IDENTITY_ENABLED=true requires DEMO_IDENTITY_STATE_DIR")
+        if self.demo_repeated_discomfort_enabled:
+            if not self.demo_operator_identity_enabled:
+                raise ValueError("DEMO_REPEATED_DISCOMFORT_ENABLED=true requires RESIDENT_IDENTITY_ENABLED=true")
+            if not self.demo_care_memory_root:
+                raise ValueError("DEMO_REPEATED_DISCOMFORT_ENABLED=true requires DEMO_CARE_MEMORY_ROOT")
+            if not self.hermes_demo_care_callback_socket:
+                raise ValueError("DEMO_REPEATED_DISCOMFORT_ENABLED=true requires HERMES_DEMO_CARE_CALLBACK_SOCKET")
         if self.demo_resident_context_ttl_seconds <= 0:
             raise ValueError("DEMO_RESIDENT_CONTEXT_TTL_SECONDS must be positive")
         if not 0 <= self.demo_resident_visual_minimum_confidence <= 1:
             raise ValueError("DEMO_RESIDENT_VISUAL_MINIMUM_CONFIDENCE must be between 0 and 1")
+        if self.demo_identity_refresh_seconds <= 0:
+            raise ValueError("DEMO_IDENTITY_REFRESH_SECONDS must be positive")
+        if self.demo_identity_max_duration_seconds <= 0 or self.demo_identity_refresh_seconds > self.demo_identity_max_duration_seconds:
+            raise ValueError("DEMO_IDENTITY_MAX_DURATION_SECONDS must be at least DEMO_IDENTITY_REFRESH_SECONDS")
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> "BridgeConfig":
@@ -123,6 +146,12 @@ class BridgeConfig:
         values = _read_env_file(Path(env_file))
         username = os.getenv("MQTT_USERNAME", values.get("MQTT_USERNAME", "")) or None
         password = os.getenv("MQTT_PASSWORD", values.get("MQTT_PASSWORD", "")) or None
+        legacy_operator_identity_enabled = _get_bool(
+            values, "DEMO_OPERATOR_IDENTITY_ENABLED", cls.demo_operator_identity_enabled
+        )
+        resident_identity_enabled = _get_bool(
+            values, "RESIDENT_IDENTITY_ENABLED", legacy_operator_identity_enabled
+        )
         return cls(
             mqtt_broker_host=os.getenv(
                 "MQTT_BROKER_HOST", values.get("MQTT_BROKER_HOST", cls.mqtt_broker_host)
@@ -199,6 +228,12 @@ class BridgeConfig:
                 "DEMO_RESIDENT_VISUAL_ROUTING_ENABLED",
                 cls.demo_resident_visual_routing_enabled,
             ),
+            demo_operator_identity_enabled=resident_identity_enabled,
+            demo_repeated_discomfort_enabled=_get_bool(
+                values,
+                "DEMO_REPEATED_DISCOMFORT_ENABLED",
+                cls.demo_repeated_discomfort_enabled,
+            ),
             demo_care_memory_root=os.getenv(
                 "DEMO_CARE_MEMORY_ROOT",
                 values.get("DEMO_CARE_MEMORY_ROOT", cls.demo_care_memory_root),
@@ -216,5 +251,27 @@ class BridgeConfig:
             hermes_media_callback_socket=os.getenv(
                 "HERMES_MEDIA_CALLBACK_SOCKET",
                 values.get("HERMES_MEDIA_CALLBACK_SOCKET", cls.hermes_media_callback_socket),
+            ),
+            hermes_demo_identity_callback_socket=os.getenv(
+                "HERMES_DEMO_IDENTITY_CALLBACK_SOCKET",
+                values.get("HERMES_DEMO_IDENTITY_CALLBACK_SOCKET", cls.hermes_demo_identity_callback_socket),
+            ),
+            hermes_demo_care_callback_socket=os.getenv(
+                "HERMES_DEMO_CARE_CALLBACK_SOCKET",
+                values.get("HERMES_DEMO_CARE_CALLBACK_SOCKET", cls.hermes_demo_care_callback_socket),
+            ),
+            demo_identity_state_dir=os.getenv(
+                "DEMO_IDENTITY_STATE_DIR",
+                values.get("DEMO_IDENTITY_STATE_DIR", cls.demo_identity_state_dir),
+            ),
+            demo_identity_refresh_seconds=_get_int(
+                values,
+                "DEMO_IDENTITY_REFRESH_SECONDS",
+                cls.demo_identity_refresh_seconds,
+            ),
+            demo_identity_max_duration_seconds=_get_int(
+                values,
+                "DEMO_IDENTITY_MAX_DURATION_SECONDS",
+                cls.demo_identity_max_duration_seconds,
             ),
         )

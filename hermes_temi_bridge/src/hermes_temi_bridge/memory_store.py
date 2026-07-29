@@ -131,6 +131,88 @@ class StructuredMemoryStore:
             "resident_id": payload.get("user_id"),
         }
 
+    def find_latest_synthetic_headache(self, *, seed_id: str, event_id: str) -> dict[str, Any] | None:
+        """Read one bounded synthetic headache record for the controlled Demo.
+
+        This is deliberately narrower than a general event search: callers
+        cannot query arbitrary residents, dates, fields, or free text.  The
+        partition has already been selected by the Bridge before this API is
+        constructed.
+        """
+        if not isinstance(seed_id, str) or not seed_id.strip():
+            raise MemoryActionError("invalid_demo_seed_id")
+        if not isinstance(event_id, str) or not event_id.strip():
+            raise MemoryActionError("invalid_demo_seed_event_id")
+        candidates = [
+            item
+            for item in self._read_event_log()
+            if item.get("event_id") == event_id
+            and item.get("source") == "synthetic_demo_seed"
+            and isinstance(item.get("details"), dict)
+            and item["details"].get("synthetic") is True
+            and item["details"].get("seed_id") == seed_id
+        ]
+        if not candidates:
+            return None
+        latest = max(candidates, key=lambda item: str(item.get("timestamp") or ""))
+        return {
+            "event_id": latest["event_id"],
+            "timestamp": latest.get("timestamp"),
+            "asr_text": latest.get("asr_text"),
+        }
+
+    def record_repeated_discomfort(
+        self,
+        *,
+        event_id: str,
+        conversation_id: str | None,
+        asr_text: str,
+        prior_event_id: str,
+        systolic: int,
+        diastolic: int,
+    ) -> dict[str, Any]:
+        """Append the post-confirmation Demo observation through the memory API.
+
+        The method records user-provided numbers only.  It intentionally makes
+        no clinical interpretation, diagnosis, measurement claim, or alert.
+        """
+        if not isinstance(event_id, str) or not event_id.strip():
+            raise MemoryActionError("invalid_repeated_discomfort_event_id")
+        if not isinstance(asr_text, str) or not asr_text.strip():
+            raise MemoryActionError("invalid_repeated_discomfort_asr_text")
+        if not isinstance(prior_event_id, str) or not prior_event_id.strip():
+            raise MemoryActionError("invalid_repeated_discomfort_prior_event")
+        if isinstance(systolic, bool) or isinstance(diastolic, bool):
+            raise MemoryActionError("invalid_blood_pressure")
+        if not isinstance(systolic, int) or not isinstance(diastolic, int):
+            raise MemoryActionError("invalid_blood_pressure")
+        if not (70 <= systolic <= 250 and 40 <= diastolic <= 150 and systolic > diastolic):
+            raise MemoryActionError("invalid_blood_pressure")
+        self._ensure_layout()
+        if any(item.get("event_id") == event_id for item in self._read_event_log()):
+            raise MemoryActionError("duplicate_memory_event_id", {"event_id": event_id})
+        entry = {
+            "event_id": event_id,
+            "timestamp": _now_iso(),
+            "source": "hermes_temi_bridge",
+            "conversation_id": conversation_id,
+            "asr_text": asr_text,
+            "perception": {"intent": "repeated_discomfort_blood_pressure", "visual_status": "not_available", "image_paths": []},
+            "risk": {"home_esi_level": "Normal", "reason": "Demo-only user-provided record; no clinical assessment was made."},
+            "reasoning_summary": "Controlled Demo repeated-discomfort record after explicit confirmation.",
+            "actions_taken": ["log_event"],
+            "outcome": "Recorded user-provided blood-pressure values for the controlled Demo.",
+            "details": {
+                "demo": {"flow": "repeated_discomfort", "prior_event_id": prior_event_id},
+                "blood_pressure": {"systolic": systolic, "diastolic": diastolic, "unit": "mmHg", "source": "user_reported"},
+            },
+        }
+        log_path = self.root / "event_log.jsonl"
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, ensure_ascii=False, separators=(",", ":")) + "\n")
+        self._update_daily_recent_event(event_id)
+        return {"status": "success", "event_id": event_id, "prior_event_id": prior_event_id, "path": log_path.as_posix()}
+
     def _ensure_layout(self) -> None:
         """Create memory directories expected by the Demo."""
         self.root.mkdir(parents=True, exist_ok=True)

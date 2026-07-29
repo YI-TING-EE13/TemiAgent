@@ -13,8 +13,12 @@ from .action_validator import ActionValidationError, validate_action_output
 from .care_context_builder import CareContextBuilder
 from .command_dispatcher import build_command_request, fallback_command
 from .config import BridgeConfig
+from .demo_callback_socket import DemoCallbackSocketServer
 from .demo_care_memory import resident_memory_dir
+from .demo_identity import DemoIdentityController
+from .demo_repeated_discomfort import DemoRepeatedDiscomfortController
 from .event_models import ASRFinalEvent, EventValidationError, PerceptionAbnormalEvent
+from .hermes_demo_tools import HermesDemoIdentityToolCallback, HermesRepeatedDiscomfortToolCallback
 from .hermes_client import (
     HermesClient,
     HttpHermesClient,
@@ -28,6 +32,7 @@ from .hermes_client import (
 )
 from .idempotency import TTLProcessedEventCache
 from .hermes_media_tool import HermesMediaToolCallback
+from .identity_contract import IdentityContractError, build_demo_identity_result
 from .image_resolver import ImageValidationError, translate_frames, validate_image_file
 from .logging_utils import EventJsonlLogger, configure_logging
 from .media_contract import MediaContractError, build_media_command_request
@@ -95,6 +100,11 @@ class HermesTemiBridgeService:
             minimum_confidence=config.demo_resident_visual_minimum_confidence,
         )
         self._media_callback_server: MediaCallbackSocketServer | None = None
+        self._identity_callback_server: DemoCallbackSocketServer | None = None
+        self._care_callback_server: DemoCallbackSocketServer | None = None
+        self._identity_controller: DemoIdentityController | None = None
+        self._repeated_discomfort_controller: DemoRepeatedDiscomfortController | None = None
+        self._demo_operator_identity_event_ids: dict[str, set[str]] = {}
         if config.hermes_media_tool_enabled:
             callback = HermesMediaToolCallback(
                 self,
@@ -107,6 +117,40 @@ class HermesTemiBridgeService:
                 config.hermes_media_callback_socket,
                 callback,
             )
+        if config.demo_operator_identity_enabled:
+            demo_robot_id = config.robot_id_allowlist[0]
+            self._identity_controller = DemoIdentityController(
+                robot_id=demo_robot_id,
+                state_dir=config.demo_identity_state_dir,
+                publish=lambda status, reason, trigger_event_id: self.publish_demo_identity_result(
+                    robot_id=demo_robot_id,
+                    identity_status=status,
+                    reason=reason,
+                    trigger_event_id=trigger_event_id,
+                ),
+                refresh_seconds=config.demo_identity_refresh_seconds,
+                max_duration_seconds=config.demo_identity_max_duration_seconds,
+            )
+            self._identity_callback_server = DemoCallbackSocketServer(
+                config.hermes_demo_identity_callback_socket,
+                HermesDemoIdentityToolCallback(
+                    self._identity_controller,
+                    allowed_robot_ids=(demo_robot_id,),
+                ),
+            )
+        if config.demo_repeated_discomfort_enabled:
+            self._repeated_discomfort_controller = DemoRepeatedDiscomfortController(
+                memory_root=config.demo_care_memory_root,
+                active_resident=self._active_resident,
+            )
+            self._care_callback_server = DemoCallbackSocketServer(
+                config.hermes_demo_care_callback_socket,
+                HermesRepeatedDiscomfortToolCallback(
+                    self._repeated_discomfort_controller,
+                    allowed_robot_ids=(config.robot_id_allowlist[0],),
+                    trace_callback=self._trace_repeated_discomfort_callback,
+                ),
+            )
 
     def start(self) -> None:
         """Start the MQTT runtime and block forever."""
@@ -116,12 +160,52 @@ class HermesTemiBridgeService:
         self.mqtt_client.set_identity_handler(self.handle_identity_payload)
         if self._media_callback_server is not None:
             self._media_callback_server.start()
+        if self._identity_callback_server is not None:
+            self._identity_callback_server.start()
+        if self._care_callback_server is not None:
+            self._care_callback_server.start()
         try:
             self.mqtt_client.connect()
             self.mqtt_client.loop_forever()
         finally:
+            if self._identity_controller is not None:
+                self._identity_controller.shutdown()
+            if self._care_callback_server is not None:
+                self._care_callback_server.stop()
+            if self._identity_callback_server is not None:
+                self._identity_callback_server.stop()
             if self._media_callback_server is not None:
                 self._media_callback_server.stop()
+
+    def _trace_repeated_discomfort_callback(
+        self,
+        action: str,
+        event_id: str,
+        robot_id: str,
+        result: dict[str, Any],
+    ) -> None:
+        """Record callback evidence without storing the spoken blood-pressure values in trace."""
+        trace_payload: dict[str, Any] = {
+            "callback_action": action,
+            "callback_status": result.get("status"),
+        }
+        prior = result.get("prior_event")
+        if isinstance(prior, dict) and isinstance(prior.get("event_id"), str):
+            trace_payload["retrieval_event_id"] = prior["event_id"]
+        if isinstance(result.get("prior_event_id"), str):
+            trace_payload["retrieval_event_id"] = result["prior_event_id"]
+        if action == "record_repeated_blood_pressure" and isinstance(result.get("event_id"), str):
+            trace_payload["new_event_id"] = result["event_id"]
+        self.event_logger.write_trace(
+            event_id=event_id,
+            robot_id=robot_id,
+            source_type="resident.demo_care.callback",
+            stage="event_completed",
+            record_type="demo_repeated_discomfort_callback",
+            status=str(result.get("status") or "rejected"),
+            component="bridge",
+            payload=trace_payload,
+        )
 
     def handle_identity_payload(self, topic: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Consume the already-canonical identity result; never run inference here."""
@@ -132,17 +216,70 @@ class HermesTemiBridgeService:
             robot_id=robot_id,
             payload=payload,
             enabled=self.config.demo_resident_visual_routing_enabled,
+            operator_identity_enabled=(
+                self.config.demo_operator_identity_enabled
+                and (
+                    payload.get("source") != "manual_selection"
+                    or str(payload.get("event_id") or "")
+                    in self._demo_operator_identity_event_ids.get(robot_id, set())
+                )
+            ),
         )
+        if self._repeated_discomfort_controller is not None:
+            self._repeated_discomfort_controller.identity_changed(robot_id, resident)
         self.event_logger.write_trace(
             event_id=str(payload.get("event_id") or "identity_unknown"),
             robot_id=robot_id,
             source_type="resident.identity.result",
-            stage="active_resident_updated",
+            stage="event_completed",
+            record_type="active_resident_updated",
             status="ok" if resident.is_confirmed else "unknown",
             component="bridge",
             payload={"active_resident": resident.as_prompt_context(), "topic": topic},
         )
         return {"status": "updated", "active_resident": resident.as_prompt_context()}
+
+    def publish_demo_identity_result(
+        self,
+        *,
+        robot_id: str,
+        identity_status: str,
+        reason: str,
+        trigger_event_id: str | None,
+    ) -> dict[str, Any]:
+        """Validate, publish, and immediately apply one Demo identity result."""
+        if not self.config.demo_operator_identity_enabled:
+            return {"status": "rejected", "error_code": "DEMO_OPERATOR_IDENTITY_DISABLED"}
+        if robot_id not in self.config.robot_id_allowlist:
+            return {"status": "rejected", "error_code": "DEMO_IDENTITY_ROBOT_NOT_ALLOWED"}
+        try:
+            payload = build_demo_identity_result(
+                identity_status=identity_status,
+                reason=reason,
+                event_id=trigger_event_id,
+            )
+        except IdentityContractError as exc:
+            return {"status": "rejected", "error_code": str(exc)}
+        allowed_event_ids = self._demo_operator_identity_event_ids.setdefault(robot_id, set())
+        allowed_event_ids.add(payload["event_id"])
+        try:
+            self.mqtt_client.publish_identity_result(robot_id, payload)
+        except Exception:
+            allowed_event_ids.discard(payload["event_id"])
+            raise
+        topic = f"temi/{robot_id}/resident/identity/result"
+        active = self.handle_identity_payload(topic, payload)
+        self.event_logger.write_trace(
+            event_id=payload["event_id"],
+            robot_id=robot_id,
+            source_type="resident.identity.result",
+            stage="event_completed",
+            record_type="demo_identity_result_published",
+            status="published",
+            component="bridge",
+            payload={"topic": topic, "identity_result": payload, "active_resident": active.get("active_resident")},
+        )
+        return {"status": "published", "identity_result": payload}
 
     def handle_asr_payload(self, topic: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Handle one canonical ASR event payload from MQTT."""
@@ -823,10 +960,11 @@ class HermesTemiBridgeService:
 
 
     def _active_resident(self, robot_id: str) -> ActiveResident:
-        """Resolve the current visual context without consulting user speech."""
+        """Resolve only a validated visual or explicitly enabled operator context."""
         return self.resident_context.resolve(
             robot_id,
             enabled=self.config.demo_resident_visual_routing_enabled,
+            operator_identity_enabled=self.config.demo_operator_identity_enabled,
         )
 
     def _memory_store_for(self, active_resident: ActiveResident) -> StructuredMemoryStore:

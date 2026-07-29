@@ -70,6 +70,47 @@ CARE_CONTEXT_ENABLED=false
 `elderly_hand_exercise`，且不讀寫 Care Memory。Mother dialysis-care playback 是另一條
 workflow：它仍需要 confirmed `mother`、已記錄 dialysis-return、無不適與本人明確同意。
 
+## Controlled identity 與 repeated-discomfort Demo
+
+以下是額外的、預設關閉的 Demo 路線；它不替代 visual identity，也不是 face recognition。
+private env 必須把所有新增 path 放在同一 external runtime root，並只在要驗收本功能時設為：
+
+```text
+RESIDENT_IDENTITY_ENABLED=true
+HERMES_DEMO_IDENTITY_TOOL_ENABLED=true
+HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED=true
+CARE_MEMORY_V2_ENABLED=true
+DEMO_REPEATED_DISCOMFORT_ENABLED=true
+DEMO_CARE_SCENARIO_PROMPT_ENABLED=true
+DEMO_CARE_MEMORY_ROOT=<runtime-root>/data/care-memory
+HERMES_DEMO_IDENTITY_CALLBACK_SOCKET=<runtime-root>/tmp/sockets/bridge_demo_identity_callback.sock
+HERMES_DEMO_CARE_CALLBACK_SOCKET=<runtime-root>/tmp/sockets/bridge_demo_care_callback.sock
+DEMO_IDENTITY_STATE_DIR=<runtime-root>/state/demo-identity
+DEMO_IDENTITY_REFRESH_SECONDS=10
+DEMO_IDENTITY_MAX_DURATION_SECONDS=900
+```
+
+先經 lifecycle 的同一個 Bridge callback 選擇身分，不要手刻 MQTT identity payload：
+
+```bash
+./scripts/demo --config <private-demo-env> identity father
+./scripts/demo --config <private-demo-env> identity status
+./scripts/demo --config <private-demo-env> seed repeated-discomfort
+./scripts/demo --config <private-demo-env> verify repeated-discomfort
+```
+
+語音 operator 指令只接受以下精確句型（可有開頭 `小安小安` 與標點）：`進入示範管理模式，持續發布王先生身分`、`示範模式切換到王先生`、`Demo 管理，持續發布王先生身分`、對應的王太太三句、`停止示範身分發布`、`示範模式切換為未知住民`、`Demo 管理，清除目前身分`、`目前示範身分是誰`，以及 `Demo 管理，查詢目前身分發布狀態`。短句 `Demo切換為爸爸` 等同樣是受審查的 operator fallback。`我是爸爸`、名字或一般談話絕不選擇身分。Bridge 以現有 identity v1.0 schema 驗證後才發布 `temi/{robot_id}/resident/identity/result`，QoS 1、`retain=false`；selection 每 10 秒 refresh、最多 900 秒，而且 restart 不會恢復前一個 selection。
+
+father 已選定並 seed 完成後，依序對 Temi 說：
+
+1. `小安小安，我又不舒服了。`
+2. 等它問「這次也是頭痛嗎？」後說：`對。`
+3. 等它要求血壓後說：`血壓128/78。`
+
+這條路只讀 father partition 的固定 synthetic headache event；確認後才接受血壓格式並經
+canonical memory API append 一筆新的 father event。它不讀 mother 或 unknown partition，且只
+記錄使用者提供的數字，不作醫療判斷。
+
 ## Readiness
 
 成功的 backend restart 會顯示 `BACKEND_READY_WAITING_ANDROID`；只有 lifecycle 在 broker
@@ -110,6 +151,13 @@ mosquitto_sub -h "$MQTT_BROKER_HOST" -p "$MQTT_BROKER_PORT" \
 ```bash
 mosquitto_sub -h "$MQTT_BROKER_HOST" -p "$MQTT_BROKER_PORT" \
   -t "temi/$robot_id/cmd/result" -v
+```
+
+若驗收 identity，另開 observer：
+
+```bash
+mosquitto_sub -h "$MQTT_BROKER_HOST" -p "$MQTT_BROKER_PORT" \
+  -t "temi/$robot_id/resident/identity/result" -v
 ```
 
 另開一個 terminal：

@@ -31,6 +31,13 @@ import uuid
 
 
 ROOT = Path(__file__).resolve().parents[1]
+BRIDGE_SRC = ROOT / "hermes_temi_bridge" / "src"
+if BRIDGE_SRC.as_posix() not in sys.path:
+    sys.path.insert(0, BRIDGE_SRC.as_posix())
+
+from hermes_temi_bridge.demo_callback_socket import invoke_demo_callback_socket
+from hermes_temi_bridge.demo_care_memory import seed_demo_care_memory, verify_demo_care_memory
+
 EXPECTED_BRANCH = "codex/media-v11-bridge-runtime"
 ALLOWED_DIRTY_FILES = {
     "memory/daily_state.json",
@@ -43,6 +50,12 @@ MEDIA_FLAGS = (
     "HERMES_MEDIA_FAST_PATH_ENABLED",
 )
 MEDIA_TOOLS = ("play_video", "pause_video", "resume_video", "stop_video")
+IDENTITY_TOOLS = ("start_demo_identity", "stop_demo_identity", "get_demo_identity_status")
+REPEATED_DISCOMFORT_TOOLS = (
+    "retrieve_repeated_discomfort",
+    "confirm_repeated_headache",
+    "record_repeated_blood_pressure",
+)
 
 
 class DemoError(RuntimeError):
@@ -124,6 +137,11 @@ def _require(values: dict[str, str], name: str) -> str:
     return value
 
 
+def _config_truthy(values: dict[str, str], name: str, fallback: bool) -> bool:
+    """Read an explicit private flag, retaining a legacy fallback only when absent."""
+    return _truthy(values[name]) if name in values else fallback
+
+
 @dataclass(frozen=True)
 class DemoConfig:
     config_path: Path
@@ -136,6 +154,14 @@ class DemoConfig:
     memory_dir: Path
     shared_root: Path
     callback_socket: Path
+    identity_callback_socket: Path | None
+    care_callback_socket: Path | None
+    identity_state_dir: Path | None
+    operator_identity_enabled: bool
+    identity_tool_enabled: bool
+    identity_fast_path_enabled: bool
+    care_memory_v2_enabled: bool
+    repeated_discomfort_enabled: bool
     viewer_enabled: bool
     timeout_seconds: int
 
@@ -153,8 +179,28 @@ class DemoConfig:
 
     @property
     def flags(self) -> dict[str, str]:
-        keys = (*MEDIA_FLAGS, "DEMO_CARE_SCENARIO_PROMPT_ENABLED", "DEMO_RESIDENT_VISUAL_ROUTING_ENABLED", "CARE_CONTEXT_ENABLED")
+        keys = (
+            *MEDIA_FLAGS,
+            "DEMO_CARE_SCENARIO_PROMPT_ENABLED",
+            "DEMO_RESIDENT_VISUAL_ROUTING_ENABLED",
+            "DEMO_OPERATOR_IDENTITY_ENABLED",
+            "RESIDENT_IDENTITY_ENABLED",
+            "HERMES_DEMO_IDENTITY_TOOL_ENABLED",
+            "HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED",
+            "CARE_MEMORY_V2_ENABLED",
+            "DEMO_REPEATED_DISCOMFORT_ENABLED",
+            "CARE_CONTEXT_ENABLED",
+        )
         return {key: self.values.get(key, "") for key in keys}
+
+    @property
+    def callback_sockets(self) -> tuple[Path, ...]:
+        sockets = [self.callback_socket]
+        if self.identity_callback_socket is not None:
+            sockets.append(self.identity_callback_socket)
+        if self.care_callback_socket is not None:
+            sockets.append(self.care_callback_socket)
+        return tuple(sockets)
 
 
 def load_config(raw_path: str | Path) -> DemoConfig:
@@ -188,13 +234,44 @@ def load_config(raw_path: str | Path) -> DemoConfig:
     shared_root = Path(_require(values, "TEMI_SHARED_BRIDGE_PATH"))
     hermes_shared_root = Path(_require(values, "TEMI_SHARED_HERMES_PATH"))
     callback_socket = Path(_require(values, "HERMES_MEDIA_CALLBACK_SOCKET"))
-    for label, candidate in (
+    legacy_operator_identity_enabled = _truthy(values.get("DEMO_OPERATOR_IDENTITY_ENABLED", "false"))
+    operator_identity_enabled = _config_truthy(
+        values, "RESIDENT_IDENTITY_ENABLED", legacy_operator_identity_enabled
+    )
+    identity_tool_enabled = _config_truthy(
+        values, "HERMES_DEMO_IDENTITY_TOOL_ENABLED", legacy_operator_identity_enabled
+    )
+    identity_fast_path_enabled = _config_truthy(
+        values, "HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED", legacy_operator_identity_enabled
+    )
+    care_memory_v2_enabled = _truthy(values.get("CARE_MEMORY_V2_ENABLED", "false"))
+    repeated_discomfort_enabled = _truthy(values.get("DEMO_REPEATED_DISCOMFORT_ENABLED", "false"))
+    if operator_identity_enabled and not identity_tool_enabled:
+        raise DemoError("RESIDENT_IDENTITY_ENABLED=true requires HERMES_DEMO_IDENTITY_TOOL_ENABLED=true")
+    if repeated_discomfort_enabled and not operator_identity_enabled:
+        raise DemoError("DEMO_REPEATED_DISCOMFORT_ENABLED requires RESIDENT_IDENTITY_ENABLED=true")
+    if repeated_discomfort_enabled and not care_memory_v2_enabled:
+        raise DemoError("DEMO_REPEATED_DISCOMFORT_ENABLED requires CARE_MEMORY_V2_ENABLED=true")
+    identity_callback_socket = Path(_require(values, "HERMES_DEMO_IDENTITY_CALLBACK_SOCKET")) if operator_identity_enabled else None
+    care_callback_socket = Path(_require(values, "HERMES_DEMO_CARE_CALLBACK_SOCKET")) if repeated_discomfort_enabled else None
+    identity_state_dir = Path(_require(values, "DEMO_IDENTITY_STATE_DIR")) if operator_identity_enabled else None
+    demo_care_memory_root = Path(_require(values, "DEMO_CARE_MEMORY_ROOT")) if repeated_discomfort_enabled else None
+    candidates = [
         ("LOG_DIR", bridge_log_dir),
         ("MEMORY_DIR", memory_dir),
         ("TEMI_SHARED_BRIDGE_PATH", shared_root),
         ("TEMI_SHARED_HERMES_PATH", hermes_shared_root),
         ("HERMES_MEDIA_CALLBACK_SOCKET", callback_socket),
-    ):
+    ]
+    if identity_callback_socket is not None:
+        candidates.append(("HERMES_DEMO_IDENTITY_CALLBACK_SOCKET", identity_callback_socket))
+    if care_callback_socket is not None:
+        candidates.append(("HERMES_DEMO_CARE_CALLBACK_SOCKET", care_callback_socket))
+    if identity_state_dir is not None:
+        candidates.append(("DEMO_IDENTITY_STATE_DIR", identity_state_dir))
+    if demo_care_memory_root is not None:
+        candidates.append(("DEMO_CARE_MEMORY_ROOT", demo_care_memory_root))
+    for label, candidate in candidates:
         if not candidate.is_absolute() or not _under(runtime_root, candidate):
             raise DemoError(f"{label} must be an absolute path under TEMIAGENT_RUNTIME_ROOT")
     if shared_root.resolve() != hermes_shared_root.resolve():
@@ -231,6 +308,14 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         memory_dir=memory_dir.resolve(),
         shared_root=shared_root.resolve(),
         callback_socket=callback_socket.resolve(),
+        identity_callback_socket=identity_callback_socket.resolve() if identity_callback_socket is not None else None,
+        care_callback_socket=care_callback_socket.resolve() if care_callback_socket is not None else None,
+        identity_state_dir=identity_state_dir.resolve() if identity_state_dir is not None else None,
+        operator_identity_enabled=operator_identity_enabled,
+        identity_tool_enabled=identity_tool_enabled,
+        identity_fast_path_enabled=identity_fast_path_enabled,
+        care_memory_v2_enabled=care_memory_v2_enabled,
+        repeated_discomfort_enabled=repeated_discomfort_enabled,
         viewer_enabled=viewer_enabled,
         timeout_seconds=timeout_seconds,
     )
@@ -239,6 +324,14 @@ def load_config(raw_path: str | Path) -> DemoConfig:
 def _mkdir_private(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(path, 0o700)
+
+
+def _has_writable_existing_parent(path: Path) -> bool:
+    """Check the nearest existing parent without making doctor mutate runtime state."""
+    candidate = path.parent
+    while not candidate.exists() and candidate != candidate.parent:
+        candidate = candidate.parent
+    return candidate.is_dir() and os.access(candidate, os.W_OK)
 
 
 def ensure_runtime_layout(config: DemoConfig) -> None:
@@ -256,6 +349,7 @@ def ensure_runtime_layout(config: DemoConfig) -> None:
         config.runtime_root / "logs" / "asr",
         config.runtime_root / "logs" / "trace",
         config.runtime_root / "tmp" / "sockets",
+        *( (config.identity_state_dir,) if config.identity_state_dir is not None else () ),
     ):
         _mkdir_private(path)
     if stat.S_IMODE(config.config_path.parent.stat().st_mode) & (stat.S_IRWXG | stat.S_IRWXO):
@@ -488,6 +582,7 @@ def _write_pre_restart_evidence(config: DemoConfig) -> Path:
         "viewer_health": _http_json("http://127.0.0.1:8010/health"),
         "flags": config.flags,
         "callback_socket_exists": config.callback_socket.exists(),
+        "callback_sockets": {str(path): path.exists() for path in config.callback_sockets},
     }
     path = config.runtime_root / "state" / "last-run" / f"before-restart-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
     _atomic_json(path, evidence)
@@ -498,15 +593,32 @@ def _resident_health() -> dict[str, Any] | None:
     return _http_json("http://127.0.0.1:8765/health")
 
 
-def _resident_ready() -> bool:
+def _resident_ready(config: DemoConfig) -> bool:
     health = _resident_health()
-    return bool(
+    if not (
         health
         and health.get("status") == "ok"
         and health.get("media_tool_enabled") is True
         and health.get("media_fast_path_enabled") is True
         and tuple(health.get("media_tool_names", ())) == MEDIA_TOOLS
-    )
+    ):
+        return False
+    if config.operator_identity_enabled and not (
+        health.get("demo_operator_identity_enabled") is True
+        and health.get("resident_identity_enabled") is True
+        and health.get("identity_tool_enabled") is True
+        and health.get("identity_fast_path_enabled") is config.identity_fast_path_enabled
+        and tuple(health.get("identity_tool_names", ())) == IDENTITY_TOOLS
+    ):
+        return False
+    if config.repeated_discomfort_enabled and not (
+        health.get("demo_repeated_discomfort_enabled") is True
+        and health.get("care_memory_v2_enabled") is True
+        and health.get("repeated_discomfort_fast_path_enabled") is True
+        and tuple(health.get("repeated_discomfort_tool_names", ())) == REPEATED_DISCOMFORT_TOOLS
+    ):
+        return False
+    return True
 
 
 def _viewer_ready() -> bool:
@@ -521,7 +633,7 @@ def _viewer_ready() -> bool:
 
 def _socket_ready(config: DemoConfig) -> bool:
     try:
-        return stat.S_ISSOCK(config.callback_socket.stat().st_mode)
+        return all(stat.S_ISSOCK(path.stat().st_mode) for path in config.callback_sockets)
     except FileNotFoundError:
         return False
 
@@ -667,20 +779,31 @@ def _stop_record(record: dict[str, Any], *, timeout_seconds: int) -> str:
     return "stopped_term"
 
 
-def _remove_owned_callback_socket(config: DemoConfig, record: dict[str, Any]) -> None:
-    """Remove only a Bridge socket whose recorded owner has fully stopped."""
-    if record.get("name") != "bridge" or not config.callback_socket.exists():
+def _remove_owned_callback_path(path: Path, record: dict[str, Any]) -> None:
+    """Remove one verified Bridge-owned Unix callback socket after exact stop."""
+    if record.get("name") != "bridge" or not path.exists():
         return
     identities = [record.get("leader"), *(record.get("members") or [])]
     if any(isinstance(identity, dict) and _identity_matches(identity) for identity in identities):
         raise DemoError("refusing to remove callback socket while a recorded Bridge PID is alive")
     try:
-        mode = config.callback_socket.lstat().st_mode
+        mode = path.lstat().st_mode
     except FileNotFoundError:
         return
     if not stat.S_ISSOCK(mode):
         raise DemoError("refusing to remove a non-socket callback path")
-    config.callback_socket.unlink()
+    path.unlink()
+
+
+def _remove_owned_callback_socket(config: DemoConfig, record: dict[str, Any]) -> None:
+    """Compatibility helper for the original Media callback socket."""
+    _remove_owned_callback_path(config.callback_socket, record)
+
+
+def _remove_owned_callback_sockets(config: DemoConfig, record: dict[str, Any]) -> None:
+    """Remove every verified private Bridge callback socket for this Demo run."""
+    for path in config.callback_sockets:
+        _remove_owned_callback_path(path, record)
 
 
 def _service_argv(config: DemoConfig, name: str) -> list[str]:
@@ -705,6 +828,11 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
         ]
         for skill in ("temi-robot-control", "temi-care-memory", "temi-home-esi", "temi-discord-care-assistant"):
             argv.extend(["--skill-path", str(skills / skill / "SKILL.md")])
+        root_skills = ROOT / "hermes-skills"
+        if config.operator_identity_enabled and config.identity_tool_enabled:
+            argv.extend(["--skill-path", str(root_skills / "temi-demo-identity" / "SKILL.md")])
+        if config.repeated_discomfort_enabled:
+            argv.extend(["--skill-path", str(root_skills / "temi-demo-repeated-discomfort" / "SKILL.md")])
         return argv
     if name == "bridge":
         return ["uv", "run", "--extra", "mqtt", "hermes-temi-bridge", "--env-file", str(ROOT / "hermes_temi_bridge" / ".env.example")]
@@ -739,6 +867,12 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
 def _base_env(config: DemoConfig, run_id: str) -> dict[str, str]:
     env = dict(os.environ)
     env.update(config.values)
+    # Export resolved values so the Bridge also honors a legacy private config
+    # while its tracked .env.example supplies safe false defaults.
+    env["RESIDENT_IDENTITY_ENABLED"] = "true" if config.operator_identity_enabled else "false"
+    env["HERMES_DEMO_IDENTITY_TOOL_ENABLED"] = "true" if config.identity_tool_enabled else "false"
+    env["HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED"] = "true" if config.identity_fast_path_enabled else "false"
+    env["CARE_MEMORY_V2_ENABLED"] = "true" if config.care_memory_v2_enabled else "false"
     env["TRACE_RUN_ID"] = run_id
     env["PYTHONUNBUFFERED"] = "1"
     return env
@@ -764,8 +898,9 @@ def _assert_start_ports_clear(config: DemoConfig, specs: dict[str, ServiceSpec])
                 raise DemoError(f"refusing to start {spec.name}: port {port} is already occupied")
         if spec.name == "bridge" and _record_from_existing(spec) is not None:
             raise DemoError("refusing to start a second Bridge process")
-    if config.callback_socket.exists():
-        raise DemoError("callback socket already exists; inspect its exact owner before retrying")
+    for callback_socket in config.callback_sockets:
+        if callback_socket.exists():
+            raise DemoError("callback socket already exists; inspect its exact owner before retrying")
 
 
 def _state_records(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -776,8 +911,8 @@ def _state_records(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _reconcile_archived_callback_socket(config: DemoConfig) -> None:
-    """Recover only a socket linked to an archived, fully stopped Bridge record."""
-    if not config.callback_socket.exists():
+    """Recover only sockets linked to an archived, fully stopped Bridge record."""
+    if not any(path.exists() for path in config.callback_sockets):
         return
     archived = _read_json(config.last_run_path)
     bridge = _state_records(archived).get("bridge") if archived is not None else None
@@ -790,14 +925,15 @@ def _reconcile_archived_callback_socket(config: DemoConfig) -> None:
                 continue
             health = manifest.get("health") if isinstance(manifest.get("health"), dict) else {}
             callback = health.get("callback_socket") if isinstance(health.get("callback_socket"), dict) else {}
+            callbacks = health.get("callback_sockets") if isinstance(health.get("callback_sockets"), dict) else {}
             inventory = manifest.get("process_inventory") if isinstance(manifest.get("process_inventory"), dict) else {}
             candidate = inventory.get("bridge") if isinstance(inventory.get("bridge"), dict) else None
-            if callback.get("path") == str(config.callback_socket) and candidate is not None:
+            if (callback.get("path") == str(config.callback_socket) or any(str(path) in callbacks for path in config.callback_sockets)) and candidate is not None:
                 bridge = candidate
                 break
     if bridge is None:
         raise DemoError("callback socket has no archived Bridge ownership record")
-    _remove_owned_callback_socket(config, bridge)
+    _remove_owned_callback_sockets(config, bridge)
 
 
 def start(config: DemoConfig) -> dict[str, Any]:
@@ -844,7 +980,7 @@ def start(config: DemoConfig) -> dict[str, Any]:
             if name == "adapter":
                 ok = _wait_for(lambda: _listener_count(8080) == 1 and _listener_count(8081) == 1, 30)
             elif name == "resident":
-                ok = _wait_for(_resident_ready, config.timeout_seconds)
+                ok = _wait_for(lambda: _resident_ready(config), config.timeout_seconds)
             elif name == "bridge":
                 ok = _wait_for(lambda: _identity_matches(record["leader"]) and _socket_ready(config), 30)
             else:
@@ -904,8 +1040,8 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
             continue
         outcome = _stop_record(record, timeout_seconds=30)
         if name == "bridge":
-            _remove_owned_callback_socket(config, record)
-            outcome += "+callback_socket_removed"
+            _remove_owned_callback_sockets(config, record)
+            outcome += "+callback_sockets_removed"
         results.append({"service": name, "outcome": outcome})
     if dry_run:
         return {"state": "DRY_RUN", "already_stopped": False, "results": results}
@@ -950,7 +1086,7 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
     listeners = {str(port): _listener_count(port) for port in (1234, config.mqtt_port, 8080, 8081, 8765, 8010, 8011)}
     broker = {"tcp_ready": _mqtt_tcp_ready(config), "listener_count": listeners[str(config.mqtt_port)], **_broker_sessions(config)}
     adapter_ok = listeners["8080"] == 1 and listeners["8081"] == 1 and service_identity.get("adapter", False)
-    resident_ok = _resident_ready() and service_identity.get("resident", False)
+    resident_ok = _resident_ready(config) and service_identity.get("resident", False)
     bridge_ok = service_identity.get("bridge", False) and _socket_ready(config) and broker["tcp_ready"]
     viewer_ok = (not config.viewer_enabled) or bool(viewer and viewer.get("ok") and viewer.get("source_connected") and viewer.get("llama_server_ready") and service_identity.get("viewer", False))
     backend_ready = bool(adapter_ok and resident_ok and bridge_ok and viewer_ok and broker["listener_count"] == 1)
@@ -969,7 +1105,9 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
         "broker": broker,
         "resident_health": resident,
         "viewer_health": viewer,
-        "callback_socket": {"path": str(config.callback_socket), "exists": _socket_ready(config)},
+        "callback_socket": {"path": str(config.callback_socket), "exists": config.callback_socket.exists() and stat.S_ISSOCK(config.callback_socket.stat().st_mode)},
+        "callback_sockets": {str(path): path.exists() and stat.S_ISSOCK(path.stat().st_mode) for path in config.callback_sockets},
+        "demo_identity_status": _demo_identity_status(config),
         "latest_trace": _latest_trace(config.bridge_log_dir),
         "log_paths": {"bridge": str(config.bridge_log_dir), "hermes": str(config.runtime_root / "logs" / "hermes"), "asr": str(config.runtime_root / "logs" / "asr"), "trace": str(config.runtime_root / "logs" / "trace")},
     }
@@ -987,7 +1125,7 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
     check("repository", lambda: f"branch={_validate_source()['branch']} head={_validate_source()['head']}")
     check("private_env", lambda: f"mode={stat.S_IMODE(config.config_path.stat().st_mode):03o} outside_worktree=true")
     check("runtime_root", lambda: f"outside_worktree=true exists={config.runtime_root.is_dir()} mode={stat.S_IMODE(config.runtime_root.stat().st_mode):03o}")
-    check("runtime_paths", lambda: "all required writable paths are under the external runtime root" if all(path.parent.is_dir() and os.access(path.parent, os.W_OK) for path in (config.bridge_log_dir / "x", config.memory_dir / "x", config.callback_socket)) else "required runtime parent is not writable")
+    check("runtime_paths", lambda: "all required writable paths are under the external runtime root" if all(_has_writable_existing_parent(path) for path in (config.bridge_log_dir / "x", config.memory_dir / "x", *config.callback_sockets, *((config.identity_state_dir / "x",) if config.identity_state_dir is not None else ()))) else "required runtime parent is not writable")
     check("entrypoints", lambda: "all current source entrypoints exist" if all(path.exists() for path in (ROOT / "tools" / "temi_overview_adapter.py", ROOT / "tools" / "hermes_resident_server.py", ROOT / "hermes_temi_bridge" / ".venv" / "bin" / "hermes-temi-bridge")) else "a required entrypoint is missing")
     check("mqtt_broker", lambda: "endpoint reachable with exactly one listener" if _mqtt_tcp_ready(config) and _listener_count(config.mqtt_port) == 1 else "broker endpoint unavailable or listener count is not one")
     check("lm_studio", lambda: "health endpoint reachable" if _http_json("http://127.0.0.1:1234/v1/models") is not None else "LM Studio health endpoint unavailable")
@@ -1050,6 +1188,50 @@ def trace_export(config: DemoConfig) -> dict[str, Any]:
     return {"bundle": str(bundle), "archive": str(archive), "archive_sha256": _sha256(archive), "files": sorted(checksums)}
 
 
+def _demo_identity_status(config: DemoConfig) -> dict[str, Any] | None:
+    """Read status only through the same Bridge-owned callback socket."""
+    if not config.operator_identity_enabled or config.identity_callback_socket is None:
+        return None
+    return invoke_demo_callback_socket(
+        config.identity_callback_socket,
+        {"action": "get_demo_identity_status", "event_id": f"operator_status_{uuid.uuid4().hex}", "robot_id": config.robot_id},
+    )
+
+
+def identity_command(config: DemoConfig, operation: str) -> dict[str, Any]:
+    """Use the canonical Bridge identity callback; never raw-publish MQTT."""
+    if not config.operator_identity_enabled or config.identity_callback_socket is None:
+        raise DemoError("RESIDENT_IDENTITY_ENABLED and HERMES_DEMO_IDENTITY_TOOL_ENABLED are required for identity commands")
+    event_id = f"operator_identity_{uuid.uuid4().hex}"
+    payload: dict[str, Any] = {"event_id": event_id, "robot_id": config.robot_id}
+    if operation in {"father", "mother"}:
+        payload.update({"action": "start_demo_identity", "identity_status": operation})
+    elif operation == "unknown":
+        payload["action"] = "stop_demo_identity"
+    elif operation == "status":
+        payload["action"] = "get_demo_identity_status"
+    else:
+        raise DemoError("identity operation is not allowed")
+    result = invoke_demo_callback_socket(config.identity_callback_socket, payload)
+    if result.get("status") == "rejected":
+        raise DemoError(f"identity callback rejected request: {result.get('error_code', 'unknown')}")
+    return {"state": "IDENTITY_CALLBACK_COMPLETED", "operation": operation, "result": result}
+
+
+def seed_repeated_discomfort(config: DemoConfig) -> dict[str, Any]:
+    """Seed the private synthetic partitions through the Bridge memory API."""
+    if not config.repeated_discomfort_enabled:
+        raise DemoError("DEMO_REPEATED_DISCOMFORT_ENABLED is required for this seed")
+    return {"state": "REPEATED_DISCOMFORT_SEEDED", "seed": seed_demo_care_memory(config.values["DEMO_CARE_MEMORY_ROOT"])}
+
+
+def verify_repeated_discomfort(config: DemoConfig) -> dict[str, Any]:
+    """Read the bounded seed verification without publishing or starting services."""
+    if not config.repeated_discomfort_enabled:
+        raise DemoError("DEMO_REPEATED_DISCOMFORT_ENABLED is required for this verification")
+    return {"state": "REPEATED_DISCOMFORT_VERIFIED", "verification": verify_demo_care_memory(config.values["DEMO_CARE_MEMORY_ROOT"])}
+
+
 def _print(payload: dict[str, Any], json_output: bool) -> None:
     if json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
@@ -1081,6 +1263,12 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("down")
     deploy_parser = commands.add_parser("deploy")
     deploy_parser.add_argument("--backend-only", action="store_true")
+    identity_parser = commands.add_parser("identity")
+    identity_parser.add_argument("operation", choices=("father", "mother", "unknown", "status"))
+    seed_parser = commands.add_parser("seed")
+    seed_parser.add_argument("scenario", choices=("repeated-discomfort",))
+    verify_parser = commands.add_parser("verify")
+    verify_parser.add_argument("scenario", choices=("repeated-discomfort",))
     args = parser.parse_args(argv)
     try:
         config = load_config(args.config)
@@ -1097,6 +1285,12 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "status":
             payload = runtime_health(config)
             payload["state"] = payload.pop("readiness")
+        elif args.command == "identity":
+            payload = identity_command(config, args.operation)
+        elif args.command == "seed":
+            payload = seed_repeated_discomfort(config)
+        elif args.command == "verify":
+            payload = verify_repeated_discomfort(config)
         else:
             payload = trace_export(config)
             payload["state"] = "TRACE_EXPORTED"

@@ -78,15 +78,17 @@ class ResidentContextStore:
         robot_id: str,
         payload: dict[str, Any],
         enabled: bool,
+        operator_identity_enabled: bool = False,
     ) -> ActiveResident:
         """Validate a canonical result and update one robot's active resident.
 
-        Only a result explicitly produced by the visual fallback is accepted.
-        ``manual_selection`` and malformed/ambiguous values deliberately become
-        ``unknown`` for this controlled visual-routing feature.
+        A normal visual route accepts only ``vision_gender_fallback``.  The
+        separately gated Demo operator route may additionally accept the
+        existing schema's ``manual_selection`` source.  Speech is never an
+        identity source; this store sees only already-validated results.
         """
-        if not enabled:
-            return unknown_resident("demo_visual_routing_disabled")
+        if not enabled and not operator_identity_enabled:
+            return unknown_resident("resident_identity_routing_disabled")
         if not isinstance(payload, dict):
             return self._store_unknown(robot_id, "invalid_identity_result")
 
@@ -107,13 +109,18 @@ class ResidentContextStore:
         event_id = payload.get("event_id")
         confidence = payload.get("confidence")
         resident_id = payload.get("resident_id")
+        allowed_sources = set()
+        if enabled:
+            allowed_sources.add("vision_gender_fallback")
+        if operator_identity_enabled:
+            allowed_sources.add("manual_selection")
         if (
             set(payload) != expected_fields
             or payload.get("schema_version") != "1.0"
             or status not in {"father", "mother"}
             or display_name != status
             or resident_id != status
-            or source != "vision_gender_fallback"
+            or source not in allowed_sources
             or not isinstance(event_id, str)
             or not event_id.strip()
             or isinstance(confidence, bool)
@@ -132,10 +139,16 @@ class ResidentContextStore:
         self._records[robot_id] = (self._monotonic(), resident)
         return resident
 
-    def resolve(self, robot_id: str, *, enabled: bool) -> ActiveResident:
+    def resolve(
+        self,
+        robot_id: str,
+        *,
+        enabled: bool,
+        operator_identity_enabled: bool = False,
+    ) -> ActiveResident:
         """Return a fresh confirmed context, otherwise fail closed to unknown."""
-        if not enabled:
-            return unknown_resident("demo_visual_routing_disabled")
+        if not enabled and not operator_identity_enabled:
+            return unknown_resident("resident_identity_routing_disabled")
         record = self._records.get(robot_id)
         if record is None:
             return unknown_resident("missing_identity_result")

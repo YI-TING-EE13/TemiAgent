@@ -16,6 +16,8 @@
 |---|---|
 | `hermes_resident_server.py` | 啟動低延遲 resident Hermes HTTP worker，供 Bridge `HERMES_INVOKE_MODE=http` 使用。 |
 | `hermes_media_fast_path.py` | Resident-only pure exact matcher；只在 private Demo flag 開啟時將受控中文 Media phrase 送入既有 native tool。 |
+| `hermes_demo_identity_fast_path.py` / `hermes_resident_identity_tools.py` | Demo-only exact operator identity matcher and root native tool; local Unix callback only. |
+| `hermes_repeated_discomfort_fast_path.py` / `hermes_resident_repeated_discomfort_tools.py` | Father-only exact three-step synthetic-memory matcher and root native tool; local Unix callback only. |
 | `demo_lifecycle.py` / `scripts/demo` | current Demo 的 exact-PID lifecycle；private external runtime、health gate、status 與 trace export。 |
 | `temi_overview_adapter.py` | ASR/camera-only adapter：接 legacy `temi/event/asr` 與 WebSocket camera frames，產生 canonical `temi/{robot_id}/asr/final` 與三張 keyframe path；不轉發 command。 |
 | `e2e_test_runner.py` | 不需硬體的本地 mock E2E smoke test。 |
@@ -65,6 +67,18 @@ cd /TemiAgent
 ./scripts/demo --config <private-demo-env> status
 ./scripts/demo --config <private-demo-env> trace-export
 ./scripts/demo --config <private-demo-env> stop
+```
+
+When the private Demo flags explicitly enable identity and repeated discomfort, these commands
+remain inside the same Bridge callback / memory boundary and do not raw-publish MQTT:
+
+```bash
+./scripts/demo --config <private-demo-env> identity father
+./scripts/demo --config <private-demo-env> identity mother
+./scripts/demo --config <private-demo-env> identity unknown
+./scripts/demo --config <private-demo-env> identity status
+./scripts/demo --config <private-demo-env> seed repeated-discomfort
+./scripts/demo --config <private-demo-env> verify repeated-discomfort
 ```
 
 `restart` 只在 current user-authorized transition 中採用已由 cwd、command line、start identity
@@ -132,6 +146,11 @@ Bridge，不得改為 raw MQTT 或 Bridge 外部 fallback；完整啟動與真�
 「播放影片」。`hermes_media_fast_path.py` 對三個已審查表面詞、四個固定播放句型建立有限
 組合，仍固定到 `elderly_hand_exercise`；它不做泛用讀音／模糊比對、語意改寫或任意影片搜尋。
 例如「背部運動」不會命中 hand-exercise allowlist。
+
+`RESIDENT_IDENTITY_ENABLED=true`、`HERMES_DEMO_IDENTITY_TOOL_ENABLED=true` 與 `HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED=true` 會載入 repo-root 的 `hermes-skills/temi-demo-identity/SKILL.md`，接受受控的完整示範管理句型；它不從「我是爸爸」、姓名或自然談話推論 identity。`CARE_MEMORY_V2_ENABLED=true` 與 `DEMO_REPEATED_DISCOMFORT_ENABLED=true` 會再載入
+`temi-demo-repeated-discomfort`，但只有 Bridge 確認 active resident 是 father 時，才將「我又
+不舒服了」→「對」→「血壓128/78」送往 canonical memory callback。兩者都不讓 resident publish
+MQTT 或直接讀寫 memory files。
 
 ### Legacy ASR/camera to canonical contract
 
