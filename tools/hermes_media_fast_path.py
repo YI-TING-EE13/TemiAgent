@@ -32,6 +32,11 @@ class MediaIntent:
 _INTENTS = {
     "播放手部運動影片": MediaIntent("play_video", VIDEO_ID),
     "請幫我播放手部運動影片": MediaIntent("play_video", VIDEO_ID),
+    # Exact legacy-ASR transcripts observed during the current real-device
+    # hand-exercise acceptance.  These are bounded acoustic substitutions for
+    # 手部, not a fuzzy semantic rewrite or a general video search feature.
+    "幫我播放首都運動影片": MediaIntent("play_video", VIDEO_ID),
+    "幫我播放守護運動影片": MediaIntent("play_video", VIDEO_ID),
     "我要做手部運動": MediaIntent("play_video", VIDEO_ID),
     "播放手部運動": MediaIntent("play_video", VIDEO_ID),
     "幫我放手部運動影片": MediaIntent("play_video", VIDEO_ID),

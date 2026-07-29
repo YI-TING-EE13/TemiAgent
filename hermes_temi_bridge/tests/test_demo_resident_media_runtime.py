@@ -336,6 +336,8 @@ class DeterministicMediaFastPathTests(unittest.TestCase):
         cases = {
             "小安小安，請幫我播放手部運動影片。": "play_video",
             "播放手部運動影片": "play_video",
+            "幫我播放首都運動影片": "play_video",
+            "幫我播放守護運動影片": "play_video",
             "我要做手部運動": "play_video",
             "暫停影片": "pause_video",
             "先暫停": "pause_video",
