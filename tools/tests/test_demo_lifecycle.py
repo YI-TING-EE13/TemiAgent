@@ -185,6 +185,21 @@ class DemoLifecycleRecordTests(unittest.TestCase):
             finally:
                 server.close()
 
+    def test_trace_export_manifest_can_reconcile_its_recorded_socket(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(DemoLifecycleConfigTests().make_config(Path(temporary)))
+            demo.ensure_runtime_layout(config)
+            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            server.bind(str(config.callback_socket))
+            try:
+                manifest = config.runtime_root / "state" / "last-run" / "exports" / "older" / "manifest.json"
+                demo._atomic_json(manifest, {"health": {"callback_socket": {"path": str(config.callback_socket)}}, "process_inventory": {"bridge": {"name": "bridge", "leader": {"pid": 736}, "members": []}}})
+                with mock.patch.object(demo, "_identity_matches", return_value=False):
+                    demo._reconcile_archived_callback_socket(config)
+                self.assertFalse(config.callback_socket.exists())
+            finally:
+                server.close()
+
     def test_latest_trace_extracts_public_index_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

@@ -771,9 +771,21 @@ def _reconcile_archived_callback_socket(config: DemoConfig) -> None:
     if not config.callback_socket.exists():
         return
     archived = _read_json(config.last_run_path)
-    if archived is None:
-        raise DemoError("callback socket already exists; inspect its exact owner before retrying")
-    bridge = _state_records(archived).get("bridge")
+    bridge = _state_records(archived).get("bridge") if archived is not None else None
+    if bridge is None:
+        exports = config.runtime_root / "state" / "last-run" / "exports"
+        manifests = sorted(exports.glob("*/manifest.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+        for manifest_path in manifests:
+            manifest = _read_json(manifest_path)
+            if manifest is None:
+                continue
+            health = manifest.get("health") if isinstance(manifest.get("health"), dict) else {}
+            callback = health.get("callback_socket") if isinstance(health.get("callback_socket"), dict) else {}
+            inventory = manifest.get("process_inventory") if isinstance(manifest.get("process_inventory"), dict) else {}
+            candidate = inventory.get("bridge") if isinstance(inventory.get("bridge"), dict) else None
+            if callback.get("path") == str(config.callback_socket) and candidate is not None:
+                bridge = candidate
+                break
     if bridge is None:
         raise DemoError("callback socket has no archived Bridge ownership record")
     _remove_owned_callback_socket(config, bridge)
@@ -845,7 +857,13 @@ def start(config: DemoConfig) -> dict[str, Any]:
                 pass
         state["status"] = "failed_rolled_back"
         state["updated_at"] = _utc_now()
-        _atomic_json(config.last_run_path, state)
+        if started:
+            _atomic_json(config.last_run_path, state)
+        else:
+            _atomic_json(
+                config.runtime_root / "state" / "last-run" / f"start-failure-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json",
+                state,
+            )
         raise
 
 
