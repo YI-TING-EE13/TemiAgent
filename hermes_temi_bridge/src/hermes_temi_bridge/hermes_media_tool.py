@@ -136,6 +136,12 @@ class HermesMediaToolCallback:
 
     @staticmethod
     def _require_active_resident(active: ActiveResident, requested_resident_id: str) -> None:
+        # Generic direct Media requests carry ``unknown`` when no visual identity
+        # producer is available.  They are limited to the native allowlist and
+        # never read/write care memory.  Confirmed resident requests retain the
+        # existing identity binding used by the private care workflow.
+        if requested_resident_id == "unknown":
+            return
         if not active.is_confirmed or active.resident_id != requested_resident_id:
             raise ActionValidationError(
                 "media_tool_active_resident_mismatch",

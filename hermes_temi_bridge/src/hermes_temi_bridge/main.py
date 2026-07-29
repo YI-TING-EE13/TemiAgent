@@ -285,6 +285,7 @@ class HermesTemiBridgeService:
                     "measured_stage_duration_ms": _duration_ms(stage_started),
                     "hermes_latency_ms": hermes_response.latency_ms,
                     "raw_hermes_output": hermes_response.raw_output,
+                    "resident_dispatch": hermes_response.dispatch_metadata,
                 },
             )
 

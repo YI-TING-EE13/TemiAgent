@@ -62,6 +62,9 @@ Temi Action Viewer / Video Action Tester
 - 僅在 `MEDIA_V11_ENABLED=true`、`HERMES_MEDIA_TOOL_ENABLED=true` 與 private Unix
   callback socket 都已設定時，接受 resident Hermes 的 root-owned native Media tool callback。
   Resident process 不擁有 MQTT publisher。
+- Resident 的 `HERMES_MEDIA_FAST_PATH_ENABLED=true` 僅啟用受控中文 phrase 的 deterministic
+  generic Media dispatch；它在 LLM inference 前重用 native tool → Unix callback → Bridge，
+  預設為 `false`，不恢復 Bridge 外部 fallback。
 
 ## 目前狀態與限制
 
@@ -84,6 +87,9 @@ Temi Action Viewer / Video Action Tester
 - Video v1.1 沿用 `cmd/request`/`cmd/result` topic。Media 不會擴張 generic
   `action_validator.py` allowlist；native tool callback 先經獨立 allowlist（目前僅
   `elderly_hand_exercise`），再呼叫既有 `publish_media_play()`／`publish_media_control()`。
+- Generic direct request 可使用 `resident_id=unknown`，但僅限這個 allowlisted video，且不會
+  建立、讀取或寫入 private Care Memory；confirmed father/mother care policy 仍維持原 identity
+  binding 與 care-prompt gate。
 - Video v1.1 保留 `play_video`、`pause_video`、`resume_video`、`stop_video`。Play 是
   serialized execution；controls 只有完成 schema、semantic validator 與 active-session
   target validation 後才可優先處理。既有 generic robot `stop` 不具 media session 語意。
@@ -234,6 +240,8 @@ uv run --extra mqtt hermes-temi-bridge --env-file .env.example
 | `TRACE_MAX_FIELD_CHARS` | excerpt 最大字元數，預設 `2000`。 |
 | `MEMORY_DIR` | structured memory root，預設 `memory`。 |
 | `MEDIA_V11_ENABLED` | 啟用 isolated media v1.1 producer/consumer；預設 `false`。 |
+| `HERMES_MEDIA_TOOL_ENABLED` | 接受 root-owned native tool callback；預設 `false`。 |
+| `HERMES_MEDIA_FAST_PATH_ENABLED` | Resident-only exact Media matcher；需兩個 Media flag，預設 `false`。 |
 
 ## Trace log schema
 
@@ -278,6 +286,12 @@ Video v1.1 不新增 trace stage。Media result consumer 在既有
 `playback_state`、`result_delivery`、`cancelled_by_command_id`、`cancel_reason` 與 `actor`。
 Trace 另記 `result_disposition`、`side_effect_applied` 與 originating play command。拒絕的
 schema、correlation 或 lifecycle result 也使用相同 stage，且不改變 registry state。
+
+Resident deterministic Media dispatch 同樣不新增 trace stage；Bridge 在
+`hermes_invocation_finished.payload.resident_dispatch` 記錄 `dispatch_mode`、`intent`、
+`video_id`、`resident_id`、`callback_status`、`bridge_command_id` 與
+`dispatch_latency_ms`。`callback_status=published` 只表示 Bridge 接受 publication；真實播放
+仍須 Android `cmd/result` lifecycle 證據。
 
 All payloads pass through the shared sanitizer in `logging_utils.py`. Hashes use SHA-256. Excerpts use `TRACE_MAX_FIELD_CHARS` and include `truncated=true|false`. Summary mode records prompt/raw output/care context only as length/hash/excerpt; full debug mode is required to store full prompt, full care_context, and full raw Hermes output. Image bytes are never stored; traces only record paths, frame metadata, and validation result.
 

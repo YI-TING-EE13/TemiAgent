@@ -79,11 +79,16 @@ class MockMqtt:
 
 
 class MockHermes:
-    def __init__(self, raw_output):
+    def __init__(self, raw_output, dispatch_metadata=None):
         self.raw_output = raw_output
+        self.dispatch_metadata = dispatch_metadata
 
     def invoke(self, request):
-        return HermesResponse(raw_output=self.raw_output, latency_ms=7)
+        return HermesResponse(
+            raw_output=self.raw_output,
+            latency_ms=7,
+            dispatch_metadata=self.dispatch_metadata,
+        )
 
 
 class Unstringable:
@@ -95,6 +100,41 @@ class Unstringable:
 
 
 class TraceLoggingTests(unittest.TestCase):
+    def test_resident_deterministic_dispatch_uses_existing_trace_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payload = rewrite_frame_paths(load_fixture("asr_final_valid.json"), root / "temi_shared")
+            create_images_for_payload(payload)
+            dispatch = {
+                "dispatch_mode": "deterministic_media_fast_path",
+                "intent": "play_video",
+                "video_id": "elderly_hand_exercise",
+                "resident_id": "unknown",
+                "callback_status": "published",
+                "bridge_command_id": "cmd_fast_trace_001",
+                "dispatch_latency_ms": 4,
+            }
+            service = HermesTemiBridgeService(
+                BridgeConfig(
+                    temi_shared_bridge_path=(root / "temi_shared").as_posix(),
+                    temi_shared_hermes_path="/shared/temi",
+                    log_dir=(root / "logs").as_posix(),
+                    memory_dir=(root / "memory").as_posix(),
+                ),
+                MockMqtt(),
+                MockHermes(
+                    (FIXTURES / "hermes_output_valid_speak.json").read_text(encoding="utf-8"),
+                    dispatch,
+                ),
+                TTLProcessedEventCache(600),
+            )
+
+            service.handle_asr_payload("temi/temi-01/asr/final", copy.deepcopy(payload))
+
+            records = read_trace(root / "logs", payload["event_id"])
+            invocation = next(item for item in records if item["stage"] == "hermes_invocation_finished")
+            self.assertEqual(invocation["payload"]["resident_dispatch"], dispatch)
+
     def test_trace_records_are_ordered_and_completed_summary_is_present(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -15,6 +15,7 @@
 | Script | 用途 |
 |---|---|
 | `hermes_resident_server.py` | 啟動低延遲 resident Hermes HTTP worker，供 Bridge `HERMES_INVOKE_MODE=http` 使用。 |
+| `hermes_media_fast_path.py` | Resident-only pure exact matcher；只在 private Demo flag 開啟時將受控中文 Media phrase 送入既有 native tool。 |
 | `temi_overview_adapter.py` | ASR/camera-only adapter：接 legacy `temi/event/asr` 與 WebSocket camera frames，產生 canonical `temi/{robot_id}/asr/final` 與三張 keyframe path；不轉發 command。 |
 | `e2e_test_runner.py` | 不需硬體的本地 mock E2E smoke test。 |
 | `media_v11_fake_e2e.py` | 以 in-memory MQTT 與 fake Android 驗證 media v1.1 lifecycle、stop linkage、replay 與 trace。 |
@@ -98,6 +99,12 @@ Health check：
 ```bash
 curl -s http://127.0.0.1:8765/health
 ```
+
+在 private Demo env 同時設 `MEDIA_V11_ENABLED=true`、`HERMES_MEDIA_TOOL_ENABLED=true`、
+`HERMES_MEDIA_FAST_PATH_ENABLED=true` 與絕對 Unix callback socket 後，Resident 會在 LLM 前只
+匹配受控手部運動播放／暫停／繼續／停止字句。這條路仍是 native tool → local Unix socket →
+Bridge，不得改為 raw MQTT 或 Bridge 外部 fallback；完整啟動與真機觀察步驟見
+`docs/operations/demo_warm_start_runbook.md`。
 
 ### Legacy ASR/camera to canonical contract
 

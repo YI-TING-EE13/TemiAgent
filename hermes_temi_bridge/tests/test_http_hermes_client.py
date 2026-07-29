@@ -77,6 +77,7 @@ class HttpHermesClientTests(unittest.TestCase):
 
         self.assertEqual(response.latency_ms, 7)
         self.assertIn("你聽得到嗎", FakeHermesHandler.captured_payload["prompt"])
+        self.assertEqual(FakeHermesHandler.captured_payload["asr_text"], "你聽得到嗎")
         parsed = parse_hermes_output(response.raw_output)
         self.assertEqual(parsed["actions"][0]["text"], "http ok")
 

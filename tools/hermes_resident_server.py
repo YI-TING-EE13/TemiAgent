@@ -31,6 +31,11 @@ HERMES_AGENT_ROOT = ROOT / "hermes-agent"
 DEFAULT_SKILL_PATH = HERMES_AGENT_ROOT / "skills" / "temi-robot-control" / "SKILL.md"
 DEFAULT_SKILL_PATHS = [DEFAULT_SKILL_PATH]
 MEDIA_TOOL_MODULE_PATH = ROOT / "tools" / "hermes_resident_media_tools.py"
+TOOLS_ROOT = ROOT / "tools"
+if TOOLS_ROOT.as_posix() not in sys.path:
+    sys.path.insert(0, TOOLS_ROOT.as_posix())
+
+from hermes_media_fast_path import DISPATCH_MODE, MediaIntent, match_media_intent
 
 
 def _ensure_hermes_import_path() -> None:
@@ -144,6 +149,7 @@ class ResidentHermes:
         enable_memory: bool = False,
         media_tool_enabled: bool | None = None,
         media_v11_enabled: bool | None = None,
+        media_fast_path_enabled: bool | None = None,
         media_callback_socket: str | None = None,
     ):
         """Create and warm the resident Hermes runtime.
@@ -209,6 +215,13 @@ class ResidentHermes:
             "DEMO_CARE_SCENARIO_PROMPT_ENABLED", ""
         ).lower() in {"1", "true", "yes", "on"}
         self.media_tool_enabled = configured_media_tool and configured_media_v11
+        configured_media_fast_path = (
+            os.getenv("HERMES_MEDIA_FAST_PATH_ENABLED", "").lower()
+            in {"1", "true", "yes", "on"}
+            if media_fast_path_enabled is None
+            else media_fast_path_enabled
+        )
+        self.media_fast_path_enabled = configured_media_fast_path and self.media_tool_enabled
         self.media_tool_names: list[str] = []
         self._media_tools = None
         effective_toolsets = list(toolsets)
@@ -248,18 +261,28 @@ class ResidentHermes:
         self._agent.stream_delta_callback = None
         self._agent.tool_gen_callback = None
 
-    def invoke(self, prompt: str, invocation_context: dict[str, str] | None = None) -> dict[str, Any]:
-        """Run one prompt through the resident agent and measure latency."""
+    def invoke(
+        self,
+        prompt: str,
+        invocation_context: dict[str, str] | None = None,
+        *,
+        asr_text: str = "",
+    ) -> dict[str, Any]:
+        """Run a reviewed fast path or one prompt through the resident agent."""
         started = time.monotonic()
+        context = invocation_context or {}
         with self._lock:
             self.request_count += 1
+            intent = match_media_intent(asr_text) if self.media_fast_path_enabled else None
+            if intent is not None and self._media_tools is not None:
+                return self._invoke_deterministic_media_intent(intent, context, started)
             stdout = io.StringIO()
             stderr = io.StringIO()
             with redirect_stdout(stdout), redirect_stderr(stderr):
                 if self._media_tools is None:
                     raw_output = self._agent.chat(prompt) or ""
                 else:
-                    with self._media_tools.invocation_context(invocation_context or {}):
+                    with self._media_tools.invocation_context(context):
                         raw_output = self._agent.chat(prompt) or ""
         latency_ms = int((time.monotonic() - started) * 1000)
         return {
@@ -267,6 +290,48 @@ class ResidentHermes:
             "raw_output": raw_output,
             "latency_ms": latency_ms,
             "request_count": self.request_count,
+        }
+
+    def _invoke_deterministic_media_intent(
+        self,
+        intent: MediaIntent,
+        context: dict[str, str],
+        started: float,
+    ) -> dict[str, Any]:
+        """Invoke the registered native tool without calling the language model."""
+        assert self._media_tools is not None
+        with self._media_tools.invocation_context(context):
+            callback = self._media_tools.invoke_registered_media_tool(
+                intent.action, intent.arguments
+            )
+        callback_status = str(callback.get("status") or "rejected")
+        command_id = callback.get("command_id")
+        accepted = callback_status == "published" and isinstance(command_id, str) and bool(command_id)
+        latency_ms = int((time.monotonic() - started) * 1000)
+        dispatch = {
+            "dispatch_mode": DISPATCH_MODE,
+            "intent": intent.action,
+            "video_id": intent.video_id,
+            "resident_id": context.get("resident_id") or "unknown",
+            "callback_status": callback_status,
+            "bridge_command_id": command_id if isinstance(command_id, str) else None,
+            "dispatch_latency_ms": latency_ms,
+        }
+        return {
+            "status": "ok",
+            "raw_output": json.dumps(
+                _fast_path_action_output(
+                    event_id=context.get("event_id", ""),
+                    robot_id=context.get("robot_id", ""),
+                    action=intent.action,
+                    accepted=accepted,
+                ),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            "latency_ms": latency_ms,
+            "request_count": self.request_count,
+            "dispatch_metadata": dispatch,
         }
 
     def health(self) -> dict[str, Any]:
@@ -284,6 +349,7 @@ class ResidentHermes:
             "demo_care_scenario_prompt_enabled": self.demo_care_scenario_prompt_enabled,
             "media_tool_enabled": self.media_tool_enabled,
             "media_tool_names": self.media_tool_names,
+            "media_fast_path_enabled": self.media_fast_path_enabled,
             "uptime_seconds": int(time.time() - self.started_at),
             "request_count": self.request_count,
         }
@@ -332,7 +398,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "robot_id": str(payload.get("robot_id") or ""),
                 "resident_id": str((active_resident or {}).get("resident_id") or ""),
             }
-            result = self.server.resident.invoke(prompt, invocation_context)  # type: ignore[attr-defined]
+            asr_text = payload.get("asr_text", "")
+            if not isinstance(asr_text, str):
+                self._write_json(400, {"status": "error", "error": "invalid asr_text"})
+                return
+            result = self.server.resident.invoke(  # type: ignore[attr-defined]
+                prompt, invocation_context, asr_text=asr_text
+            )
             self._write_json(200, result)
         except Exception as exc:
             logging.exception("resident Hermes invocation failed")
@@ -371,6 +443,42 @@ def _parse_toolsets(raw: str) -> list[str]:
 def _combine_system_prompt(base: str, overlay: str) -> str:
     """Combine optional production prompt components without empty separators."""
     return "\n\n---\n\n".join(item for item in (base, overlay) if item)
+
+
+def _fast_path_action_output(
+    *, event_id: str, robot_id: str, action: str, accepted: bool
+) -> dict[str, Any]:
+    """Build a normal Bridge-validated acknowledgement after callback completion."""
+    success_text = {
+        "play_video": "好的，現在為您播放手部運動影片。",
+        "pause_video": "好的，已暫停影片。",
+        "resume_video": "好的，已繼續播放影片。",
+        "stop_video": "好的，已停止影片。",
+    }[action]
+    text = success_text if accepted else "抱歉，目前無法播放影片，請稍後再試。"
+    return {
+        "schema_version": "1.0",
+        "event_id": event_id,
+        "robot_id": robot_id,
+        "confidence": 1.0 if accepted else 0.0,
+        "cognitive_state": {
+            "intent": action,
+            "home_esi_level": "Normal",
+            "risk_reason": "Native Media callback accepted the reviewed request."
+            if accepted
+            else "Native Media callback rejected the reviewed request.",
+            "next_step": "acknowledge_media_request" if accepted else "report_media_unavailable",
+        },
+        "reasoning_summary": "Resident Hermes deterministic Media dispatch.",
+        "actions": [
+            {
+                "action_id": "act_001",
+                "type": "speak",
+                "text": text,
+                "language": "zh-TW",
+            }
+        ],
+    }
 
 
 def _resolve_skill_paths(raw_paths: list[str] | None) -> list[Path]:

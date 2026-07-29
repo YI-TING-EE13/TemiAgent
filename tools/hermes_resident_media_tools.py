@@ -95,6 +95,30 @@ def invocation_context(context: dict[str, str]) -> Iterator[None]:
         _context.reset(token)
 
 
+def invoke_registered_media_tool(action: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Invoke the same reviewed handler used by the native Hermes registry.
+
+    The deterministic Resident fast path uses this function rather than the
+    Bridge API, keeping its route identical to an upstream Hermes tool call.
+    """
+    if action not in {"play_video", "pause_video", "resume_video", "stop_video"}:
+        return {"status": "rejected", "error_code": "MEDIA_TOOL_INVALID_ACTION"}
+    if not isinstance(args, dict):
+        return {"status": "rejected", "error_code": "MEDIA_TOOL_INVALID_ARGUMENTS"}
+    if action == "play_video":
+        if args != {"video_id": VIDEO_ID}:
+            return {"status": "rejected", "error_code": "VIDEO_ID_NOT_ALLOWED"}
+    elif args:
+        return {"status": "rejected", "error_code": "MEDIA_TOOL_INVALID_ARGUMENTS"}
+    try:
+        result = json.loads(_handle_media_tool(action, args))
+    except json.JSONDecodeError:
+        return {"status": "rejected", "error_code": "MEDIA_CALLBACK_INVALID_RESPONSE"}
+    if not isinstance(result, dict):
+        return {"status": "rejected", "error_code": "MEDIA_CALLBACK_INVALID_RESPONSE"}
+    return result
+
+
 def _handle_media_tool(action: str, args: dict[str, Any]) -> str:
     context = _context.get()
     if context is None or _callback_socket is None:

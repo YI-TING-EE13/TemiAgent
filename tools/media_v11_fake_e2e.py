@@ -137,8 +137,8 @@ def run(work_root: Path) -> dict[str, Any]:
     play = service.publish_media_play(
         event_id=event_id,
         robot_id=robot_id,
-        resident_id="resident_father",
-        video_id="exercise_upper_body_01",
+        resident_id="unknown",
+        video_id="elderly_hand_exercise",
         command_id="cmd_fake_play_001",
         timestamp="2026-07-26T10:00:00Z",
     )

@@ -55,6 +55,7 @@ class HermesResponse:
     raw_output: str
     latency_ms: int
     parsed_json: dict[str, Any] | None = None
+    dispatch_metadata: dict[str, Any] | None = None
 
 
 class HermesClient:
@@ -112,6 +113,7 @@ class HttpHermesClient:
                 "robot_id": request_data.robot_id,
                 "conversation_id": request_data.conversation_id,
                 "language": request_data.language,
+                "asr_text": request_data.asr_text,
                 "active_resident": request_data.active_resident,
                 "prompt": prompt,
             },
@@ -156,7 +158,14 @@ class HttpHermesClient:
             raise HermesInvocationError("hermes http response missing raw_output")
         server_latency = parsed.get("latency_ms")
         latency_ms = server_latency if isinstance(server_latency, int) else roundtrip_latency_ms
-        return HermesResponse(raw_output=raw_output, latency_ms=latency_ms)
+        dispatch_metadata = parsed.get("dispatch_metadata")
+        if not isinstance(dispatch_metadata, dict):
+            dispatch_metadata = None
+        return HermesResponse(
+            raw_output=raw_output,
+            latency_ms=latency_ms,
+            dispatch_metadata=dispatch_metadata,
+        )
 
 
 class MockHermesClient:
