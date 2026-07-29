@@ -37,6 +37,7 @@ class TemiMqttClient:
         self._asr_handler: Callable[[str, dict[str, Any]], None] | None = None
         self._abnormal_handler: Callable[[str, dict[str, Any]], None] | None = None
         self._result_handler: Callable[[str, dict[str, Any]], None] | None = None
+        self._identity_handler: Callable[[str, dict[str, Any]], None] | None = None
 
     def set_asr_handler(self, handler: Callable[[str, dict[str, Any]], None]) -> None:
         """Register the callback for canonical ASR final events."""
@@ -49,6 +50,10 @@ class TemiMqttClient:
     def set_result_handler(self, handler: Callable[[str, dict[str, Any]], None]) -> None:
         """Register the callback for command result events."""
         self._result_handler = handler
+
+    def set_identity_handler(self, handler: Callable[[str, dict[str, Any]], None]) -> None:
+        """Register the callback for the existing canonical identity result topic."""
+        self._identity_handler = handler
 
     def connect(self) -> None:
         """Connect to the configured MQTT broker."""
@@ -77,6 +82,7 @@ class TemiMqttClient:
         client.subscribe("temi/+/asr/final", qos=1)
         client.subscribe("temi/+/perception/abnormal", qos=1)
         client.subscribe("temi/+/cmd/result", qos=1)
+        client.subscribe("temi/+/resident/identity/result", qos=1)
 
     def _on_message(self, client, userdata, msg) -> None:
         """Decode MQTT JSON and dispatch it to the registered handler."""
@@ -94,6 +100,8 @@ class TemiMqttClient:
             self._abnormal_handler(msg.topic, payload)
         elif msg.topic.endswith("/cmd/result") and self._result_handler:
             self._result_handler(msg.topic, payload)
+        elif msg.topic.endswith("/resident/identity/result") and self._identity_handler:
+            self._identity_handler(msg.topic, payload)
 
 
 def _is_success_reason_code(reason_code: Any) -> bool:

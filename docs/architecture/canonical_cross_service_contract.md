@@ -1,28 +1,28 @@
 # Canonical Cross-Service Contract：Identity、Video 與 Care Report
 
-最後審查日期：2026-07-26
+最後審查日期：2026-07-29
 
 本文件定義第一年度新增功能的跨服務協議。`hermes_temi_bridge/schemas/` 是
 runtime schema 的唯一權威來源；本文件只說明 message flow、責任、安全語意與
 相容性。Bridge media v1.1 runtime 已在預設關閉的 feature gate 後實作並以 fake Android
-驗證；這不代表 identity 推論、Hermes video action、Android 實作、真機或 care report
+驗證；Bridge 現在也有 feature-gated identity result consumer 與 root-owned resident Hermes
+native Media callback。這不代表 identity 推論 producer、Android 實作、真機或 care report
 service 已完成。
 
 ## 現況盤點與決策
 
 | 需求 | 既有能力 | 決策 | Capability state |
 |---|---|---|---|
-| Resident identity result | 沒有 canonical identity topic 或 schema；`memory/profile.json` 是 Demo-only 單一 persona，不可當 identity result | 新增獨立 identity result topic 與 schema | Contract defined；runtime 未實作 |
-| Video command | `cmd/request` 已是唯一 robot command topic，但 v1.0 只有 `command_id` 與 `actions[]` | 沿用 topic；Bridge explicit media API 由 feature flag 隔離 | Bridge producer implemented and fake-verified；Android pending |
+| Resident identity result | 已有 canonical topic/schema；Bridge 僅在 Demo visual-routing flag 開啟時消費，不做 identity inference | 保留 topic/schema；以 fresh confirmed upstream result 建立 active resident context | Bridge consumer implemented and fake-tested；upstream producer/Android pending |
+| Video command | `cmd/request` 已是唯一 robot command topic，但 v1.0 只有 `command_id` 與 `actions[]` | 沿用 topic；Bridge explicit media API 與 root-owned resident native tool 都由 feature flag 隔離 | Bridge producer/native entry fake-verified；Android pending |
 | Video command result | `cmd/result` 已回傳 command 結果，但 v1.0 status 無法表達播放 lifecycle | 沿用 topic；Bridge 依 discriminator 嚴格分流並追蹤 session | Bridge consumer implemented and fake-verified；Android pending |
 | Care report | `generate_summary` 與 Markdown summary 是 Demo memory action/artifact，不是跨服務 report payload | 新增 care report topic 與 schema；不從 Demo 情境推導內容 | Contract defined；report service 未實作 |
 | Report interaction | Trace 可記錄 command result，沒有 report viewed/acknowledged contract | 新增 interaction result topic 與 schema | Contract defined；runtime 未實作 |
 | Error codes | 既有 code 分散在 validators 與 trace payload | 新 schema 使用 `cross_service_common.schema.json` 的 allowlist；既有錯誤碼不變 | New contracts only |
 
-盤點發現 `docs/project/system_handover.md` 曾提到 `media_contract.py`、resident
-resolution 與分 resident memory layout，但目前 branch 沒有那些 runtime files。
-本 contract 以目前可執行 code、schema 與 tests 為準，不把 handover 中的未落地敘述
-當成 implemented baseline。
+本 contract 以目前可執行 code、schema 與 tests 為準。Bridge 的 new resident context
+consumer、private synthetic Demo seed 和 native media callback 都是 root-owned, feature-gated
+runtime；它們不補足 Android source 或 upstream identity producer 的未落地範圍。
 
 ## Canonical authority 與 message direction
 
@@ -32,15 +32,16 @@ Publisher 在 publish 前驗證；subscriber 在處理前再次驗證。Schema g
 
 | Topic | Direction | Publisher | Subscriber | Runtime validation owner |
 |---|---|---|---|---|
-| `temi/{robot_id}/resident/identity/result` | identity result → consumers | 未來 identity adapter；manual selection 由 Temi App 產生 | Temi App、未來 report pipeline、Bridge integration | 各 subscriber；Bridge schema 是 authority |
+| `temi/{robot_id}/resident/identity/result` | identity result → consumers | External VLM/Identity Provider；Temi App manual selection | Bridge controlled Demo consumer、Temi App、future report pipeline | 各 subscriber；Bridge schema 是 authority |
 | `temi/{robot_id}/cmd/request` | command producer → Temi App | Bridge。Media v1.1 只由 feature-gated explicit API 產生；Remote gateway 必須把 authorized intent 交給 Bridge | Temi App | Bridge publish boundary 與 Temi App boundary validator |
 | `temi/{robot_id}/cmd/result` | Temi App → command producer/trace | Temi App | Bridge、request originator | Bridge/result consumer |
 | `temi/{robot_id}/care/report` | report producer → reviewer UI | 未來 report producer behind Bridge/memory boundary | Temi App、authorized reviewer | 每個 report consumer |
 | `temi/{robot_id}/care/report/interaction/result` | reviewer UI → report owner/trace | Temi App 或 authorized reviewer client | 未來 report owner、Bridge trace adapter | Report interaction consumer |
 
-新 topic 目前沒有 active publisher 或 subscriber。實作者不得在 service code、Android
-或 runbook 宣稱 message flow 可執行，直到 producer、consumer、validation 與 integration
-tests 同時完成。
+Bridge is now an active subscriber of `resident/identity/result` when its Demo flag is enabled;
+it does not publish that topic and current checkout has no identity producer. Care-report topics
+still have no active runtime producer/consumer. No document may claim a visual identity or Android
+end-to-end flow until the external producer and Android evidence are delivered.
 
 ## Identifier responsibility 與 correlation
 
@@ -64,7 +65,9 @@ Publisher 使用隨機或時間排序 ID 均可，但 ID 不得包含姓名、�
 
 Authority：`hermes_temi_bridge/schemas/resident_identity_result.schema.json`。
 
-`father` 與 `mother` 只是第一年度暫行 display mapping。`vision_gender_fallback` 表示
+`father` 與 `mother` 是 controlled Demo canonical resident IDs. The identity schema keeps its
+legacy `display_name=father|mother|unknown` values; Bridge maps active prompt display names to
+「王先生」／「王太太」／「未知住民／尚未確認」without changing the schema. `vision_gender_fallback` 表示
 模型依有限視覺線索做 Demo fallback；它不是 face recognition、speaker recognition、
 verified identity 或醫療判定。UI 必須顯示暫行狀態，不能把 `confidence` 呈現為認證準確率。
 
@@ -75,6 +78,10 @@ verified identity 或醫療判定。UI 必須顯示暫行狀態，不能把 `con
 - `father` 與 `mother` 必須使用不同且穩定的 `resident_id`。Storage、cache、report、
   reminder 與 trace lookup 必須以 `resident_id` 分區，不得只用 `display_name`。
 - Manual selection 必須保留 `source=manual_selection`，不得改寫成 vision result。
+- Controlled Bridge Demo routing only accepts a fresh `source=vision_gender_fallback` result with
+  `resident_id == identity_status == father|mother`; all other results (including manual selection,
+  missing, stale, low-confidence upstream output, or conflicts) are `unknown` for private memory
+  and native Media callback purposes.
 
 合法範例：
 
@@ -99,6 +106,11 @@ Video subtype 使用 `message_type=video.command`，支援 `play_video`、`pause
 allowlisted logical ID；payload 不得包含 URL、absolute path、media bytes 或 private host。
 `parameters` 是 bounded object；每個參數需由後續 Android contract revision 明確列入
 allowlist 才能執行。
+
+Root-owned resident Hermes tools call the Bridge through a private local callback only when both
+`MEDIA_V11_ENABLED` and `HERMES_MEDIA_TOOL_ENABLED` are true. The native entry accepts only
+`elderly_hand_exercise`; no URL, path, Android intent, parameters, or caller-supplied session ID is
+accepted. The generic Hermes action schema remains unchanged.
 
 `execution_class` 定義 ordering，不建立新 topic：
 

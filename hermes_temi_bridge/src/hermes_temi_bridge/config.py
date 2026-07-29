@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import os
 from pathlib import Path
 
@@ -28,6 +29,18 @@ def _get_int(values: dict[str, str], name: str, default: int) -> int:
         return int(raw)
     except ValueError as exc:
         raise ValueError(f"{name} must be an integer, got {raw!r}") from exc
+
+
+def _get_float(values: dict[str, str], name: str, default: float) -> float:
+    """Read a finite floating-point value from environment or env file."""
+    raw = os.getenv(name, values.get(name, str(default)))
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a number, got {raw!r}") from exc
+    if not math.isfinite(value):
+        raise ValueError(f"{name} must be finite, got {raw!r}")
+    return value
 
 
 def _get_bool(values: dict[str, str], name: str, default: bool) -> bool:
@@ -79,6 +92,30 @@ class BridgeConfig:
     care_context_max_events: int = 5
     care_context_max_chars: int = 4000
     media_v11_enabled: bool = False
+    hermes_media_tool_enabled: bool = False
+    demo_care_scenario_prompt_enabled: bool = False
+    demo_resident_visual_routing_enabled: bool = False
+    demo_care_memory_root: str = ""
+    demo_resident_context_ttl_seconds: int = 300
+    demo_resident_visual_minimum_confidence: float = 0.70
+    hermes_media_callback_socket: str = ""
+
+    def __post_init__(self) -> None:
+        """Reject partial Demo-media configuration before connecting to MQTT."""
+        if self.hermes_media_tool_enabled and not self.media_v11_enabled:
+            raise ValueError("HERMES_MEDIA_TOOL_ENABLED=true requires MEDIA_V11_ENABLED=true")
+        if self.hermes_media_tool_enabled and not self.hermes_media_callback_socket:
+            raise ValueError(
+                "HERMES_MEDIA_TOOL_ENABLED=true requires HERMES_MEDIA_CALLBACK_SOCKET"
+            )
+        if self.demo_care_scenario_prompt_enabled and not self.demo_care_memory_root:
+            raise ValueError(
+                "DEMO_CARE_SCENARIO_PROMPT_ENABLED=true requires DEMO_CARE_MEMORY_ROOT"
+            )
+        if self.demo_resident_context_ttl_seconds <= 0:
+            raise ValueError("DEMO_RESIDENT_CONTEXT_TTL_SECONDS must be positive")
+        if not 0 <= self.demo_resident_visual_minimum_confidence <= 1:
+            raise ValueError("DEMO_RESIDENT_VISUAL_MINIMUM_CONFIDENCE must be between 0 and 1")
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> "BridgeConfig":
@@ -149,4 +186,35 @@ class BridgeConfig:
                 values, "CARE_CONTEXT_MAX_CHARS", cls.care_context_max_chars
             ),
             media_v11_enabled=_get_bool(values, "MEDIA_V11_ENABLED", cls.media_v11_enabled),
+            hermes_media_tool_enabled=_get_bool(
+                values, "HERMES_MEDIA_TOOL_ENABLED", cls.hermes_media_tool_enabled
+            ),
+            demo_care_scenario_prompt_enabled=_get_bool(
+                values,
+                "DEMO_CARE_SCENARIO_PROMPT_ENABLED",
+                cls.demo_care_scenario_prompt_enabled,
+            ),
+            demo_resident_visual_routing_enabled=_get_bool(
+                values,
+                "DEMO_RESIDENT_VISUAL_ROUTING_ENABLED",
+                cls.demo_resident_visual_routing_enabled,
+            ),
+            demo_care_memory_root=os.getenv(
+                "DEMO_CARE_MEMORY_ROOT",
+                values.get("DEMO_CARE_MEMORY_ROOT", cls.demo_care_memory_root),
+            ),
+            demo_resident_context_ttl_seconds=_get_int(
+                values,
+                "DEMO_RESIDENT_CONTEXT_TTL_SECONDS",
+                cls.demo_resident_context_ttl_seconds,
+            ),
+            demo_resident_visual_minimum_confidence=_get_float(
+                values,
+                "DEMO_RESIDENT_VISUAL_MINIMUM_CONFIDENCE",
+                cls.demo_resident_visual_minimum_confidence,
+            ),
+            hermes_media_callback_socket=os.getenv(
+                "HERMES_MEDIA_CALLBACK_SOCKET",
+                values.get("HERMES_MEDIA_CALLBACK_SOCKET", cls.hermes_media_callback_socket),
+            ),
         )

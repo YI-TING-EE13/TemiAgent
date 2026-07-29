@@ -59,6 +59,78 @@ class StructuredMemoryStore:
                 raise MemoryActionError("unsupported_memory_action", {"type": action_type})
         return results
 
+    def seed_synthetic_demo(
+        self,
+        *,
+        seed_id: str,
+        profile: dict[str, Any],
+        reminders: dict[str, Any],
+        daily_state: dict[str, Any],
+        events: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Idempotently replace one explicitly synthetic Demo seed.
+
+        This is a narrow Bridge-owned writer API for a private Demo store.  It
+        does not target the default runtime memory directory unless an operator
+        explicitly passes it, and it never appends seed events: each call writes
+        the same bounded synthetic fixture for the supplied ``seed_id``.
+        """
+        if not isinstance(seed_id, str) or not seed_id.strip():
+            raise MemoryActionError("invalid_demo_seed_id")
+        if not isinstance(profile, dict) or not isinstance(reminders, dict) or not isinstance(daily_state, dict):
+            raise MemoryActionError("invalid_demo_seed_payload")
+        if not isinstance(events, list) or not all(isinstance(event, dict) for event in events):
+            raise MemoryActionError("invalid_demo_seed_events")
+        self._ensure_layout()
+        marker = {"synthetic": True, "seed_id": seed_id.strip()}
+        profile_payload = dict(profile)
+        profile_payload["demo_seed"] = marker
+        reminders_payload = dict(reminders)
+        reminders_payload["demo_seed"] = marker
+        daily_payload = dict(daily_state)
+        daily_payload["demo_seed"] = marker
+        event_lines = []
+        for event in events:
+            seeded_event = dict(event)
+            details = dict(seeded_event.get("details") or {})
+            details.update(marker)
+            seeded_event["details"] = details
+            event_lines.append(json.dumps(seeded_event, ensure_ascii=False, separators=(",", ":")))
+
+        self._write_json(self.root / "profile.json", profile_payload)
+        self._write_json(self.root / "reminders.json", reminders_payload)
+        self._write_json(self.root / "daily_state.json", daily_payload)
+        (self.root / "event_log.jsonl").write_text(
+            "\n".join(event_lines) + ("\n" if event_lines else ""),
+            encoding="utf-8",
+        )
+        return {
+            "status": "seeded",
+            "seed_id": seed_id.strip(),
+            "memory_dir": self.root.as_posix(),
+            "event_count": len(events),
+        }
+
+    @staticmethod
+    def read_seed_marker(memory_dir: str | Path) -> dict[str, Any]:
+        """Read the narrow seed marker without constructing a writer."""
+        path = Path(memory_dir) / "profile.json"
+        if not path.exists():
+            return {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        marker = payload.get("demo_seed")
+        if not isinstance(marker, dict):
+            return {}
+        return {
+            "seed_id": marker.get("seed_id"),
+            "resident_id": payload.get("user_id"),
+        }
+
     def _ensure_layout(self) -> None:
         """Create memory directories expected by the Demo."""
         self.root.mkdir(parents=True, exist_ok=True)

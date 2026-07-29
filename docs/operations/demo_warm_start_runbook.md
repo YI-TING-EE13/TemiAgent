@@ -81,6 +81,52 @@ mkdir -p "$DEMO_LOG_ROOT" /TemiAgent/logs/overview_bridge_resident
 printf '%s\n' "$DEMO_LOG_ROOT"
 ```
 
+### 3.1 受控 resident-care／Media Demo 的 private config 與 synthetic seed
+
+一般暖啟動仍可維持所有 feature default 為 `false`。只有要展示 resident 的自然語言
+Media route 時，才在 repository 外、權限為 owner-only 的 private env file 設定下列欄位。
+`DEMO_CARE_MEMORY_ROOT` 與 `HERMES_MEDIA_CALLBACK_SOCKET` 必須是絕對路徑，且不得指向
+`/TemiAgent/memory` 或 tracked source path。
+
+```text
+MEDIA_V11_ENABLED=true
+HERMES_MEDIA_TOOL_ENABLED=true
+DEMO_CARE_SCENARIO_PROMPT_ENABLED=true
+DEMO_RESIDENT_VISUAL_ROUTING_ENABLED=true
+DEMO_CARE_MEMORY_ROOT=<private-absolute-demo-care-root>
+HERMES_MEDIA_CALLBACK_SOCKET=<private-absolute-demo-runtime-root>/bridge_media_callback.sock
+DEMO_RESIDENT_VISUAL_MINIMUM_CONFIDENCE=0.70
+```
+
+在同一個 shell 載入 private config，確認其 mode，然後建立或重用 synthetic Demo seed。這個
+tool 只寫入 `DEMO_CARE_MEMORY_ROOT/father` 與 `.../mother`；它會拒絕 tracked `memory/`，
+重跑不會 append duplicate event。
+
+```bash
+test -n "${DEMO_PRIVATE_ENV:-}" && test -r "$DEMO_PRIVATE_ENV"
+test "$(stat -c '%a' "$DEMO_PRIVATE_ENV")" = 600
+set -a
+. "$DEMO_PRIVATE_ENV"
+set +a
+
+python3 /TemiAgent/tools/seed_demo_care_context.py --root "$DEMO_CARE_MEMORY_ROOT"
+python3 /TemiAgent/tools/seed_demo_care_context.py --root "$DEMO_CARE_MEMORY_ROOT" --verify
+```
+
+private config 只會被目前 shell 繼承；不要把 endpoint、credential、private path 或它的內容
+寫回 `.env.example`、log、commit 或 MQTT payload。
+
+若 callback socket path 已存在，Bridge 會拒絕啟動而不刪除它。先依 safe-service operations
+確認沒有仍在使用該 path 的本次/外部 process，再由操作員明確處理 stale private socket；不要
+用 broad delete 或 process kill。
+
+此 checkout **沒有**上游 VLM／Identity Provider 的 runtime producer。Bridge 只消費既有
+`temi/{robot_id}/resident/identity/result`，並且在 flag 開啟時只接受 fresh、canonical 的
+`source=vision_gender_fallback`、confirmed `father`／`mother`，且 confidence 不低於
+`DEMO_RESIDENT_VISUAL_MINIMUM_CONFIDENCE`。若 producer 尚未部署，active resident 必為
+`unknown`，Media callback 會拒絕，這是預期 fail-closed 行為；不得用語音、姓名
+或 raw MQTT payload 偽造 identity result。
+
 ## 4. 啟動 canonical Demo services
 
 在執行下列區塊前，重跑 port 預檢並確認 `8080`、`8081`、`8765`、`8010`、`8011` 都沒有 listener。此區塊不碰 `1234` 或 `1883`。
@@ -210,6 +256,19 @@ tail -n 40 "$DEMO_LOG_ROOT/bridge.log"
 /TemiAgent/hermes-agent/venv/bin/hermes gateway status
 ```
 
+當且僅當 private media config 已載入時，resident `/health` 還必須顯示：
+
+```text
+media_tool_enabled: true
+media_tool_names: [play_video, pause_video, resume_video, stop_video]
+demo_care_scenario_prompt_enabled: true
+```
+
+Bridge startup log 必須顯示已連 MQTT；它的 private Unix callback socket 是本機 process
+boundary，不是新的 TCP service port。不要以 resident health、socket 存在或 MQTT publish
+success 宣稱 Android 已播放；必須收到 Android `cmd/result` 的 `accepted` 與 `started`／
+`playing` 才可確認開始播放。
+
 viewer health 應至少滿足：
 
 - `ok` 是 `true`。
@@ -240,6 +299,53 @@ PY
 只有 gateway status 顯示 running 且 `discord.state=connected` 時，Discord gateway 才算 ready。Bridge 只證明已連上 broker；本手冊不發布 mock ASR、TTS 或 command result，因此不把 service startup 宣稱為完整硬體 E2E。開始情境前，可先從 viewer health 確認 Temi camera frame 正在流入。
 
 action viewer UI：`http://127.0.0.1:8010/`。若從其他裝置查看，使用當次 PC 對該裝置可達的 IP；不要把私人 IP 寫入 tracked documentation。
+
+## 5.1 resident Media Demo 的語句、監看與驗證
+
+在上游 canonical identity producer 已提供 fresh、confirmed identity 且 Android media mapping
+已驗收的前提下，對 Temi 說：
+
+```text
+小安小安，請幫我播放手部運動影片。
+```
+
+王太太照護情境先說「小安小安，我今天洗腎結束了，幫我紀錄。」；應先記錄 dialysis-return，
+再詢問頭暈、明顯疲倦、疼痛、呼吸不適或其他不適。只有她明確表示沒有不適、且再次明確同意後，
+才說上述播放語句。王先生情境可說「我又不舒服了」；Hermes 只會讀 father partition 的
+synthetic prior-headache event，並詢問目前是否也是頭痛。任何 `unknown`、不適或不明確回答
+都不得產生 Media command。
+
+播放 request 只允許 canonical `video_id=elderly_hand_exercise`；沒有 URL、檔案路徑或 Android
+intent 可從 prompt 或 MQTT 取得。控制語句依序為：
+
+```text
+小安小安，請暫停影片。
+小安小安，請繼續播放影片。
+小安小安，請停止影片。
+```
+
+在另一個只監看的 terminal 執行。這些命令不發布 payload：
+
+```bash
+mosquitto_sub -h 127.0.0.1 -p 1883 -t 'temi/temi-01/asr/final' -v
+mosquitto_sub -h 127.0.0.1 -p 1883 -t 'temi/temi-01/cmd/request' -v
+mosquitto_sub -h 127.0.0.1 -p 1883 -t 'temi/temi-01/cmd/result' -v
+python3 /TemiAgent/tools/show_temi_trace.py \
+  --log-dir /TemiAgent/logs/overview_bridge_resident --latest --full
+```
+
+驗證順序：
+
+1. ASR topic 有最終 transcript，Bridge trace 顯示 `active_resident` 不是 `unknown`。
+2. resident health 顯示四個 native media tools，trace 顯示 Hermes invocation；resident 本身不會 publish MQTT。
+3. `cmd/request` 是 schema `1.1`、`message_type=video.command`、`action=play_video`、
+   `video_id=elderly_hand_exercise`；其後 Android 回 `accepted` 再回 `started`／`playing`。
+4. pause 成功後 Android 回 control `succeeded` 且 play session state 為 `paused`；resume 回 `playing`。
+5. stop 回 control `succeeded`，原 play command 再回 `cancelled`、`cancel_reason=remote_stop` 與
+   `cancelled_by_command_id=<stop command id>`。
+
+缺少 identity producer、Android asset/URI mapping、`cmd/result` 或真機 trace 中任一項時，停止
+在對應前置條件，不得用 `mosquitto_pub` 手刻 command 或 result 取代真機驗收。
 
 ## 6. 正常停止與恢復
 

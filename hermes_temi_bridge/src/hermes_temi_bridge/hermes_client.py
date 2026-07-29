@@ -45,6 +45,7 @@ class HermesRequest:
     abnormal_action_name: str | None = None
     abnormal_reason: str | None = None
     care_context: dict[str, Any] | None = None
+    active_resident: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -111,6 +112,7 @@ class HttpHermesClient:
                 "robot_id": request_data.robot_id,
                 "conversation_id": request_data.conversation_id,
                 "language": request_data.language,
+                "active_resident": request_data.active_resident,
                 "prompt": prompt,
             },
             ensure_ascii=False,
@@ -224,6 +226,19 @@ def format_care_context_block(care_context: dict[str, Any] | None) -> str:
     )
 
 
+def format_active_resident_block(active_resident: dict[str, Any] | None) -> str:
+    """Format Bridge-provided identity context without presenting it as user speech."""
+    if not active_resident:
+        return ""
+    encoded = json.dumps(active_resident, ensure_ascii=False, separators=(",", ":"))
+    return (
+        "Active resident context provided by HermesTemiBridge:\n"
+        "This comes from a separately validated upstream identity result. Never infer, "
+        "replace, or enrich it from speech or names.\n"
+        f"<active_resident>{encoded}</active_resident>\n"
+    )
+
+
 def build_asr_prompt(request: HermesRequest) -> str:
     """Build the deterministic prompt sent to Hermes for one ASR event."""
     frame_lines = []
@@ -235,6 +250,7 @@ def build_asr_prompt(request: HermesRequest) -> str:
         )
     frames_text = "\n".join(frame_lines) or "No synchronized visual frames were provided."
     care_context_text = format_care_context_block(request.care_context)
+    active_resident_text = format_active_resident_block(request.active_resident)
     return f"""You are controlling a Temi robot through the temi-robot-control skill.
 
 Use the installed skill: /temi-robot-control
@@ -245,7 +261,7 @@ Task source:
 - conversation_id: {request.conversation_id or ""}
 - user language: {request.language}
 
-{care_context_text}Current user ASR text:
+{care_context_text}{active_resident_text}Current user ASR text:
 {request.asr_text}
 
 Synchronized visual frames:

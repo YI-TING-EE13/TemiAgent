@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 from contextlib import redirect_stderr, redirect_stdout
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import importlib.util
 import io
 import json
 import logging
@@ -29,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HERMES_AGENT_ROOT = ROOT / "hermes-agent"
 DEFAULT_SKILL_PATH = HERMES_AGENT_ROOT / "skills" / "temi-robot-control" / "SKILL.md"
 DEFAULT_SKILL_PATHS = [DEFAULT_SKILL_PATH]
+MEDIA_TOOL_MODULE_PATH = ROOT / "tools" / "hermes_resident_media_tools.py"
 
 
 def _ensure_hermes_import_path() -> None:
@@ -84,6 +86,49 @@ def _read_skill_prompt(paths: list[Path]) -> str:
     )
 
 
+def _demo_care_overlay(enabled: bool) -> str:
+    """Return the production-loaded Demo overlay only when explicitly enabled."""
+    if not enabled:
+        return ""
+    return """
+## Controlled resident-care Demo overlay
+
+This is a controlled home-care Demo. The Bridge supplies an active_resident
+context derived from a separately validated upstream visual identity result.
+Never infer or replace resident identity from speech, names, self-description,
+or text. When active_resident.resident_id is unknown, do not read or write the
+private care memory of father or mother.
+
+The Demo residents are father (王先生, 90, hypertension care context) and mother
+(王太太, 85, dialysis care context). Care plan information is Bridge-provided;
+do not diagnose, recommend dosages, or make treatment decisions.
+
+For father: if he says he is unwell again, use only father-provided relevant
+care context. The synthetic Demo history may contain a prior headache report;
+ask whether the current discomfort is also headache. Do not read or mention
+mother's care context.
+
+For mother: when she says dialysis has finished or she has returned home, use
+the validated care-memory action to record the event, then ask about dizziness,
+marked fatigue, pain, breathing discomfort, or other discomfort. Only after an
+explicit no-discomfort response and her explicit consent may you call play_video
+with video_id elderly_hand_exercise. A tool result with status=published only
+means the Bridge accepted the command; playback is confirmed only by the Android
+cmd/result lifecycle. Do not claim success when a tool returns rejected.
+""".strip()
+
+
+def _load_resident_media_tools() -> Any:
+    """Load the root-owned tool registration module without editing Hermes upstream."""
+    spec = importlib.util.spec_from_file_location("temi_resident_media_tools", MEDIA_TOOL_MODULE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("unable to load root-owned resident media tools")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 class ResidentHermes:
     """Own one preloaded Hermes AIAgent and serialize invocations through it."""
 
@@ -97,6 +142,9 @@ class ResidentHermes:
         cwd: Path,
         hermes_home: Path | None = None,
         enable_memory: bool = False,
+        media_tool_enabled: bool | None = None,
+        media_v11_enabled: bool | None = None,
+        media_callback_socket: str | None = None,
     ):
         """Create and warm the resident Hermes runtime.
 
@@ -147,7 +195,31 @@ class ResidentHermes:
         self.model = effective_model
         self.provider = runtime.get("provider")
         self.base_url = runtime.get("base_url")
-        self.toolsets = toolsets
+        configured_media_tool = (
+            os.getenv("HERMES_MEDIA_TOOL_ENABLED", "").lower() in {"1", "true", "yes", "on"}
+            if media_tool_enabled is None
+            else media_tool_enabled
+        )
+        configured_media_v11 = (
+            os.getenv("MEDIA_V11_ENABLED", "").lower() in {"1", "true", "yes", "on"}
+            if media_v11_enabled is None
+            else media_v11_enabled
+        )
+        self.demo_care_scenario_prompt_enabled = os.getenv(
+            "DEMO_CARE_SCENARIO_PROMPT_ENABLED", ""
+        ).lower() in {"1", "true", "yes", "on"}
+        self.media_tool_enabled = configured_media_tool and configured_media_v11
+        self.media_tool_names: list[str] = []
+        self._media_tools = None
+        effective_toolsets = list(toolsets)
+        if self.media_tool_enabled:
+            resolved_socket = media_callback_socket or os.getenv("HERMES_MEDIA_CALLBACK_SOCKET", "")
+            self._media_tools = _load_resident_media_tools()
+            self.media_tool_names = self._media_tools.install_media_tools(
+                callback_socket=resolved_socket
+            )
+            effective_toolsets.append(self._media_tools.TOOLSET)
+        self.toolsets = effective_toolsets
         self.skill_paths = skill_paths
         self.hermes_home = os.environ.get("HERMES_HOME", "")
         self.memory_enabled = enable_memory
@@ -159,11 +231,14 @@ class ResidentHermes:
             provider=runtime.get("provider"),
             api_mode=runtime.get("api_mode"),
             model=effective_model,
-            enabled_toolsets=toolsets,
+            enabled_toolsets=effective_toolsets,
             quiet_mode=True,
             platform="temi-resident",
             session_id="temi-resident",
-            ephemeral_system_prompt=_read_skill_prompt(skill_paths),
+            ephemeral_system_prompt=_combine_system_prompt(
+                _read_skill_prompt(skill_paths),
+                _demo_care_overlay(self.demo_care_scenario_prompt_enabled),
+            ),
             clarify_callback=_clarify_callback,
             credential_pool=runtime.get("credential_pool"),
             skip_context_files=True,
@@ -173,7 +248,7 @@ class ResidentHermes:
         self._agent.stream_delta_callback = None
         self._agent.tool_gen_callback = None
 
-    def invoke(self, prompt: str) -> dict[str, Any]:
+    def invoke(self, prompt: str, invocation_context: dict[str, str] | None = None) -> dict[str, Any]:
         """Run one prompt through the resident agent and measure latency."""
         started = time.monotonic()
         with self._lock:
@@ -181,7 +256,11 @@ class ResidentHermes:
             stdout = io.StringIO()
             stderr = io.StringIO()
             with redirect_stdout(stdout), redirect_stderr(stderr):
-                raw_output = self._agent.chat(prompt) or ""
+                if self._media_tools is None:
+                    raw_output = self._agent.chat(prompt) or ""
+                else:
+                    with self._media_tools.invocation_context(invocation_context or {}):
+                        raw_output = self._agent.chat(prompt) or ""
         latency_ms = int((time.monotonic() - started) * 1000)
         return {
             "status": "ok",
@@ -202,6 +281,9 @@ class ResidentHermes:
             "skill_paths": [path.as_posix() for path in self.skill_paths],
             "hermes_home": self.hermes_home,
             "memory_enabled": self.memory_enabled,
+            "demo_care_scenario_prompt_enabled": self.demo_care_scenario_prompt_enabled,
+            "media_tool_enabled": self.media_tool_enabled,
+            "media_tool_names": self.media_tool_names,
             "uptime_seconds": int(time.time() - self.started_at),
             "request_count": self.request_count,
         }
@@ -241,7 +323,16 @@ class RequestHandler(BaseHTTPRequestHandler):
             if not isinstance(prompt, str) or not prompt.strip():
                 self._write_json(400, {"status": "error", "error": "missing prompt"})
                 return
-            result = self.server.resident.invoke(prompt)  # type: ignore[attr-defined]
+            active_resident = payload.get("active_resident")
+            if active_resident is not None and not isinstance(active_resident, dict):
+                self._write_json(400, {"status": "error", "error": "invalid active_resident"})
+                return
+            invocation_context = {
+                "event_id": str(payload.get("event_id") or ""),
+                "robot_id": str(payload.get("robot_id") or ""),
+                "resident_id": str((active_resident or {}).get("resident_id") or ""),
+            }
+            result = self.server.resident.invoke(prompt, invocation_context)  # type: ignore[attr-defined]
             self._write_json(200, result)
         except Exception as exc:
             logging.exception("resident Hermes invocation failed")
@@ -275,6 +366,11 @@ def _parse_toolsets(raw: str) -> list[str]:
     if not raw.strip():
         return []
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _combine_system_prompt(base: str, overlay: str) -> str:
+    """Combine optional production prompt components without empty separators."""
+    return "\n\n---\n\n".join(item for item in (base, overlay) if item)
 
 
 def _resolve_skill_paths(raw_paths: list[str] | None) -> list[Path]:

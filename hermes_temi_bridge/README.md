@@ -44,7 +44,8 @@ Temi Action Viewer / Video Action Tester
 ## 核心職責
 
 - 連線到 MQTT broker。
-- Subscribe `temi/+/asr/final`、`temi/+/perception/abnormal` 與 `temi/+/cmd/result`。
+- Subscribe `temi/+/asr/final`、`temi/+/perception/abnormal`、`temi/+/cmd/result` 與既有
+  `temi/+/resident/identity/result` contract。
 - 驗證 ASR event schema 與 robot allowlist。
 - 驗證三張影像存在、大小合理，且位於 shared root 內。
 - 驗證 abnormal event 內的 evidence frame paths 存在、大小合理，且位於 shared root 內。
@@ -58,6 +59,9 @@ Temi Action Viewer / Video Action Tester
 - 記錄 raw output、parsed output、robot command request、memory action result、command result 與錯誤。
 - 在 `MEDIA_V11_ENABLED=true` 時提供獨立 media v1.1 request API，並嚴格驗證 result、
   command/session correlation、lifecycle 與 replay disposition。
+- 僅在 `MEDIA_V11_ENABLED=true`、`HERMES_MEDIA_TOOL_ENABLED=true` 與 private Unix
+  callback socket 都已設定時，接受 resident Hermes 的 root-owned native Media tool callback。
+  Resident process 不擁有 MQTT publisher。
 
 ## 目前狀態與限制
 
@@ -72,10 +76,14 @@ Temi Action Viewer / Video Action Tester
 - Bridge-internal memory/demo actions：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
 - 只有 robot-facing actions 會 publish 到 `temi/{robot_id}/cmd/request`；memory/demo actions 只寫入 `MEMORY_DIR`。
 - Abnormal perception events currently carry only `observation.action_name`, `observation.reason`, and `evidence.frame_paths`; they do not carry model confidence, confidence_source, or severity.
-- Identity、care report 與 report interaction 已有 canonical runtime schema 與 schema tests，
-  但 producer、consumer 與 service integration 尚未實作。
-- Video v1.1 沿用 `cmd/request`/`cmd/result` topic。Hermes video action 不在目前
-  `action_validator.py` allowlist，因此 Bridge 尚不能從 Hermes output 產生 video command。
+- Identity、care report 與 report interaction 已有 canonical runtime schema 與 schema tests。
+  Bridge 現在只在 `DEMO_RESIDENT_VISUAL_ROUTING_ENABLED=true` 時消費 identity result，且僅接受
+  `vision_gender_fallback` 的 confirmed `father`／`mother`，且 confidence 不低於
+  `DEMO_RESIDENT_VISUAL_MINIMUM_CONFIDENCE`；無結果、manual selection、衝突、低信心或過期
+  都會變成 `unknown`。本 checkout 仍沒有上游 VLM/Identity Provider producer。
+- Video v1.1 沿用 `cmd/request`/`cmd/result` topic。Media 不會擴張 generic
+  `action_validator.py` allowlist；native tool callback 先經獨立 allowlist（目前僅
+  `elderly_hand_exercise`），再呼叫既有 `publish_media_play()`／`publish_media_control()`。
 - Video v1.1 保留 `play_video`、`pause_video`、`resume_video`、`stop_video`。Play 是
   serialized execution；controls 只有完成 schema、semantic validator 與 active-session
   target validation 後才可優先處理。既有 generic robot `stop` 不具 media session 語意。
@@ -110,6 +118,10 @@ hermes_temi_bridge/
     action_validator.py     # Hermes action contract validation
     command_dispatcher.py   # command request publishing
     idempotency.py          # event_id dedup
+    hermes_media_tool.py    # native Hermes media callback validation/dispatch adapter
+    media_callback_socket.py # private local transport between resident and Bridge
+    resident_context.py     # canonical identity-result to active resident, fail closed
+    demo_care_memory.py     # private synthetic Demo seed and resident partitions
     media_contract.py       # media v1.1 builder and strict boundary validation
     media_registry.py       # command/session lifecycle and replay correlation
   schemas/                  # runtime JSON schemas
@@ -362,7 +374,11 @@ Identity、video 與 care report 的欄位、topic、correlation、privacy 與 m
 - `.env.example` 未列出 `BridgeConfig` 的每個 optional care-context setting；以 `config.py` 為實作依據。
 - CLI、HTTP、MQTT、Hermes 與 Temi App failure 都可能使事件進入 degraded state；trace completion 不等同 robot action 成功，必須檢查 command result。
 - Bridge 只支援 Demo／研究照護流程，不提供醫療診斷或真實緊急通報。
-- Bridge runtime 尚未 subscribe/publish 新 identity 或 care-report topics。
+- Bridge consumes (but does not produce) the established identity result topic only when the
+  visual-routing Demo flag is enabled. It still does not implement a VLM/identity producer or
+  care-report runtime.
 - Media registry 只保存目前 Bridge process 的 correlation；Android 仍須依 contract 持久化
   command idempotency 與 restart reconciliation。Bridge restart 不還原既有 session。
-- Media producer 預設關閉，且沒有 CLI、Hermes action 或正式 remote gateway entry point。
+- Media producer and native Hermes entry are default-off. Their controlled Demo route additionally
+  needs a fresh canonical visual identity result and Android media mapping/result evidence; without
+  either, it fails closed and does not publish a media command.

@@ -1,6 +1,6 @@
 # TemiAgent Documentation Index
 
-最後審查日期：2026-07-26
+最後審查日期：2026-07-29
 
 `docs/` 保存跨模組架構、契約、操作流程、專案範圍與 reader-facing schema。模組自己的執行、設定與測試方式應留在該模組 README。
 
@@ -28,14 +28,15 @@ Runtime-owned schemas under `hermes_temi_bridge/schemas/` remain authoritative. 
 
 ## Operations
 
-> Demo operations documents below are a reference mirror from
-> `codex/demo-operations-v1`. Their `./scripts/demo` commands require that
-> branch; this current branch does not include the Demo operations runtime.
+> `DEMO_QUICK_REFERENCE.md` 與 `demo_operations_runbook.md` 是
+> `codex/demo-operations-v1` 的 reference mirror；其中 `./scripts/demo` 指令不適用於
+> 目前 branch。現行操作入口是 `DEMO_OPERATOR_GUIDE.md` 與
+> `demo_warm_start_runbook.md`。
 
 | Document | Status | Owner | Purpose |
 |---|---|---|---|
 | [safe_service_operations.md](operations/safe_service_operations.md) | Maintained policy | All service owners | Exact PID/port targeting, rollback, restore, retention and incident evidence. |
-| [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md) | Reference mirror; Demo-only | Demo operator | Traditional Chinese beginner setup, one-command deployment, Android evidence, filming and safe stop. |
+| [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md) | Maintained, Demo-only | Demo operator | Current entrypoint and capability boundary; redirects to the warm-start runbook. |
 | [DEMO_QUICK_REFERENCE.md](operations/DEMO_QUICK_REFERENCE.md) | Reference mirror; Demo-only | Demo operator | Compact command, status, evidence and recovery card. |
 | [demo_operations_runbook.md](operations/demo_operations_runbook.md) | Reference mirror; Demo-only | Demo operator | Exact-PID expert lifecycle and static/live Android gate boundaries. |
 | [temi_integration_runbook.md](operations/temi_integration_runbook.md) | Maintained | Integration | Hardware-free through real-device integration sequence. |

@@ -6,7 +6,8 @@
 相容性規則見 [canonical cross-service contract](canonical_cross_service_contract.md)；
 runtime schemas 位於 `hermes_temi_bridge/schemas/`。AI6 repository 不包含 Android
 source，本文件不代表 Android 功能已實作或通過真機驗證。
-AI6 Bridge 已提供預設關閉的 media v1.1 producer/result consumer 與 fake client；Android
+AI6 Bridge 已提供預設關閉的 media v1.1 producer/result consumer 與 root-owned resident
+Hermes Media callback；Android
 仍須自行實作 durable idempotency、player state machine 與 schema validation。Bridge 的
 process-local registry 不是 Android persistence 的替代品。
 
@@ -43,6 +44,11 @@ App 必須以 `command_id` 去重，並確認 `command_id == request_id`。只�
 `video_id` 對應 bundled/deployed media，不執行 payload 中的 URL 或 filesystem path。
 在任何 player side effect 前依序完成：schema、robot/resident/correlation、action/video
 allowlist、execution class、target session 與 state transition validation。
+
+第一個 AI6 allowlisted video ID 是固定的 `elderly_hand_exercise`。Android 維護端必須在
+App 內以固定的 bundled/deployed asset 或受控 URI mapping 將該 ID 對應到播放器來源；mapping
+不得從 MQTT payload 取得 URL、filesystem path、shell command 或 Android intent。AI6 checkout
+沒有 Android source、APK asset manifest 或 URI mapping evidence，因此不得把 mapping 視為已完成。
 
 `play_video` 必須是 `serialized_execution` 並進一般 command queue。Pause/resume/stop
 必須是 `active_playback_control`，而且只有完成上述 validation、確認 target 是目前 active

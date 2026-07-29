@@ -13,6 +13,7 @@ from .action_validator import ActionValidationError, validate_action_output
 from .care_context_builder import CareContextBuilder
 from .command_dispatcher import build_command_request, fallback_command
 from .config import BridgeConfig
+from .demo_care_memory import resident_memory_dir
 from .event_models import ASRFinalEvent, EventValidationError, PerceptionAbnormalEvent
 from .hermes_client import (
     HermesClient,
@@ -26,12 +27,15 @@ from .hermes_client import (
     parse_hermes_output,
 )
 from .idempotency import TTLProcessedEventCache
+from .hermes_media_tool import HermesMediaToolCallback
 from .image_resolver import ImageValidationError, translate_frames, validate_image_file
 from .logging_utils import EventJsonlLogger, configure_logging
 from .media_contract import MediaContractError, build_media_command_request
+from .media_callback_socket import MediaCallbackSocketServer
 from .media_registry import MediaSessionRegistry
 from .memory_store import EventContext, MemoryActionError, StructuredMemoryStore
 from .mqtt_client import TemiMqttClient
+from .resident_context import ActiveResident, ResidentContextStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -58,6 +62,7 @@ class HermesTemiBridgeService:
         memory_store: StructuredMemoryStore | None = None,
         care_context_builder: CareContextBuilder | None = None,
         media_registry: MediaSessionRegistry | None = None,
+        resident_context: ResidentContextStore | None = None,
     ):
         """Create a Bridge service with injectable clients for tests."""
         self.config = config
@@ -85,14 +90,59 @@ class HermesTemiBridgeService:
             else None
         )
         self.media_registry = media_registry or MediaSessionRegistry()
+        self.resident_context = resident_context or ResidentContextStore(
+            ttl_seconds=config.demo_resident_context_ttl_seconds,
+            minimum_confidence=config.demo_resident_visual_minimum_confidence,
+        )
+        self._media_callback_server: MediaCallbackSocketServer | None = None
+        if config.hermes_media_tool_enabled:
+            callback = HermesMediaToolCallback(
+                self,
+                self.resident_context,
+                media_v11_enabled=config.media_v11_enabled,
+                hermes_media_tool_enabled=config.hermes_media_tool_enabled,
+                visual_routing_enabled=config.demo_resident_visual_routing_enabled,
+            )
+            self._media_callback_server = MediaCallbackSocketServer(
+                config.hermes_media_callback_socket,
+                callback,
+            )
 
     def start(self) -> None:
         """Start the MQTT runtime and block forever."""
         self.mqtt_client.set_asr_handler(self.handle_asr_payload)
         self.mqtt_client.set_abnormal_handler(self.handle_abnormal_payload)
         self.mqtt_client.set_result_handler(self.handle_command_result)
-        self.mqtt_client.connect()
-        self.mqtt_client.loop_forever()
+        self.mqtt_client.set_identity_handler(self.handle_identity_payload)
+        if self._media_callback_server is not None:
+            self._media_callback_server.start()
+        try:
+            self.mqtt_client.connect()
+            self.mqtt_client.loop_forever()
+        finally:
+            if self._media_callback_server is not None:
+                self._media_callback_server.stop()
+
+    def handle_identity_payload(self, topic: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Consume the already-canonical identity result; never run inference here."""
+        robot_id = _robot_id_from_topic(topic)
+        if robot_id is None or robot_id not in self.config.robot_id_allowlist:
+            return {"status": "ignored", "reason": "topic_robot_mismatch"}
+        resident = self.resident_context.update_from_identity_result(
+            robot_id=robot_id,
+            payload=payload,
+            enabled=self.config.demo_resident_visual_routing_enabled,
+        )
+        self.event_logger.write_trace(
+            event_id=str(payload.get("event_id") or "identity_unknown"),
+            robot_id=robot_id,
+            source_type="resident.identity.result",
+            stage="active_resident_updated",
+            status="ok" if resident.is_confirmed else "unknown",
+            component="bridge",
+            payload={"active_resident": resident.as_prompt_context(), "topic": topic},
+        )
+        return {"status": "updated", "active_resident": resident.as_prompt_context()}
 
     def handle_asr_payload(self, topic: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Handle one canonical ASR event payload from MQTT."""
@@ -175,12 +225,14 @@ class HermesTemiBridgeService:
 
             stage_started = time.monotonic()
             failed_stage = "care_context_built"
+            active_resident = self._active_resident(event.robot_id)
             care_context = self._build_care_context(
                 event_id=event.event_id,
                 robot_id=event.robot_id,
                 source="asr.final",
                 asr_text=event.asr_text,
                 image_paths=[frame.path for frame in event.frames],
+                active_resident=active_resident,
             )
             self.event_logger.write_trace(
                 event_id=event.event_id,
@@ -199,6 +251,7 @@ class HermesTemiBridgeService:
                 asr_text=event.asr_text,
                 frames=translated_frames,
                 care_context=care_context,
+                active_resident=active_resident.as_prompt_context(),
             )
             stage_started = time.monotonic()
             failed_stage = "hermes_request_prepared"
@@ -258,7 +311,7 @@ class HermesTemiBridgeService:
             failed_stage = "memory_actions_completed"
             memory_results = []
             if validated_output.memory_actions:
-                memory_results = self.memory_store.execute(
+                memory_results = self._memory_store_for(active_resident).execute(
                     validated_output,
                     EventContext(
                         asr_text=event.asr_text,
@@ -510,12 +563,14 @@ class HermesTemiBridgeService:
 
             stage_started = time.monotonic()
             failed_stage = "care_context_built"
+            active_resident = self._active_resident(event.robot_id)
             care_context = self._build_care_context(
                 event_id=event.event_id,
                 robot_id=event.robot_id,
                 source="perception.abnormal",
                 asr_text="",
                 image_paths=[frame.path for frame in event.frames],
+                active_resident=active_resident,
             )
             self.event_logger.write_trace(
                 event_id=event.event_id,
@@ -534,6 +589,7 @@ class HermesTemiBridgeService:
                 asr_text="",
                 frames=translated_frames,
                 care_context=care_context,
+                active_resident=active_resident.as_prompt_context(),
                 source_type="perception.abnormal",
                 abnormal_action_name=event.action_name,
                 abnormal_reason=event.reason,
@@ -596,7 +652,7 @@ class HermesTemiBridgeService:
             failed_stage = "memory_actions_completed"
             memory_results = []
             if validated_output.memory_actions:
-                memory_results = self.memory_store.execute(
+                memory_results = self._memory_store_for(active_resident).execute(
                     validated_output,
                     EventContext(
                         asr_text="",
@@ -765,6 +821,23 @@ class HermesTemiBridgeService:
             )
 
 
+    def _active_resident(self, robot_id: str) -> ActiveResident:
+        """Resolve the current visual context without consulting user speech."""
+        return self.resident_context.resolve(
+            robot_id,
+            enabled=self.config.demo_resident_visual_routing_enabled,
+        )
+
+    def _memory_store_for(self, active_resident: ActiveResident) -> StructuredMemoryStore:
+        """Choose an isolated Demo partition or preserve the legacy default path."""
+        if not self.config.demo_care_scenario_prompt_enabled:
+            return self.memory_store
+        if not active_resident.is_confirmed:
+            raise MemoryActionError("unknown_resident_memory_forbidden")
+        return StructuredMemoryStore(
+            resident_memory_dir(self.config.demo_care_memory_root, active_resident.resident_id)
+        )
+
     def _build_care_context(
         self,
         *,
@@ -773,17 +846,46 @@ class HermesTemiBridgeService:
         source: str,
         asr_text: str | None,
         image_paths: list[str],
+        active_resident: ActiveResident | None = None,
     ) -> dict[str, Any] | None:
         """Build structured care context if the read path is enabled."""
         if self.care_context_builder is None:
             return None
-        return self.care_context_builder.build_for_event(
+        if not self.config.demo_care_scenario_prompt_enabled:
+            return self.care_context_builder.build_for_event(
+                event_id=event_id,
+                robot_id=robot_id,
+                source=source,
+                asr_text=asr_text,
+                image_paths=image_paths,
+            )
+        active = active_resident or self._active_resident(robot_id)
+        if not active.is_confirmed:
+            return {
+                "schema_version": "1.0",
+                "event": {"event_id": event_id, "robot_id": robot_id, "source": source},
+                "active_resident": active.as_prompt_context(),
+                "resident": {},
+                "active_reminders": [],
+                "daily_state": {},
+                "relevant_events": [],
+                "read_status": {"warnings": ["unknown_resident_private_memory_not_read"]},
+                "memory_policy": ["unknown resident cannot access father or mother private memory"],
+            }
+        builder = CareContextBuilder(
+            resident_memory_dir(self.config.demo_care_memory_root, active.resident_id),
+            max_events=self.config.care_context_max_events,
+            max_chars=self.config.care_context_max_chars,
+        )
+        context = builder.build_for_event(
             event_id=event_id,
             robot_id=robot_id,
             source=source,
             asr_text=asr_text,
             image_paths=image_paths,
         )
+        context["active_resident"] = active.as_prompt_context()
+        return context
 
     def publish_media_play(
         self,
