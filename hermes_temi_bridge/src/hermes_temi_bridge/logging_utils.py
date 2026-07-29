@@ -19,6 +19,8 @@ TRACE_STAGES = (
     "event_received",
     "input_validated",
     "care_context_built",
+    "abnormal_care_confirmation_created",
+    "abnormal_care_follow_up_resolved",
     "hermes_request_prepared",
     "hermes_invocation_finished",
     "hermes_output_validated",

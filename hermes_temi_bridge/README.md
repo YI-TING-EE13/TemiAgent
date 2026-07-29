@@ -26,8 +26,9 @@ Continuous vision abnormal events use the same Bridge safety boundary:
 Temi Action Viewer / Video Action Tester
   -> MQTT temi/{robot_id}/perception/abnormal
   -> HermesTemiBridge
-  -> Hermes CLI / Resident HTTP / Mock Hermes
-  -> validated temi/{robot_id}/cmd/request
+  -> deterministic care-first speak + pending confirmation
+  -> later ASR confirmation or ordinary Hermes route
+  -> validated temi/{robot_id}/cmd/request (speak only for the care flow)
 ```
 
 ## 對外關係
@@ -49,6 +50,10 @@ Temi Action Viewer / Video Action Tester
 - 驗證 ASR event schema 與 robot allowlist。
 - 驗證三張影像存在、大小合理，且位於 shared root 內。
 - 驗證 abnormal event 內的 evidence frame paths 存在、大小合理，且位於 shared root 內。
+- 對 abnormal event 建立 bounded、atomic 的 pending care confirmation；第一輪不呼叫
+  Hermes，不將 notification 或 memory action 發到 Temi。
+- 在下一個同 robot 的高信心 ASR 先處理明確同意／拒絕；模糊回答最多重問一次，過期或
+  無關 ASR 不會被誤判為同意。
 - 將 `/var/lib/temi_shared/...` 轉成 Hermes 可讀的 `/shared/temi/...` 或本機等價路徑。
 - 建立 Hermes prompt。
 - 支援 `mock`、`cli`、`http` 三種 Hermes invocation mode。
@@ -84,6 +89,12 @@ Temi Action Viewer / Video Action Tester
 - Bridge-internal memory/demo actions：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
 - 只有 robot-facing actions 會 publish 到 `temi/{robot_id}/cmd/request`；memory/demo actions 只寫入 `MEMORY_DIR`。
 - Abnormal perception events currently carry only `observation.action_name`, `observation.reason`, and `evidence.frame_paths`; they do not carry model confidence, confidence_source, or severity.
+- Viewer 可在既有 abnormal event 的 optional `notification.immediate_alert` 放入 non-secret
+  Discord delivery receipt。Bridge 只在 `transport=discord_webhook` 與 `status=delivered`
+  時承認既有通知管道已送出；target class 未經 source/config 證實，因此不宣稱已通知家人。
+- Pending confirmation state 寫入 `MEMORY_DIR/pending_care_confirmations.json`，只保存 event、
+  robot、conversation、category、timestamps、status、expiry、dedup key 與 delivery receipt；
+  不保存 raw ASR 或 hidden reasoning，最多保留 100 筆。
 - Identity、care report 與 report interaction 已有 canonical runtime schema 與 schema tests。
   Visual route 只在 `DEMO_RESIDENT_VISUAL_ROUTING_ENABLED=true` 時接受
   `vision_gender_fallback`；另有預設關閉的 Demo operator route 才接受相同 existing schema 的
@@ -249,6 +260,9 @@ uv run --extra mqtt hermes-temi-bridge --env-file .env.example
 | `TRACE_RUN_ID` | 手動指定 run id；空值時自動產生。 |
 | `TRACE_MAX_FIELD_CHARS` | excerpt 最大字元數，預設 `2000`。 |
 | `MEMORY_DIR` | structured memory root，預設 `memory`。 |
+| `ABNORMAL_CARE_CONFIRMATION_ENABLED` | 啟用 Bridge-owned abnormal care confirmation；預設 `true`。 |
+| `ABNORMAL_CARE_CONFIRMATION_TTL_SECONDS` | pending care question 的 expiry；預設 `120`。 |
+| `ABNORMAL_CARE_CONFIRMATION_MIN_ASR_CONFIDENCE` | affirmative answer 可自動接受的最小 ASR confidence；預設 `0.70`。 |
 | `MEDIA_V11_ENABLED` | 啟用 isolated media v1.1 producer/consumer；預設 `false`。 |
 | `HERMES_MEDIA_TOOL_ENABLED` | 接受 root-owned native tool callback；預設 `false`。 |
 | `HERMES_MEDIA_FAST_PATH_ENABLED` | Resident-only exact Media matcher；需兩個 Media flag，預設 `false`。 |
@@ -289,6 +303,8 @@ Fixed stage enum:
 event_received
 input_validated
 care_context_built
+abnormal_care_confirmation_created
+abnormal_care_follow_up_resolved
 hermes_request_prepared
 hermes_invocation_finished
 hermes_output_validated

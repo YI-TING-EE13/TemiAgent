@@ -148,32 +148,13 @@ temi/{robot_id}/perception/abnormal
 
 MQTT payload 只包含 JSON metadata 和 frame paths。不包含 image bytes、confidence、confidence_source 或 severity。
 
-在把 abnormal event 丟給 Bridge/Hermes 之前，viewer/tester 預設會先發布一個 canonical `speak` command 到：
+viewer 不再直接發布 `cmd/request` pre-alert。偵測到 canonical abnormal event 後，
+Bridge 會建立可過期的 pending confirmation，並發出唯一已支援的 `speak` 關懷提問。
+這避免 viewer 與 Bridge 同時發話，且不讓 perception bypass action validation。
 
-```text
-temi/{robot_id}/cmd/request
-```
-
-讓 Temi 立即說出簡短預警。預設文字依 action 類別而定：
-
-- `falls down`：`我偵測到可能有人跌倒了，已將過程發送給 Discord。`
-- `lies on the floor`：`我偵測到有人可能躺在地上，已將過程發送給 Discord。`
-- `fights`：`我偵測到可能有肢體衝突，請注意安全，已將過程發送給 Discord。`
-
-pre-alert speak 由以下參數控制：
-
-```bash
---pre-alert-speak enabled \
---pre-alert-language zh-TW
-```
-
-若只想發布 abnormal event / Discord，不想讓 Temi 先說話，可使用：
-
-```bash
---pre-alert-speak disabled
-```
-
-pre-alert speak 發送失敗不會停止 abnormal event 或 Discord 通知；event result 會記錄 `pre_alert_speak_error`。
+舊的 `--pre-alert-speak enabled` 僅會在 event result 記錄
+`ABNORMAL_PRE_ALERT_BRIDGE_OWNED`；它不會發送 MQTT command。新 Demo 預設為
+`--pre-alert-speak disabled`。
 
 為了避免同一次跌倒或躺地狀態讓 Bridge/Hermes 被連續呼叫，action viewer 有 abnormal event cooldown。`restart_action_viewer_8010.sh` 正式 Demo 預設為 180 秒，也就是第一次緊急狀態發布後，3 分鐘內不會再發布新的 abnormal event；畫面 overlay 和模型推論仍會繼續更新。若要臨時調整：
 
@@ -204,7 +185,11 @@ Discord 通知由以下參數控制：
 --discord-max-files 8
 ```
 
-MQTT 和 Discord 發布彼此獨立。若 MQTT 不可用，event result 會記錄 `mqtt_error`，並仍會嘗試 Discord 通知。若 Discord 失敗，event result 會記錄 `discord_error`，不會停止 viewer/tester。
+MQTT 和 Discord 發布彼此獨立。viewer 會先取得 Discord 的 non-secret delivery
+receipt，再將其附在既有 abnormal event 的 `notification.immediate_alert`。receipt
+只含 transport、status、failure code 與未驗證 target class；它不含 webhook、channel
+ID 或 credential。若 MQTT 不可用，event result 仍會記錄 `mqtt_error`；若 Discord
+失敗，event 仍會發布，Bridge 會將後續肯定回答處理成「無法確認送出」，而不假裝已通知。
 
 Discord sender only records a non-secret delivery code: `DISCORD_DELIVERED`,
 `DISCORD_WEBHOOK_UNSET`, `DISCORD_UNAUTHORIZED`, `DISCORD_FORBIDDEN`,
@@ -347,11 +332,9 @@ inference、prediction overlay 與 abnormal perception event production。
 
 ## Known Safety Exception
 
-`temi_action_viewer.py` 目前的 `--pre-alert-speak enabled` 會直接 publish
-`temi/{robot_id}/cmd/request`。該路線沒有經過 Bridge service，與 canonical
-「perception → Bridge/Hermes → validation → dispatch」邊界不一致。它只能視為
-既存 Demo-only 例外；新功能不得複製這個模式。正式安全化需要把 pre-alert policy 與
-dispatch 放回 Bridge 或等價 validator/policy boundary，本輪文件治理不修改 runtime。
+異常 care TTS policy 與 command dispatch 由 Bridge 擁有。viewer 只產生 perception
+event 與 best-effort Discord receipt，不能直接控制 Temi、宣稱 Discord target 是照護者，
+或將 notification action 放進 robot command。
 
 ## Configuration and Artifacts
 

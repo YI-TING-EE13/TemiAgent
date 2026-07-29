@@ -16,7 +16,9 @@ TemiAgent 是以 Temi robot 為實體載具、Hermes Agent 為認知核心的 em
 | Continuous abnormal perception | Experimental Demo | `anomaly_detection/` 可產生 abnormal event；模型結果未經醫療或安全認證。 |
 | Caregiver notification | Demo-only | Bridge action `notify_caregiver_mock` 不是真實通報。Discord webhook 是 best-effort side channel。 |
 
-已知安全缺口：action viewer 的 pre-alert 路線目前可直接發布 canonical `cmd/request`，沒有經過 Bridge service。該路線只可視為既存 Demo-only 例外，不是新整合可沿用的架構模式；詳見 [contract traceability](docs/architecture/contract_traceability.md)。
+異常 perception 的 care-first TTS 由 Bridge 擁有；action viewer 不再直接發布
+`cmd/request` pre-alert。Discord delivery 僅是 best-effort side channel，沒有 target
+semantic 或 delivery receipt 時不得宣稱已通知照護者；詳見 [contract traceability](docs/architecture/contract_traceability.md)。
 
 ## Architecture
 

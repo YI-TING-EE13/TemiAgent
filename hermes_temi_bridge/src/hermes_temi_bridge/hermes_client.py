@@ -359,30 +359,20 @@ Evidence frames:
 
 Instructions:
 - Treat this as a low-frequency abnormal perception event, not an ASR event.
-- Use the model observation and evidence frame paths to judge care risk.
-- If visual understanding is needed, use the image paths as visual input references.
-- Decide safe Temi robot actions.
-- Do not directly control hardware outside the allowed action schema.
+- The Bridge owns the consent-first abnormal-care response. Do not claim that a family member,
+  caregiver, Discord, phone, or emergency service has been contacted.
+- If this prompt is used for a degraded compatibility path, emit only one speak action that asks
+  whether the person is safe and wants help notifying a family member or caregiver.
 - Output ONLY valid JSON.
 - Do not output Markdown.
 - Do not include explanations outside JSON.
 - Do not execute shell commands directly.
 - Do not invent unavailable robot capabilities.
-- If uncertain, ask a clarification question through a speak or ask_clarification action.
+- Do not emit ask_clarification, notification, memory, navigation, turn, stop, or noop actions.
 - Include cognitive_state.home_esi_level and cognitive_state.risk_reason for every response.
-- Use memory actions when the event should be recorded or summarized; memory actions are handled by the Bridge and are not sent to Temi.
 
 Allowed action types:
 - speak
-- ask_clarification
-- turn
-- navigate
-- stop
-- noop
-- log_event
-- mark_reminder_done
-- generate_summary
-- notify_caregiver_mock
 
 Required output JSON schema:
 {{

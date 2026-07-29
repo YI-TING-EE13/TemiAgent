@@ -91,6 +91,9 @@ class BridgeConfig:
     care_context_enabled: bool = True
     care_context_max_events: int = 5
     care_context_max_chars: int = 4000
+    abnormal_care_confirmation_enabled: bool = True
+    abnormal_care_confirmation_ttl_seconds: int = 120
+    abnormal_care_confirmation_min_asr_confidence: float = 0.70
     media_v11_enabled: bool = False
     hermes_media_tool_enabled: bool = False
     demo_care_scenario_prompt_enabled: bool = False
@@ -139,6 +142,12 @@ class BridgeConfig:
             raise ValueError("DEMO_IDENTITY_REFRESH_SECONDS must be positive")
         if self.demo_identity_max_duration_seconds <= 0 or self.demo_identity_refresh_seconds > self.demo_identity_max_duration_seconds:
             raise ValueError("DEMO_IDENTITY_MAX_DURATION_SECONDS must be at least DEMO_IDENTITY_REFRESH_SECONDS")
+        if self.abnormal_care_confirmation_ttl_seconds <= 0:
+            raise ValueError("ABNORMAL_CARE_CONFIRMATION_TTL_SECONDS must be positive")
+        if not 0 <= self.abnormal_care_confirmation_min_asr_confidence <= 1:
+            raise ValueError(
+                "ABNORMAL_CARE_CONFIRMATION_MIN_ASR_CONFIDENCE must be between 0 and 1"
+            )
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> "BridgeConfig":
@@ -213,6 +222,21 @@ class BridgeConfig:
             ),
             care_context_max_chars=_get_int(
                 values, "CARE_CONTEXT_MAX_CHARS", cls.care_context_max_chars
+            ),
+            abnormal_care_confirmation_enabled=_get_bool(
+                values,
+                "ABNORMAL_CARE_CONFIRMATION_ENABLED",
+                cls.abnormal_care_confirmation_enabled,
+            ),
+            abnormal_care_confirmation_ttl_seconds=_get_int(
+                values,
+                "ABNORMAL_CARE_CONFIRMATION_TTL_SECONDS",
+                cls.abnormal_care_confirmation_ttl_seconds,
+            ),
+            abnormal_care_confirmation_min_asr_confidence=_get_float(
+                values,
+                "ABNORMAL_CARE_CONFIRMATION_MIN_ASR_CONFIDENCE",
+                cls.abnormal_care_confirmation_min_asr_confidence,
             ),
             media_v11_enabled=_get_bool(values, "MEDIA_V11_ENABLED", cls.media_v11_enabled),
             hermes_media_tool_enabled=_get_bool(

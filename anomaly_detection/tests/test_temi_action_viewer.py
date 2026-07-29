@@ -20,10 +20,8 @@ from temi_action_viewer import (
     build_discord_abnormal_message,
     build_inference_jpegs,
     build_llamacpp_payload,
-    build_pre_alert_speak_command,
     load_env_value,
     maybe_publish_abnormal_event,
-    maybe_publish_pre_alert_speak,
     notification_health,
     notify_discord_webhook,
     normalize_action_response,
@@ -400,44 +398,7 @@ class PromptParserTests(unittest.TestCase):
         self.assertFalse(abnormal_cooldown_elapsed(100.0, 200.0, 180.0))
         self.assertTrue(abnormal_cooldown_elapsed(100.0, 280.0, 180.0))
 
-    def test_pre_alert_speak_command_uses_action_specific_text(self) -> None:
-        cases = {
-            "falls down": "我偵測到可能有人跌倒了，已將過程發送給 Discord。",
-            "lies on the floor": "我偵測到有人可能躺在地上，已將過程發送給 Discord。",
-            "fights": "我偵測到可能有肢體衝突，請注意安全，已將過程發送給 Discord。",
-        }
-        for action_name, expected_text in cases.items():
-            with self.subTest(action_name=action_name):
-                command = build_pre_alert_speak_command(
-                    parse_action_response(f"Action: {action_name}\nEvidence/Reason: test"),
-                    "evt_test",
-                    "temi-01",
-                    created_at_ms=123,
-                )
-
-                self.assertEqual(command["command_id"], "cmd_prealert_evt_test_123")
-                self.assertEqual(command["source"], "temi_action_viewer_pre_alert")
-                self.assertEqual(command["actions"][0]["type"], "speak")
-                self.assertEqual(command["actions"][0]["text"], expected_text)
-                self.assertEqual(command["actions"][0]["language"], "zh-TW")
-                self.assertNotIn("image", command)
-
-    def test_pre_alert_speak_disabled_does_not_publish(self) -> None:
-        class Args:
-            pre_alert_speak = "disabled"
-            pre_alert_language = "zh-TW"
-            robot_id = "temi-01"
-            mqtt_broker = "127.0.0.1"
-            mqtt_port = 1883
-
-        parsed = parse_action_response("Action: falls down\nEvidence/Reason: test")
-        with mock.patch("temi_action_viewer.publish_pre_alert_speak") as publish:
-            result = maybe_publish_pre_alert_speak(parsed, "evt_test", Args)
-
-        self.assertIsNone(result)
-        self.assertEqual(publish.call_count, 0)
-
-    def test_abnormal_publish_continues_when_pre_alert_fails(self) -> None:
+    def test_abnormal_publish_marks_pre_alert_bridge_owned_and_carries_delivery_receipt(self) -> None:
         class Args:
             abnormal_publish = "enabled"
             shared_root = ""
@@ -455,16 +416,17 @@ class PromptParserTests(unittest.TestCase):
         frames = [make_frame(index, float(index)) for index in range(2)]
         with tempfile.TemporaryDirectory() as tmp:
             Args.shared_root = tmp
-            with mock.patch("temi_action_viewer.publish_pre_alert_speak", side_effect=RuntimeError("speak down")):
-                with mock.patch("temi_action_viewer.publish_abnormal_event_mqtt") as publish_event:
-                    with mock.patch("temi_action_viewer.maybe_notify_discord", return_value={"status_code": 204}):
-                        event = maybe_publish_abnormal_event(parsed, frames, Args)
+            with mock.patch("temi_action_viewer.publish_abnormal_event_mqtt") as publish_event:
+                with mock.patch("temi_action_viewer.maybe_notify_discord", return_value={"status_code": 204}):
+                    event = maybe_publish_abnormal_event(parsed, frames, Args)
 
         self.assertIsNotNone(event)
         assert event is not None
-        self.assertIn("pre_alert_speak_error", event)
+        self.assertEqual(event["pre_alert_speak"]["status"], "suppressed")
+        self.assertEqual(event["pre_alert_speak"]["failure_code"], "ABNORMAL_PRE_ALERT_BRIDGE_OWNED")
         self.assertEqual(event["mqtt"]["status"], "ok")
         self.assertEqual(event["discord"]["status_code"], 204)
+        self.assertEqual(event["payload"]["notification"]["immediate_alert"]["status"], "delivered")
         self.assertEqual(publish_event.call_count, 1)
 
     def test_inference_jpegs_use_pose_renderer(self) -> None:

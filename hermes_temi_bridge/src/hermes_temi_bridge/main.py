@@ -10,6 +10,18 @@ import time
 from typing import Any
 
 from .action_validator import ActionValidationError, validate_action_output
+from .care_confirmation import (
+    CARE_DECLINED,
+    CARE_EXISTING_ALERT_DELIVERED,
+    CARE_NOTIFICATION_UNAVAILABLE,
+    CARE_QUESTION,
+    CARE_REASK,
+    CARE_UNRESOLVED,
+    PendingCareConfirmationStore,
+    classify_care_confirmation_response,
+    direct_alert_delivered,
+    direct_alert_from_event,
+)
 from .care_context_builder import CareContextBuilder
 from .command_dispatcher import build_command_request, fallback_command
 from .config import BridgeConfig
@@ -48,7 +60,7 @@ FALLBACKS = {
     "missing_image": "我目前看不到剛才的畫面，請再說一次或讓我重新看一下。",
     "empty_asr_text": "我沒有聽清楚，請再說一次。",
     "invalid_hermes_json": "抱歉，我剛剛沒有理解清楚，請再說一次。",
-    "unsafe_action": "這個動作目前不支援，我可以改用其他方式協助你。",
+    "unsafe_action": "我目前無法執行這個要求，但可以用安全的方式繼續協助你。",
     "hermes_timeout": "我還在思考，但目前需要多一點時間。請稍後再試一次。",
     "generic": "抱歉，我剛剛沒有理解清楚，請再說一次。",
 }
@@ -65,6 +77,7 @@ class HermesTemiBridgeService:
         event_cache: TTLProcessedEventCache | None = None,
         event_logger: EventJsonlLogger | None = None,
         memory_store: StructuredMemoryStore | None = None,
+        care_confirmation_store: PendingCareConfirmationStore | None = None,
         care_context_builder: CareContextBuilder | None = None,
         media_registry: MediaSessionRegistry | None = None,
         resident_context: ResidentContextStore | None = None,
@@ -83,6 +96,10 @@ class HermesTemiBridgeService:
             max_field_chars=config.trace_max_field_chars,
         )
         self.memory_store = memory_store or StructuredMemoryStore(config.memory_dir)
+        self.care_confirmation_store = care_confirmation_store or PendingCareConfirmationStore(
+            config.memory_dir,
+            config.abnormal_care_confirmation_ttl_seconds,
+        )
         self.care_context_builder = (
             care_context_builder
             if care_context_builder is not None
@@ -322,6 +339,11 @@ class HermesTemiBridgeService:
                     index_summary={"reason": "duplicate_event_id"},
                 )
                 return {"status": "ignored", "reason": "duplicate_event_id"}
+
+            care_followup = self._handle_pending_care_confirmation(event)
+            if care_followup is not None:
+                self.event_cache.mark_seen(event.event_id)
+                return care_followup
 
             image_validation = []
             for frame in event.frames:
@@ -619,6 +641,209 @@ class HermesTemiBridgeService:
             )
 
     def handle_abnormal_payload(self, topic: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Start the deterministic consent-first care flow for one abnormal event."""
+        if not self.config.abnormal_care_confirmation_enabled:
+            return self._handle_abnormal_via_hermes_legacy(topic, payload)
+        total_started = time.monotonic()
+        event_id = str(payload.get("event_id") or "unknown_event")
+        robot_id = str(payload.get("robot_id") or _robot_id_from_topic(topic) or "unknown_robot")
+        source_type = "perception.abnormal"
+        self.event_logger.write_trace(
+            event_id=event_id,
+            robot_id=robot_id,
+            source_type=source_type,
+            stage="event_received",
+            status="started",
+            payload={
+                "topic": topic,
+                "raw_inbound_payload": payload,
+                "image_paths": _payload_abnormal_image_paths(payload),
+                "observation": payload.get("observation") if isinstance(payload.get("observation"), dict) else {},
+            },
+            index_status="started",
+            index_summary={"topic": topic},
+        )
+        try:
+            event = PerceptionAbnormalEvent.from_payload(payload, self.config.robot_id_allowlist)
+            if self.event_cache.seen(event.event_id):
+                self.event_logger.write_trace(
+                    event_id=event.event_id,
+                    robot_id=event.robot_id,
+                    source_type=source_type,
+                    stage="duplicate_event_ignored",
+                    record_type="duplicate_event_ignored",
+                    status="ignored",
+                    level="WARNING",
+                    payload={"reason": "duplicate_event_id"},
+                    index_status="ignored",
+                    index_summary={"reason": "duplicate_event_id"},
+                )
+                return {"status": "ignored", "reason": "duplicate_event_id"}
+
+            evidence_status = "valid"
+            evidence_error = None
+            try:
+                for frame in event.frames:
+                    validate_image_file(frame.path, self.config.max_image_size_mb)
+            except ImageValidationError as exc:
+                evidence_status = "degraded"
+                evidence_error = exc.reason
+            self.event_logger.write_trace(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                source_type=source_type,
+                stage="input_validated",
+                status=evidence_status,
+                payload={
+                    "event_id": event.event_id,
+                    "robot_id": event.robot_id,
+                    "action_name": event.action_name,
+                    "evidence_status": evidence_status,
+                    "evidence_error": evidence_error,
+                },
+            )
+            pending, created = self.care_confirmation_store.create(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                abnormal_category=event.action_name,
+                event_timestamp_ms=event.timestamp_ms,
+                immediate_alert=direct_alert_from_event(event.raw),
+            )
+            if not created:
+                return {"status": "ignored", "reason": "abnormal_care_confirmation_duplicate"}
+            command = fallback_command(event.event_id, event.robot_id, CARE_QUESTION)
+            self.mqtt_client.publish_command(event.robot_id, command)
+            self.care_confirmation_store.update(
+                event.event_id,
+                prompt_command_id=str(command["command_id"]),
+                failure_code="ABNORMAL_CARE_PROMPT_CREATED",
+            )
+            self.event_cache.mark_seen(event.event_id)
+            self.event_logger.write_trace(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                source_type=source_type,
+                stage="abnormal_care_confirmation_created",
+                status="created",
+                payload={
+                    "failure_code": "ABNORMAL_PENDING_CONFIRMATION",
+                    "abnormal_category": event.action_name,
+                    "conversation_id": pending.conversation_id,
+                    "expires_at_ms": pending.expires_at_ms,
+                    "notification_target_class": pending.notification_target_class,
+                    "immediate_alert_status": (pending.immediate_alert or {}).get("status"),
+                },
+            )
+            self.event_logger.write_trace(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                source_type=source_type,
+                stage="command_request_published",
+                status="published",
+                payload={
+                    "command_status": "published",
+                    "command_id": command["command_id"],
+                    "robot_action_types": ["speak"],
+                    "command_request": command,
+                },
+            )
+            self.event_logger.write_trace(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                source_type=source_type,
+                stage="event_completed",
+                status="completed",
+                payload={
+                    "failure_code": "ABNORMAL_CARE_PROMPT_CREATED",
+                    "command_status": "published",
+                    "robot_action_types": ["speak"],
+                    "memory_action_types": [],
+                    "total_duration_ms": _duration_ms(total_started),
+                },
+                index_status="completed",
+                index_summary={"command_status": "published", "failure_code": "ABNORMAL_PENDING_CONFIRMATION"},
+            )
+            return {"status": "success", "command_id": command["command_id"], "care_confirmation": "pending"}
+        except EventValidationError as exc:
+            return self._fail_with_fallback(
+                event_id,
+                robot_id,
+                "ABNORMAL_CARE_FALLBACK_USED",
+                CARE_QUESTION,
+                {"cause": exc.reason, **exc.details},
+                failed_stage="input_validated",
+                source_type=source_type,
+                total_started=total_started,
+                error_message=str(exc),
+            )
+        except Exception as exc:
+            LOGGER.exception("abnormal care flow failed")
+            return self._fail_with_fallback(
+                event_id,
+                robot_id,
+                "ABNORMAL_CARE_FALLBACK_USED",
+                CARE_QUESTION,
+                {"cause": type(exc).__name__},
+                failed_stage="abnormal_care_confirmation_created",
+                source_type=source_type,
+                total_started=total_started,
+                error_message=str(exc),
+            )
+
+    def _handle_pending_care_confirmation(self, event: ASRFinalEvent) -> dict[str, Any] | None:
+        """Resolve only an explicit answer before routing unrelated ASR to Hermes."""
+        if not self.config.abnormal_care_confirmation_enabled:
+            return None
+        pending = self.care_confirmation_store.active_for_robot(event.robot_id)
+        if pending is None:
+            return None
+        response = classify_care_confirmation_response(
+            event.asr_text,
+            event.asr_confidence,
+            self.config.abnormal_care_confirmation_min_asr_confidence,
+        )
+        if response == "unrelated":
+            return None
+        status = ""
+        failure_code = ""
+        if response == "accepted":
+            if direct_alert_delivered(pending):
+                status, failure_code, text = "notification_already_sent", "ABNORMAL_NOTIFICATION_ALREADY_SENT", CARE_EXISTING_ALERT_DELIVERED
+            else:
+                status, failure_code, text = "notification_unavailable", "ABNORMAL_NOTIFICATION_FAILED", CARE_NOTIFICATION_UNAVAILABLE
+        elif response == "declined":
+            status, failure_code, text = "declined", "ABNORMAL_CONFIRMATION_DECLINED", CARE_DECLINED
+        elif pending.clarification_count >= 1:
+            status, failure_code, text = "expired", "ABNORMAL_CONFIRMATION_EXPIRED", CARE_UNRESOLVED
+        else:
+            status, failure_code, text = "pending", "ABNORMAL_CONFIRMATION_AMBIGUOUS", CARE_REASK
+
+        command = fallback_command(event.event_id, event.robot_id, text)
+        self.mqtt_client.publish_command(event.robot_id, command)
+        clarification_count = pending.clarification_count + 1 if response == "ambiguous" and status == "pending" else pending.clarification_count
+        self.care_confirmation_store.update(
+            pending.event_id,
+            status=status,
+            clarification_count=clarification_count,
+            failure_code=failure_code,
+        )
+        self.event_logger.write_trace(
+            event_id=pending.event_id,
+            robot_id=event.robot_id,
+            source_type="asr.final",
+            stage="abnormal_care_follow_up_resolved",
+            status=status,
+            payload={
+                "follow_up_event_id": event.event_id,
+                "response_class": response,
+                "failure_code": failure_code,
+                "command_id": command["command_id"],
+                "notification_delivery_verified": direct_alert_delivered(pending),
+            },
+        )
+        return {"status": "success", "command_id": command["command_id"], "care_confirmation": status, "failure_code": failure_code}
+
+    def _handle_abnormal_via_hermes_legacy(self, topic: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Handle one abnormal perception event payload from MQTT."""
         total_started = time.monotonic()
         event_id = str(payload.get("event_id") or "unknown_event")
@@ -1126,8 +1351,24 @@ class HermesTemiBridgeService:
         robot_id = str(payload.get("robot_id") or _robot_id_from_topic(topic) or "unknown_robot")
         schema_version = payload.get("schema_version")
         if schema_version == "1.0":
-            self._trace_command_result(topic, payload, status=str(payload.get("status") or "received"))
-            return {"status": "recorded", "schema_version": "1.0"}
+            result_status = str(payload.get("status") or "received")
+            care_record = self.care_confirmation_store.update_by_command_result(
+                str(payload.get("command_id") or ""), result_status
+            )
+            self._trace_command_result(
+                topic,
+                payload,
+                status=result_status,
+                extra={
+                    "care_confirmation_event_id": care_record.event_id if care_record else None,
+                    "care_confirmation_status": care_record.status if care_record else None,
+                    "care_confirmation_failure_code": care_record.failure_code if care_record else None,
+                },
+            )
+            result = {"status": "recorded", "schema_version": "1.0"}
+            if care_record is not None:
+                result["care_confirmation_status"] = care_record.status
+            return result
 
         if schema_version != "1.1" or payload.get("message_type") != "video.command_result":
             return self._reject_command_result(
