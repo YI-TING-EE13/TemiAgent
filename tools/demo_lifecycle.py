@@ -658,6 +658,22 @@ def _stop_record(record: dict[str, Any], *, timeout_seconds: int) -> str:
     return "stopped_term"
 
 
+def _remove_owned_callback_socket(config: DemoConfig, record: dict[str, Any]) -> None:
+    """Remove only a Bridge socket whose recorded owner has fully stopped."""
+    if record.get("name") != "bridge" or not config.callback_socket.exists():
+        return
+    identities = [record.get("leader"), *(record.get("members") or [])]
+    if any(isinstance(identity, dict) and _identity_matches(identity) for identity in identities):
+        raise DemoError("refusing to remove callback socket while a recorded Bridge PID is alive")
+    try:
+        mode = config.callback_socket.lstat().st_mode
+    except FileNotFoundError:
+        return
+    if not stat.S_ISSOCK(mode):
+        raise DemoError("refusing to remove a non-socket callback path")
+    config.callback_socket.unlink()
+
+
 def _service_argv(config: DemoConfig, name: str) -> list[str]:
     skills = ROOT / "hermes-agent" / "skills"
     if name == "adapter":
@@ -750,6 +766,19 @@ def _state_records(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {name: record for name, record in raw.items() if isinstance(record, dict)}
 
 
+def _reconcile_archived_callback_socket(config: DemoConfig) -> None:
+    """Recover only a socket linked to an archived, fully stopped Bridge record."""
+    if not config.callback_socket.exists():
+        return
+    archived = _read_json(config.last_run_path)
+    if archived is None:
+        raise DemoError("callback socket already exists; inspect its exact owner before retrying")
+    bridge = _state_records(archived).get("bridge")
+    if bridge is None:
+        raise DemoError("callback socket has no archived Bridge ownership record")
+    _remove_owned_callback_socket(config, bridge)
+
+
 def start(config: DemoConfig) -> dict[str, Any]:
     source = _validate_source()
     ensure_runtime_layout(config)
@@ -760,6 +789,7 @@ def start(config: DemoConfig) -> dict[str, Any]:
             return {"state": health["readiness"], "reused": True, "run_id": existing.get("run_id"), "health": health}
         raise DemoError("an owned Demo run exists but is unhealthy; use restart after inspecting status")
     specs = _specs(config)
+    _reconcile_archived_callback_socket(config)
     _assert_start_ports_clear(config, specs)
     if _listener_count(config.mqtt_port) != 1:
         raise DemoError("expected exactly one existing MQTT Broker listener")
@@ -845,7 +875,11 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
         if dry_run:
             results.append({"service": name, "outcome": "would_stop_exact_owned_pid"})
             continue
-        results.append({"service": name, "outcome": _stop_record(record, timeout_seconds=30)})
+        outcome = _stop_record(record, timeout_seconds=30)
+        if name == "bridge":
+            _remove_owned_callback_socket(config, record)
+            outcome += "+callback_socket_removed"
+        results.append({"service": name, "outcome": outcome})
     if dry_run:
         return {"state": "DRY_RUN", "already_stopped": False, "results": results}
     state["status"] = "stopped"

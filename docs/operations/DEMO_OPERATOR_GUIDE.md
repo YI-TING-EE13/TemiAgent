@@ -148,5 +148,7 @@ request published、Android accepted、Android started/playing、螢幕播放。
 ```
 
 若 `doctor` 報 unknown listener、stale socket 或 PID identity mismatch，不要刪除 state、
-不要 broad kill；保留 evidence，依 [安全服務操作](safe_service_operations.md) 處理。使用
+不要 broad kill；保留 evidence，依 [安全服務操作](safe_service_operations.md) 處理。lifecycle
+只有在 recorded Bridge 的全部 exact PID 已停止、且 callback path 確實是 Unix socket 時才會刪除
+自己的 stale socket；unknown 或非-socket path 仍會 fail closed。使用
 `trace-export` 會在 external runtime root 建立 owner-only bundle、SHA-256 manifest 與 archive。

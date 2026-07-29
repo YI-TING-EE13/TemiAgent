@@ -152,7 +152,9 @@ viewer logs、Bridge traces、最近 ASR metadata、checksums 與 archive SHA-25
 
 stop 是 idempotent，只停止 lifecycle current ownership record；不停止 LM Studio、external Broker
 或 Android App。若 restart/start health gate 失敗，lifecycle 只 rollback 本次剛啟動的 exact PID。
-若 identity、socket 或 port 無法安全確認，停止擴大操作並依
+它只會在 recorded Bridge 的 exact PID 已全數停止且 callback path 是 Unix socket 時清除自己的
+stale callback socket；任何 unknown 或 non-socket path 都會保留並 fail closed。若 identity、
+socket 或 port 無法安全確認，停止擴大操作並依
 [安全服務操作](safe_service_operations.md) 保留 evidence 後調查。
 
 Demo 錄製後才處理完整 runtime/canonical worktree decoupling，包括正式 Broker ownership、

@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import stat
 import sys
+import socket
 import tempfile
 import unittest
 from unittest import mock
@@ -147,6 +148,42 @@ class DemoLifecycleRecordTests(unittest.TestCase):
         ):
             self.assertEqual(demo._stop_record(record, timeout_seconds=1), "stopped_term")
         listener_count.assert_called_with(8765)
+
+    def test_callback_socket_cleanup_requires_a_stopped_recorded_bridge(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(DemoLifecycleConfigTests().make_config(Path(temporary)))
+            demo.ensure_runtime_layout(config)
+            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            server.bind(str(config.callback_socket))
+            try:
+                with mock.patch.object(demo, "_identity_matches", return_value=False):
+                    demo._remove_owned_callback_socket(config, {"name": "bridge", "leader": {"pid": 733}})
+                self.assertFalse(config.callback_socket.exists())
+            finally:
+                server.close()
+
+    def test_callback_socket_cleanup_rejects_regular_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(DemoLifecycleConfigTests().make_config(Path(temporary)))
+            demo.ensure_runtime_layout(config)
+            config.callback_socket.write_text("not a socket", encoding="utf-8")
+            with mock.patch.object(demo, "_identity_matches", return_value=False):
+                with self.assertRaisesRegex(demo.DemoError, "non-socket"):
+                    demo._remove_owned_callback_socket(config, {"name": "bridge", "leader": {"pid": 734}})
+
+    def test_archived_bridge_record_can_reconcile_its_socket(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(DemoLifecycleConfigTests().make_config(Path(temporary)))
+            demo.ensure_runtime_layout(config)
+            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            server.bind(str(config.callback_socket))
+            try:
+                demo._atomic_json(config.last_run_path, {"services": {"bridge": {"name": "bridge", "leader": {"pid": 735}, "members": []}}})
+                with mock.patch.object(demo, "_identity_matches", return_value=False):
+                    demo._reconcile_archived_callback_socket(config)
+                self.assertFalse(config.callback_socket.exists())
+            finally:
+                server.close()
 
     def test_latest_trace_extracts_public_index_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
