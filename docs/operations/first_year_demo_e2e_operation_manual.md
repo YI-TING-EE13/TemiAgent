@@ -6,12 +6,13 @@
 
 本手冊是第一年度 Demo 的完整 E2E 操作文件，目標是讓操作者能從零或從當機狀態重新建立整套服務，並能在任一段出問題時定位原因。正式 Demo 當天的短版流程請看 `docs/operations/first_year_demo_runbook.md`；三個 Demo 情境的台詞、展示重點與備援 artifact 請看 `docs/project/first_year_demo_scenario_script.md`。
 
-本手冊分成四個層次：
+本手冊分成五個層次：
 
 1. 一鍵建立或重啟所有服務：Demo day 優先使用。
-2. 正式錄影：同時收錄 `scrcpy` 與 ADB `screenrecord` 的做法與 debug。
-3. 分服務手動啟動：當一鍵腳本失敗或需要局部重啟時使用。
-4. Debug 決策表：依照 topic、port、log 與 health endpoint 快速定位。
+2. 暖啟動：保留既有 LM Studio 與 MQTT broker，只啟動 canonical Demo services。
+3. 正式錄影：同時收錄 `scrcpy` 與 ADB `screenrecord` 的做法與 debug。
+4. 分服務手動啟動：當一鍵腳本失敗或需要局部重啟時使用。
+5. Debug 決策表：依照 topic、port、log 與 health endpoint 快速定位。
 
 所有 TemiAgent 操作預設在 container 內執行，避免 host/container owner 與權限漂移。
 
@@ -57,6 +58,8 @@ Temi App ASR + Picture Streaming
 | Demo recording root | `/TemiAgent/logs/demo_recordings` |
 
 重要限制：Overview / Hermes 主線要讓 adapter 佔用 `8080` 接收 Picture Streaming。不要同時執行 `./tools/start_temi_pc_services.sh` 與 adapter，否則 legacy backend 和 adapter 會搶同一個 WebSocket port。
+
+如果 LM Studio 與 broker 已由其他受控流程啟動，而且操作者必須保留它們，請使用 [Demo 暖啟動操作手冊](demo_warm_start_runbook.md)。暖啟動會啟動 adapter、resident Hermes、Bridge、Discord gateway 與 action viewer，但不接管既有 `1234` 或 `1883` listener，也不執行 mock ASR／TTS 驗證。
 
 ## 第一部分：一鍵建立或重啟所有服務
 

@@ -28,15 +28,23 @@ Runtime-owned schemas under `hermes_temi_bridge/schemas/` remain authoritative. 
 
 ## Operations
 
+> Demo operations documents below are a reference mirror from
+> `codex/demo-operations-v1`. Their `./scripts/demo` commands require that
+> branch; this current branch does not include the Demo operations runtime.
+
 | Document | Status | Owner | Purpose |
 |---|---|---|---|
 | [safe_service_operations.md](operations/safe_service_operations.md) | Maintained policy | All service owners | Exact PID/port targeting, rollback, restore, retention and incident evidence. |
+| [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md) | Reference mirror; Demo-only | Demo operator | Traditional Chinese beginner setup, one-command deployment, Android evidence, filming and safe stop. |
+| [DEMO_QUICK_REFERENCE.md](operations/DEMO_QUICK_REFERENCE.md) | Reference mirror; Demo-only | Demo operator | Compact command, status, evidence and recovery card. |
+| [demo_operations_runbook.md](operations/demo_operations_runbook.md) | Reference mirror; Demo-only | Demo operator | Exact-PID expert lifecycle and static/live Android gate boundaries. |
 | [temi_integration_runbook.md](operations/temi_integration_runbook.md) | Maintained | Integration | Hardware-free through real-device integration sequence. |
 | [lmstudio_headless_3gpu_hdd_manual.md](operations/lmstudio_headless_3gpu_hdd_manual.md) | Maintained, machine-dependent | LM Studio runtime | Headless model service startup, health and recovery. |
 | [lmstudio_gpu_selection.md](operations/lmstudio_gpu_selection.md) | Experimental evidence | ML runtime | GPU selection observations; not a portable default. |
 | [temi_streaming_manual.md](operations/temi_streaming_manual.md) | Maintained, environment-dependent | Temi streaming | Android/PC streaming deployment. |
 | [temi_streaming_local_runbook.md](operations/temi_streaming_local_runbook.md) | Machine-specific evidence | Temi streaming | Local ADB, MQTT and WebSocket observations. |
 | [temi_e2e_stack_validation_manual.md](operations/temi_e2e_stack_validation_manual.md) | Maintained, environment-dependent | Integration | Full-stack validation and evidence collection. |
+| [demo_warm_start_runbook.md](operations/demo_warm_start_runbook.md) | Maintained, Demo-only | Demo operator | Preserve a ready LM Studio and broker while starting the canonical Demo services. |
 | [first_year_demo_runbook.md](operations/first_year_demo_runbook.md) | Demo-only | Demo operator | Cross-module Demo startup and fallback. |
 | [first_year_demo_e2e_operation_manual.md](operations/first_year_demo_e2e_operation_manual.md) | Demo-only | Demo operator | Detailed Demo and recording procedure. |
 
