@@ -37,6 +37,7 @@ _INTENTS = {
     # 手部, not a fuzzy semantic rewrite or a general video search feature.
     "幫我播放首都運動影片": MediaIntent("play_video", VIDEO_ID),
     "幫我播放守護運動影片": MediaIntent("play_video", VIDEO_ID),
+    "播放影片": MediaIntent("play_video", VIDEO_ID),
     "我要做手部運動": MediaIntent("play_video", VIDEO_ID),
     "播放手部運動": MediaIntent("play_video", VIDEO_ID),
     "幫我放手部運動影片": MediaIntent("play_video", VIDEO_ID),
