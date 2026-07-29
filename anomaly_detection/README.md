@@ -273,6 +273,11 @@ cd /TemiAgent/anomaly_detection
 - `8765` 上的 Hermes resident server。
 - HTTP mode 的 `hermes_temi_bridge`。
 
+目前預設的 abnormal route 在 Bridge 第一輪就發出 deterministic 關懷 `speak`，不會呼叫
+Hermes 或 private Care Memory。若 operator 明確關閉這個 safety gate 而走 legacy Hermes
+compatibility route，unknown resident 的 memory isolation 拒絕仍會保留
+`unknown_resident_memory_forbidden` trace/error code，但 Temi 會改說關懷提示，不會說做不到。
+
 若只測 Discord 通知，MQTT 可以是關閉狀態；tester 會在記錄 `mqtt_error` 後繼續執行。
 
 ## 注意事項

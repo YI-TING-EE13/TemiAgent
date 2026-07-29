@@ -61,9 +61,17 @@ FALLBACKS = {
     "empty_asr_text": "我沒有聽清楚，請再說一次。",
     "invalid_hermes_json": "抱歉，我剛剛沒有理解清楚，請再說一次。",
     "unsafe_action": "我目前無法執行這個要求，但可以用安全的方式繼續協助你。",
+    "unknown_resident_memory": "我先關心您：您現在還好嗎？如果感到不舒服或需要身邊的人協助，請直接告訴我。",
     "hermes_timeout": "我還在思考，但目前需要多一點時間。請稍後再試一次。",
     "generic": "抱歉，我剛剛沒有理解清楚，請再說一次。",
 }
+
+
+def _memory_action_failure_fallback_text(reason: str) -> str:
+    """Keep private-memory refusal machine-readable while caring for the person."""
+    if reason == "unknown_resident_memory_forbidden":
+        return FALLBACKS["unknown_resident_memory"]
+    return FALLBACKS["generic"]
 
 
 class HermesTemiBridgeService:
@@ -607,7 +615,7 @@ class HermesTemiBridgeService:
                 event_id,
                 robot_id,
                 exc.reason,
-                FALLBACKS["generic"],
+                _memory_action_failure_fallback_text(exc.reason),
                 exc.details,
                 failed_stage=failed_stage,
                 source_type=source_type,
@@ -1150,7 +1158,7 @@ class HermesTemiBridgeService:
                 event_id,
                 robot_id,
                 exc.reason,
-                FALLBACKS["generic"],
+                _memory_action_failure_fallback_text(exc.reason),
                 exc.details,
                 failed_stage=failed_stage,
                 source_type=source_type,

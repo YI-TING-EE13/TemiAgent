@@ -95,6 +95,9 @@ Temi Action Viewer / Video Action Tester
 - Pending confirmation state 寫入 `MEMORY_DIR/pending_care_confirmations.json`，只保存 event、
   robot、conversation、category、timestamps、status、expiry、dedup key 與 delivery receipt；
   不保存 raw ASR 或 hidden reasoning，最多保留 100 筆。
+- 當 feature-gated private Care Memory 因 resident 為 `unknown` 而拒絕存取時，Bridge 保留
+  `unknown_resident_memory_forbidden` error code、絕不讀寫任何 resident partition，並改發一個
+  speak-only 關懷提示；它不會把拒絕說成已完成照護或通知。
 - Identity、care report 與 report interaction 已有 canonical runtime schema 與 schema tests。
   Visual route 只在 `DEMO_RESIDENT_VISUAL_ROUTING_ENABLED=true` 時接受
   `vision_gender_fallback`；另有預設關閉的 Demo operator route 才接受相同 existing schema 的
