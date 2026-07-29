@@ -219,7 +219,7 @@ class EventValidationTests(unittest.TestCase):
             self.assertEqual(second, {"status": "ignored", "reason": "duplicate_event_id"})
             self.assertEqual(len(mqtt.published), 1)
 
-    def test_abnormal_event_invokes_hermes_and_publishes_command(self):
+    def test_abnormal_event_creates_pending_care_speak_without_invoking_hermes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             bridge_root = root / "temi_shared"
@@ -232,6 +232,7 @@ class EventValidationTests(unittest.TestCase):
                 temi_shared_bridge_path=bridge_root.as_posix(),
                 temi_shared_hermes_path="/shared/temi",
                 log_dir=(root / "logs").as_posix(),
+                memory_dir=(root / "memory").as_posix(),
             )
             service = HermesTemiBridgeService(
                 config,
@@ -244,11 +245,11 @@ class EventValidationTests(unittest.TestCase):
             result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", copy.deepcopy(payload))
 
             self.assertEqual(result["status"], "success")
-            self.assertEqual(len(hermes.requests), 1)
-            self.assertEqual(hermes.requests[0].source_type, "perception.abnormal")
-            self.assertEqual(hermes.requests[0].abnormal_action_name, "fights")
-            self.assertIn("striking", hermes.requests[0].abnormal_reason)
+            self.assertEqual(hermes.requests, [])
             self.assertEqual(len(mqtt.published), 1)
+            command = mqtt.published[0][1]
+            self.assertEqual([action["type"] for action in command["actions"]], ["speak"])
+            self.assertIn("需要我幫忙通知", command["actions"][0]["text"])
 
     def test_abnormal_event_duplicate_should_be_ignored(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -263,6 +264,7 @@ class EventValidationTests(unittest.TestCase):
                     temi_shared_bridge_path=bridge_root.as_posix(),
                     temi_shared_hermes_path="/shared/temi",
                     log_dir=(root / "logs").as_posix(),
+                    memory_dir=(root / "memory").as_posix(),
                 ),
                 mqtt,
                 MockHermes(hermes_raw),
@@ -277,7 +279,7 @@ class EventValidationTests(unittest.TestCase):
             self.assertEqual(second, {"status": "ignored", "reason": "duplicate_event_id"})
             self.assertEqual(len(mqtt.published), 1)
 
-    def test_abnormal_event_missing_image_should_fail(self):
+    def test_abnormal_event_missing_image_uses_care_safe_prompt(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             bridge_root = root / "temi_shared"
@@ -289,6 +291,7 @@ class EventValidationTests(unittest.TestCase):
                     temi_shared_bridge_path=bridge_root.as_posix(),
                     temi_shared_hermes_path="/shared/temi",
                     log_dir=(root / "logs").as_posix(),
+                    memory_dir=(root / "memory").as_posix(),
                 ),
                 mqtt,
                 MockHermes("{}"),
@@ -298,8 +301,8 @@ class EventValidationTests(unittest.TestCase):
 
             result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", payload)
 
-            self.assertEqual(result["status"], "failed")
-            self.assertEqual(result["reason"], "missing_image")
+            self.assertEqual(result["status"], "success")
+            self.assertEqual([action["type"] for action in mqtt.published[0][1]["actions"]], ["speak"])
 
 
     def test_asr_event_builds_care_context_before_hermes_invocation(self):
@@ -337,7 +340,7 @@ class EventValidationTests(unittest.TestCase):
             self.assertEqual(care_context["active_reminders"][0]["reminder_id"], "rem_morning_medication")
             self.assertEqual(care_context["relevant_events"][0]["event_id"], "evt_prior_l2")
 
-    def test_abnormal_event_builds_care_context_before_hermes_invocation(self):
+    def test_abnormal_event_keeps_care_context_and_model_out_of_first_turn(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             bridge_root = root / "temi_shared"
@@ -364,8 +367,8 @@ class EventValidationTests(unittest.TestCase):
             result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", copy.deepcopy(payload))
 
             self.assertEqual(result["status"], "success")
-            self.assertEqual(hermes.requests[0].care_context["event"]["source"], "perception.abnormal")
-            self.assertEqual(hermes.requests[0].care_context["resident"]["display_name"], "王先生")
+            self.assertEqual(hermes.requests, [])
+            self.assertEqual(len(mqtt.published), 1)
 
     def test_memory_actions_are_not_published_to_mqtt_with_care_context_enabled(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -400,6 +403,69 @@ class EventValidationTests(unittest.TestCase):
             published_actions = mqtt.published[0][1]["actions"]
             self.assertEqual([action["type"] for action in published_actions], ["speak"])
             self.assertIsNotNone(hermes.requests[0].care_context)
+
+    def test_unknown_resident_memory_failure_uses_care_speak_for_asr(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bridge_root = root / "temi_shared"
+            private_memory_root = root / "private_memory"
+            payload = rewrite_frame_paths(load_fixture("asr_final_valid.json"), bridge_root)
+            create_images_for_payload(payload)
+            hermes_raw = (FIXTURES / "hermes_output_valid_memory_actions.json").read_text(encoding="utf-8")
+            mqtt = MockMqtt()
+            service = HermesTemiBridgeService(
+                BridgeConfig(
+                    temi_shared_bridge_path=bridge_root.as_posix(),
+                    temi_shared_hermes_path="/shared/temi",
+                    memory_dir=(root / "memory").as_posix(),
+                    demo_care_scenario_prompt_enabled=True,
+                    demo_care_memory_root=private_memory_root.as_posix(),
+                    log_dir=(root / "logs").as_posix(),
+                ),
+                mqtt,
+                MockHermes(hermes_raw),
+                TTLProcessedEventCache(600),
+                EventJsonlLogger(root / "logs"),
+            )
+
+            result = service.handle_asr_payload("temi/temi-01/asr/final", payload)
+
+            self.assertEqual(result["reason"], "unknown_resident_memory_forbidden")
+            self.assertEqual([action["type"] for action in mqtt.published[0][1]["actions"]], ["speak"])
+            self.assertIn("我先關心您", mqtt.published[0][1]["actions"][0]["text"])
+            self.assertFalse(private_memory_root.exists())
+
+    def test_unknown_resident_memory_failure_uses_care_speak_for_legacy_abnormal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bridge_root = root / "temi_shared"
+            private_memory_root = root / "private_memory"
+            payload = make_abnormal_payload(bridge_root)
+            hermes_raw = (FIXTURES / "hermes_output_valid_memory_actions.json").read_text(encoding="utf-8")
+            hermes_raw = hermes_raw.replace("evt_20260511_000001", payload["event_id"])
+            mqtt = MockMqtt()
+            service = HermesTemiBridgeService(
+                BridgeConfig(
+                    temi_shared_bridge_path=bridge_root.as_posix(),
+                    temi_shared_hermes_path="/shared/temi",
+                    memory_dir=(root / "memory").as_posix(),
+                    abnormal_care_confirmation_enabled=False,
+                    demo_care_scenario_prompt_enabled=True,
+                    demo_care_memory_root=private_memory_root.as_posix(),
+                    log_dir=(root / "logs").as_posix(),
+                ),
+                mqtt,
+                MockHermes(hermes_raw),
+                TTLProcessedEventCache(600),
+                EventJsonlLogger(root / "logs"),
+            )
+
+            result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", payload)
+
+            self.assertEqual(result["reason"], "unknown_resident_memory_forbidden")
+            self.assertEqual([action["type"] for action in mqtt.published[0][1]["actions"]], ["speak"])
+            self.assertIn("我先關心您", mqtt.published[0][1]["actions"][0]["text"])
+            self.assertFalse(private_memory_root.exists())
 
 
 if __name__ == "__main__":

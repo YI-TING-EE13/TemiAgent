@@ -187,7 +187,8 @@ request published、Android accepted、Android started/playing、螢幕播放。
 設定 `DEMO_ACTION_VIEWER_ENABLED=true` 才會管理 viewer。lifecycle 將 viewer 的
 `DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH`、`DEMO_ACTION_VIEWER_DISCORD_NOTIFY` 與
 `DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK` 從 private env 傳入；沒有明確人類授權時三者必須是
-`disabled`。這避免 action-viewer 的已知 Demo-only direct pre-alert gap 繞過 Bridge。
+`disabled`。即使 legacy `PRE_ALERT_SPEAK` 被設為 enabled，viewer 也只記錄
+`ABNORMAL_PRE_ALERT_BRIDGE_OWNED`，不會直接發送 command；Bridge 是異常 care TTS 的唯一 owner。
 
 When an operator explicitly authorizes abnormal MQTT publication and Discord
 notification, viewer `/health` must show `abnormal_publish_enabled=true`,

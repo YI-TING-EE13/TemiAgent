@@ -51,11 +51,6 @@ TARGET_ACTIONS = [
     "watches tv",
 ]
 ALERT_ACTIONS = {"falls down", "fights", "lies on the floor"}
-PRE_ALERT_SPEAK_TEXT = {
-    "falls down": "我偵測到可能有人跌倒了，已將過程發送給 Discord。",
-    "lies on the floor": "我偵測到有人可能躺在地上，已將過程發送給 Discord。",
-    "fights": "我偵測到可能有肢體衝突，請注意安全，已將過程發送給 Discord。",
-}
 DEFAULT_DISCORD_ENV_PATH = "/TemiAgent/anomaly_detection/.env"
 DISCORD_WEBHOOK_ENV_VAR = "DISCORD_WEBHOOK_URL"
 DISCORD_USERNAME = "HABD-Agent"
@@ -955,74 +950,6 @@ def publish_abnormal_event_mqtt(
     )
 
 
-def build_pre_alert_speak_command(
-    action: ParsedAction,
-    event_id: str,
-    robot_id: str,
-    language: str = "zh-TW",
-    created_at_ms: int | None = None,
-) -> dict[str, Any]:
-    """Build a canonical speak command for immediate abnormal pre-alerts."""
-    now_ms = created_at_ms if created_at_ms is not None else int(time.time() * 1000)
-    normalized_action = normalize_action_name(action.action_name)
-    text = PRE_ALERT_SPEAK_TEXT.get(
-        normalized_action,
-        "我偵測到可能有異常狀況，已將過程發送給 Discord。",
-    )
-    return {
-        "schema_version": "1.0",
-        "command_id": f"cmd_prealert_{event_id}_{now_ms}",
-        "event_id": event_id,
-        "robot_id": robot_id,
-        "source": "temi_action_viewer_pre_alert",
-        "created_at_ms": now_ms,
-        "actions": [
-            {
-                "action_id": "pre_alert_speak",
-                "type": "speak",
-                "text": text,
-                "language": language,
-            }
-        ],
-    }
-
-
-def publish_pre_alert_speak(
-    command: dict[str, Any],
-    broker: str,
-    port: int,
-    robot_id: str,
-) -> str:
-    """Publish one canonical pre-alert speak command and return the topic."""
-    topic = f"temi/{robot_id}/cmd/request"
-    message = json.dumps(command, ensure_ascii=False, separators=(",", ":"))
-    subprocess.run(
-        ["mosquitto_pub", "-h", broker, "-p", str(port), "-t", topic, "-m", message],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return topic
-
-
-def maybe_publish_pre_alert_speak(
-    action: ParsedAction,
-    event_id: str,
-    args: argparse.Namespace,
-) -> dict[str, Any] | None:
-    """Publish an immediate speak warning before sending the event to Hermes."""
-    if getattr(args, "pre_alert_speak", "disabled") == "disabled":
-        return None
-    command = build_pre_alert_speak_command(
-        action,
-        event_id,
-        args.robot_id,
-        getattr(args, "pre_alert_language", "zh-TW"),
-    )
-    topic = publish_pre_alert_speak(command, args.mqtt_broker, args.mqtt_port, args.robot_id)
-    return {"topic": topic, "payload": command}
-
-
 def format_publish_error(exc: Exception) -> str:
     """Return a concise publish error without echoing the full MQTT payload."""
     if isinstance(exc, subprocess.CalledProcessError):
@@ -1210,14 +1137,34 @@ def maybe_publish_abnormal_event(
     )
     topic = f"temi/{args.robot_id}/perception/abnormal"
     published_event: dict[str, Any] = {"topic": topic, "payload": event}
+    if getattr(args, "pre_alert_speak", "disabled") == "enabled":
+        # The Bridge owns the abnormal-care TTS policy and command validation.
+        # Retain the operator-visible status instead of silently dispatching a
+        # second, pre-Bridge command that can race the care question.
+        published_event["pre_alert_speak"] = {
+            "status": "suppressed",
+            "failure_code": "ABNORMAL_PRE_ALERT_BRIDGE_OWNED",
+        }
+
+    immediate_alert: dict[str, str] = {
+        "transport": "discord_webhook",
+        "status": "disabled",
+        "target_class": "unverified_direct_alert",
+    }
     try:
-        pre_alert = maybe_publish_pre_alert_speak(action, event_id, args)
-        if pre_alert is not None:
-            published_event["pre_alert_speak"] = pre_alert
-    except Exception as exc:
-        pre_alert_error = format_publish_error(exc)
-        LOGGER.warning("failed to publish pre-alert speak command: %s", pre_alert_error)
-        published_event["pre_alert_speak_error"] = pre_alert_error
+        discord = maybe_notify_discord(event, topic, args)
+        if discord is not None:
+            published_event["discord"] = discord
+            immediate_alert["status"] = "delivered"
+    except DiscordDeliveryError as exc:
+        immediate_alert.update({"status": "failed", "failure_code": exc.failure_code})
+        published_event["discord_error"] = exc.failure_code
+        LOGGER.warning("failed to send abnormal event Discord notification: %s", exc.failure_code)
+    except Exception:
+        immediate_alert.update({"status": "failed", "failure_code": "DISCORD_CONNECTION_FAILED"})
+        published_event["discord_error"] = "DISCORD_CONNECTION_FAILED"
+        LOGGER.exception("failed to send abnormal event Discord notification")
+    event["notification"] = {"immediate_alert": immediate_alert}
     try:
         publish_abnormal_event_mqtt(event, args.mqtt_broker, args.mqtt_port, topic)
         published_event["mqtt"] = {"status": "ok"}
@@ -1225,13 +1172,6 @@ def maybe_publish_abnormal_event(
         mqtt_error = format_publish_error(exc)
         LOGGER.warning("failed to publish abnormal event to MQTT: %s", mqtt_error)
         published_event["mqtt_error"] = mqtt_error
-    try:
-        discord = maybe_notify_discord(event, topic, args)
-        if discord is not None:
-            published_event["discord"] = discord
-    except Exception as exc:
-        LOGGER.exception("failed to send abnormal event Discord notification")
-        published_event["discord_error"] = str(exc)
     return published_event
 
 
@@ -1594,7 +1534,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Send one [TEST] Discord webhook message without detector, MQTT, TTS, or care-memory activity.",
     )
-    parser.add_argument("--pre-alert-speak", choices=["enabled", "disabled"], default="enabled")
+    parser.add_argument("--pre-alert-speak", choices=["enabled", "disabled"], default="disabled")
     parser.add_argument("--pre-alert-language", default="zh-TW")
     parser.add_argument("--log-level", default="INFO")
     return parser.parse_args()

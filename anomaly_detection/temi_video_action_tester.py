@@ -176,7 +176,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--discord-notify", choices=["enabled", "disabled"], default="enabled")
     parser.add_argument("--discord-env-path", default=DEFAULT_DISCORD_ENV_PATH)
     parser.add_argument("--discord-max-files", type=int, default=8)
-    parser.add_argument("--pre-alert-speak", choices=["enabled", "disabled"], default="enabled")
+    parser.add_argument("--pre-alert-speak", choices=["enabled", "disabled"], default="disabled")
     parser.add_argument("--pre-alert-language", default="zh-TW")
     parser.add_argument("--model", default="gemma-4-e4b-finetuned@q8_0")
     parser.add_argument("--gguf-model-path", default=DEFAULT_GGUF_MODEL_PATH)
