@@ -470,9 +470,18 @@ def _source_record() -> dict[str, Any]:
 
 
 def _write_pre_restart_evidence(config: DemoConfig) -> Path:
+    previous_state = _read_json(config.state_path)
+    previous_ownership = None
+    if previous_state is not None:
+        previous_ownership = {
+            "run_id": previous_state.get("run_id"),
+            "status": previous_state.get("status"),
+            "services": _state_records(previous_state),
+        }
     evidence = {
         "recorded_at": _utc_now(),
         "source": _source_record(),
+        "owned_processes_before_stop": previous_ownership,
         "ports": {str(port): _listener_identities(port) for port in (1234, 1883, 8080, 8081, 8765, 8010, 8011)},
         "broker_sessions": _broker_sessions(config),
         "resident_health": _http_json("http://127.0.0.1:8765/health"),

@@ -126,6 +126,27 @@ class DemoLifecycleConfigTests(unittest.TestCase):
 
 
 class DemoLifecycleRecordTests(unittest.TestCase):
+    def test_pre_restart_evidence_preserves_exact_owned_processes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(DemoLifecycleConfigTests().make_config(Path(temporary)))
+            demo.ensure_runtime_layout(config)
+            expected_services = {
+                "bridge": {"name": "bridge", "leader": {"pid": 741, "start_ticks": 12}, "members": [], "ports": []}
+            }
+            demo._atomic_json(
+                config.state_path,
+                {"run_id": "demo-existing", "status": "running", "services": expected_services},
+            )
+            with (
+                mock.patch.object(demo, "_source_record", return_value={"branch": demo.EXPECTED_BRANCH, "head": "test"}),
+                mock.patch.object(demo, "_listener_identities", return_value=[]),
+                mock.patch.object(demo, "_broker_sessions", return_value={"loopback_sessions": 1, "remote_sessions": 1}),
+                mock.patch.object(demo, "_http_json", return_value={"status": "ok"}),
+            ):
+                path = demo._write_pre_restart_evidence(config)
+            evidence = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(evidence["owned_processes_before_stop"], {"run_id": "demo-existing", "status": "running", "services": expected_services})
+
     def test_identity_match_rejects_changed_start_ticks(self) -> None:
         record = {"pid": 1, "start_ticks": -1, "cwd": "/", "executable": "/x", "cmdline_sha256": "bad"}
         self.assertFalse(demo._identity_matches(record))
