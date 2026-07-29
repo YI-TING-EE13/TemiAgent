@@ -110,19 +110,15 @@ ExecStart=/usr/bin/lms server start
 
 目前 TemiAgent 的 LM Studio 預設模型是 QAT 模型 `google/gemma-4-31b-qat`，並用 `--identifier google/gemma-4-31b` 保持 Hermes config 相容。啟動腳本會用 `--gpu max` 載入模型，代表盡可能 100% GPU offload；在 `lms log stream --stats --json` 中看到 `numGpuLayers: -1` 可視為全層 GPU offload 驗證。
 
+目前 Demo runtime 的 GPU policy 是固定 `0,1`。以下其他組合僅供非 Demo 的離線效能研究；`tools/start_lmstudio_3gpu.sh` 會拒絕它們，以免影響 action viewer 使用的 GPU。
+
 ### 啟動命令
 
 ```bash
 cd /TemiAgent
 
-# 單卡，最新建議預設；只讓 LM Studio 看到 GPU 0
-LMSTUDIO_VISIBLE_GPUS=0 ./tools/start_lmstudio_3gpu.sh
-
-# 雙卡，讓 LM Studio 看到 GPU 0,1
+# Demo canonical：只讓 LM Studio 看到 GPU 0,1
 LMSTUDIO_VISIBLE_GPUS=0,1 ./tools/start_lmstudio_3gpu.sh
-
-# 三卡，讓 LM Studio 看到 GPU 0,1,2
-LMSTUDIO_VISIBLE_GPUS=0,1,2 ./tools/start_lmstudio_3gpu.sh
 ```
 
 啟動後確認：

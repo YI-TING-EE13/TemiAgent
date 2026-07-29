@@ -80,7 +80,7 @@ cd /TemiAgent
 MODEL_LOAD_ID=google/gemma-4-31b \
 MODEL_IDENTIFIER=google/gemma-4-31b \
 CONTEXT_LENGTH=64000 \
-LMSTUDIO_VISIBLE_GPUS=0,1,2 \
+LMSTUDIO_VISIBLE_GPUS=0,1 \
 ./tools/validate_temi_e2e_stack.sh
 ```
 
@@ -108,7 +108,7 @@ ss -ltnp | grep -E ':(1234|1883|8080|8765|8010)'
 ```text
 google/gemma-4-31b
 context 64000
-LMSTUDIO_VISIBLE_GPUS=0,1,2
+LMSTUDIO_VISIBLE_GPUS=0,1
 ```
 
 ### 2. 現場救急快速重啟
@@ -120,7 +120,7 @@ cd /TemiAgent
 MODEL_LOAD_ID=google/gemma-4-31b \
 MODEL_IDENTIFIER=google/gemma-4-31b \
 CONTEXT_LENGTH=64000 \
-LMSTUDIO_VISIBLE_GPUS=0,1,2 \
+LMSTUDIO_VISIBLE_GPUS=0,1 \
 RUN_UNIT_TESTS=0 \
 RUN_LOCAL_E2E=0 \
 RUN_DEMO_CASES=0 \
@@ -139,7 +139,7 @@ cd /TemiAgent
 MODEL_LOAD_ID=temi/gemma-4-31b-it-qat \
 MODEL_IDENTIFIER=google/gemma-4-31b \
 CONTEXT_LENGTH=64000 \
-LMSTUDIO_VISIBLE_GPUS=0 \
+LMSTUDIO_VISIBLE_GPUS=0,1 \
 ./tools/validate_temi_e2e_stack.sh
 ```
 
@@ -338,7 +338,7 @@ ss -ltnp | grep -E ':(1234|1883|8080|8765|8010)'
 cd /TemiAgent
 LMSTUDIO_MODEL_ID=google/gemma-4-31b \
 LMSTUDIO_CONTEXT_LENGTH=64000 \
-LMSTUDIO_VISIBLE_GPUS=0,1,2 \
+LMSTUDIO_VISIBLE_GPUS=0,1 \
 ./tools/start_lmstudio_3gpu.sh
 ```
 
@@ -350,7 +350,7 @@ export LMSTUDIO_PROJECT_ROOT=/TemiAgent
 export LMSTUDIO_TARGET_DIR=/TemiAgent/.lmstudio-data
 export LMSTUDIO_MODEL_ID=${LMSTUDIO_MODEL_ID:-google/gemma-4-31b}
 export LMSTUDIO_CONTEXT_LENGTH=${LMSTUDIO_CONTEXT_LENGTH:-64000}
-export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0,1,2}
+export LMSTUDIO_VISIBLE_GPUS=${LMSTUDIO_VISIBLE_GPUS:-0,1}
 export PATH=/TemiAgent/.lmstudio-data/bin:$PATH
 hash -r
 

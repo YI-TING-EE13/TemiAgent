@@ -74,6 +74,9 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             loaded = demo.load_config(config)
             self.assertEqual(loaded.robot_id, "temi-01")
             self.assertTrue(loaded.runtime_root.is_relative_to(root))
+            self.assertEqual(loaded.context_length, 64_000)
+            self.assertEqual(loaded.lmstudio_context_length, 64_000)
+            self.assertEqual(loaded.lmstudio_visible_gpus, "0,1")
             demo.ensure_runtime_layout(loaded)
             self.assertEqual(stat.S_IMODE(loaded.runtime_root.stat().st_mode), 0o700)
             self.assertTrue((loaded.runtime_root / "state" / "ownership").is_dir())
@@ -83,6 +86,30 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             config = self.make_config(Path(temporary))
             config.chmod(0o644)
             with self.assertRaisesRegex(demo.DemoError, "0600"):
+                demo.load_config(config)
+
+    def test_context_config_rejects_drift_from_canonical_64k(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = self.make_config(Path(temporary))
+            with config.open("a", encoding="utf-8") as handle:
+                handle.write("CONTEXT_LENGTH=32000\n")
+            with self.assertRaisesRegex(demo.DemoError, "CONTEXT_LENGTH must be 64000"):
+                demo.load_config(config)
+
+    def test_lmstudio_context_must_match_canonical_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = self.make_config(Path(temporary))
+            with config.open("a", encoding="utf-8") as handle:
+                handle.write("LMSTUDIO_CONTEXT_LENGTH=32000\n")
+            with self.assertRaisesRegex(demo.DemoError, "LMSTUDIO_CONTEXT_LENGTH must match"):
+                demo.load_config(config)
+
+    def test_lmstudio_gpu_policy_allows_only_zero_and_one(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = self.make_config(Path(temporary))
+            with config.open("a", encoding="utf-8") as handle:
+                handle.write("LMSTUDIO_VISIBLE_GPUS=0,1,2\n")
+            with self.assertRaisesRegex(demo.DemoError, "LMSTUDIO_VISIBLE_GPUS must be 0,1"):
                 demo.load_config(config)
 
     def test_media_flags_are_required(self) -> None:

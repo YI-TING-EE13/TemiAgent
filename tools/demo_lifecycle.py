@@ -56,6 +56,8 @@ REPEATED_DISCOMFORT_TOOLS = (
     "confirm_repeated_headache",
     "record_repeated_blood_pressure",
 )
+CANONICAL_CONTEXT_LENGTH = 64_000
+CANONICAL_LMSTUDIO_VISIBLE_GPUS = "0,1"
 
 
 class DemoError(RuntimeError):
@@ -164,6 +166,9 @@ class DemoConfig:
     repeated_discomfort_enabled: bool
     viewer_enabled: bool
     timeout_seconds: int
+    context_length: int
+    lmstudio_context_length: int
+    lmstudio_visible_gpus: str
 
     @property
     def state_path(self) -> Path:
@@ -216,6 +221,20 @@ def load_config(raw_path: str | Path) -> DemoConfig:
     if path.stat().st_uid != os.geteuid():
         raise DemoError("private env must be owned by the lifecycle user")
     values = _read_env(path)
+    try:
+        context_length = int(values.get("CONTEXT_LENGTH", str(CANONICAL_CONTEXT_LENGTH)))
+        lmstudio_context_length = int(values.get("LMSTUDIO_CONTEXT_LENGTH", str(context_length)))
+    except ValueError as exc:
+        raise DemoError("CONTEXT_LENGTH and LMSTUDIO_CONTEXT_LENGTH must be integers") from exc
+    if context_length != CANONICAL_CONTEXT_LENGTH:
+        raise DemoError(f"CONTEXT_LENGTH must be {CANONICAL_CONTEXT_LENGTH}")
+    if lmstudio_context_length != context_length:
+        raise DemoError("LMSTUDIO_CONTEXT_LENGTH must match CONTEXT_LENGTH")
+    lmstudio_visible_gpus = values.get(
+        "LMSTUDIO_VISIBLE_GPUS", CANONICAL_LMSTUDIO_VISIBLE_GPUS
+    ).strip()
+    if lmstudio_visible_gpus != CANONICAL_LMSTUDIO_VISIBLE_GPUS:
+        raise DemoError(f"LMSTUDIO_VISIBLE_GPUS must be {CANONICAL_LMSTUDIO_VISIBLE_GPUS}")
     runtime_root = Path(_require(values, "TEMIAGENT_RUNTIME_ROOT"))
     if not runtime_root.is_absolute():
         raise DemoError("TEMIAGENT_RUNTIME_ROOT must be absolute")
@@ -318,6 +337,9 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         repeated_discomfort_enabled=repeated_discomfort_enabled,
         viewer_enabled=viewer_enabled,
         timeout_seconds=timeout_seconds,
+        context_length=context_length,
+        lmstudio_context_length=lmstudio_context_length,
+        lmstudio_visible_gpus=lmstudio_visible_gpus,
     )
 
 
@@ -1099,6 +1121,11 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
         "source": state.get("source") if state else _source_record(),
         "runtime_root": str(config.runtime_root),
         "private_env": str(config.config_path),
+        "context": {
+            "context_length": config.context_length,
+            "lmstudio_context_length": config.lmstudio_context_length,
+            "lmstudio_visible_gpus": config.lmstudio_visible_gpus,
+        },
         "flags": config.flags,
         "services": service_identity,
         "listeners": listeners,
@@ -1129,6 +1156,7 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
     check("entrypoints", lambda: "all current source entrypoints exist" if all(path.exists() for path in (ROOT / "tools" / "temi_overview_adapter.py", ROOT / "tools" / "hermes_resident_server.py", ROOT / "hermes_temi_bridge" / ".venv" / "bin" / "hermes-temi-bridge")) else "a required entrypoint is missing")
     check("mqtt_broker", lambda: "endpoint reachable with exactly one listener" if _mqtt_tcp_ready(config) and _listener_count(config.mqtt_port) == 1 else "broker endpoint unavailable or listener count is not one")
     check("lm_studio", lambda: "health endpoint reachable" if _http_json("http://127.0.0.1:1234/v1/models") is not None else "LM Studio health endpoint unavailable")
+    check("context_config", lambda: f"context={config.context_length} lmstudio_context={config.lmstudio_context_length} gpus={config.lmstudio_visible_gpus}")
     check("feature_flags", lambda: json.dumps(config.flags, sort_keys=True))
     check("nested_hermes", lambda: "clean" if not _git("status", "--short", cwd=ROOT / "hermes-agent") else "dirty")
     health = runtime_health(config)

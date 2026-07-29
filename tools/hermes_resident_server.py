@@ -342,6 +342,7 @@ class ResidentHermes:
         self._agent.suppress_status_output = True
         self._agent.stream_delta_callback = None
         self._agent.tool_gen_callback = None
+        self.context_length, self.compression_context_length = _effective_context_lengths(self._agent)
 
     def invoke(
         self,
@@ -493,6 +494,8 @@ class ResidentHermes:
             "model": self.model,
             "provider": self.provider,
             "base_url": self.base_url,
+            "context_length": getattr(self, "context_length", None),
+            "compression_context_length": getattr(self, "compression_context_length", None),
             "toolsets": self.toolsets,
             "skill_path": self.skill_paths[0].as_posix() if self.skill_paths else "",
             "skill_paths": [path.as_posix() for path in self.skill_paths],
@@ -614,6 +617,29 @@ def _env_truthy(name: str) -> bool:
 def _env_truthy_with_legacy(name: str, legacy_value: bool) -> bool:
     """Prefer an explicit flag while preserving old private Demo configs temporarily."""
     return _env_truthy(name) if name in os.environ else legacy_value
+
+
+def _effective_context_lengths(agent: Any) -> tuple[int, int]:
+    """Return the required primary and auxiliary compression context limits.
+
+    The Demo must not silently fall back to a provider metadata default: both
+    values are explicit in the private Hermes configuration and must agree.
+    """
+    compressor = getattr(agent, "context_compressor", None)
+    model_context = getattr(compressor, "context_length", None)
+    compression_context = getattr(agent, "_aux_compression_context_length_config", None)
+    try:
+        model_context = int(model_context)
+        compression_context = int(compression_context)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "Hermes config must set positive model and compression context lengths"
+        ) from exc
+    if model_context <= 0 or compression_context <= 0:
+        raise RuntimeError("Hermes config must set positive model and compression context lengths")
+    if model_context != compression_context:
+        raise RuntimeError("Hermes model and compression context lengths must match")
+    return model_context, compression_context
 
 
 def _retrieved_discomfort_text(callback: dict[str, Any]) -> str:
