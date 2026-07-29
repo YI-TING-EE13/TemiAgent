@@ -11,6 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools" / "start_lmstudio_3gpu.sh"
+E2E_VALIDATION_SCRIPT = ROOT / "tools" / "validate_temi_e2e_stack.sh"
 
 
 class LmStudioStartHelperTests(unittest.TestCase):
@@ -79,6 +80,10 @@ class LmStudioStartHelperTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertIn("requires LMSTUDIO_VISIBLE_GPUS=0,1", result.stderr)
             self.assertFalse(capture.exists())
+
+    def test_e2e_validation_helper_uses_the_same_gpu_default(self) -> None:
+        source = E2E_VALIDATION_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('LMSTUDIO_VISIBLE_GPUS="${LMSTUDIO_VISIBLE_GPUS:-0,1}"', source)
 
 
 if __name__ == "__main__":
