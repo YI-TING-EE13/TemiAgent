@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MODE="${1:---check}"
+
+if [[ "$MODE" != "--check" && "$MODE" != "--sync" ]]; then
+  echo "usage: ./scripts/bootstrap [--check|--sync]" >&2
+  exit 2
+fi
+
+cd "$ROOT"
+test "$(git rev-parse --show-toplevel)" = "$ROOT"
+test -d hermes-agent/.git
+PIN="$(git ls-tree HEAD hermes-agent | awk '{print $3}')"
+CURRENT="$(git -C hermes-agent rev-parse HEAD)"
+if [[ "$PIN" != "$CURRENT" ]]; then
+  echo "nested Hermes HEAD does not match the root gitlink" >&2
+  exit 1
+fi
+
+for command in uv mosquitto; do
+  command -v "$command" >/dev/null
+done
+test -x hermes-agent/venv/bin/python3
+test -x hermes-agent/venv/bin/hermes
+test -x anomaly_detection/.venv/bin/python
+test -x anomaly_detection/third_party/llama.cpp/build/bin/llama-server
+test -x .lmstudio-data/bin/lms
+test -f mqtt/mosquitto.conf
+test -f config/demo.env.example
+test -f config/demo_resources.json
+
+if [[ "$MODE" == "--sync" ]]; then
+  (cd hermes_temi_bridge && uv sync --frozen --extra mqtt)
+  (cd temi_backend && uv sync --frozen)
+  (cd anomaly_detection && uv sync --frozen)
+fi
+
+echo "bootstrap ${MODE#--}: PASS"

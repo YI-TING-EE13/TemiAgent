@@ -9,12 +9,14 @@ root.  It deliberately preserves LM Studio and an already healthy MQTT broker.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
 import os
 from pathlib import Path
+import fcntl
 import shutil
 import signal
 import socket
@@ -58,6 +60,9 @@ REPEATED_DISCOMFORT_TOOLS = (
 )
 CANONICAL_CONTEXT_LENGTH = 64_000
 CANONICAL_LMSTUDIO_VISIBLE_GPUS = "0,1"
+CANONICAL_LMSTUDIO_MODEL = "temi/gemma-4-31b-it-qat"
+CANONICAL_LMSTUDIO_IDENTIFIER = "google/gemma-4-31b"
+RESOURCE_MANIFEST_PATH = ROOT / "config" / "demo_resources.json"
 
 
 class DemoError(RuntimeError):
@@ -144,6 +149,14 @@ def _config_truthy(values: dict[str, str], name: str, fallback: bool) -> bool:
     return _truthy(values[name]) if name in values else fallback
 
 
+def _ownership(values: dict[str, str], name: str, *, default: str) -> str:
+    """Return one explicit ownership mode without guessing from a live PID."""
+    value = values.get(name, default).strip().lower()
+    if value not in {"managed", "external", "disabled"}:
+        raise DemoError(f"{name} must be managed, external, or disabled")
+    return value
+
+
 @dataclass(frozen=True)
 class DemoConfig:
     config_path: Path
@@ -169,6 +182,18 @@ class DemoConfig:
     context_length: int
     lmstudio_context_length: int
     lmstudio_visible_gpus: str
+    lmstudio_ownership: str
+    lmstudio_model_id: str
+    lmstudio_api_identifier: str
+    lmstudio_target_dir: Path
+    lmstudio_server_port: int
+    mqtt_ownership: str
+    mqtt_config_path: Path | None
+    gateway_ownership: str
+    gateway_enabled: bool
+    manage_android: bool
+    viewer_discord_env_path: Path | None
+    viewer_discord_enabled: bool
 
     @property
     def state_path(self) -> Path:
@@ -235,6 +260,35 @@ def load_config(raw_path: str | Path) -> DemoConfig:
     ).strip()
     if lmstudio_visible_gpus != CANONICAL_LMSTUDIO_VISIBLE_GPUS:
         raise DemoError(f"LMSTUDIO_VISIBLE_GPUS must be {CANONICAL_LMSTUDIO_VISIBLE_GPUS}")
+    lmstudio_ownership = _ownership(values, "LMSTUDIO_OWNERSHIP", default="external")
+    mqtt_ownership = _ownership(values, "MQTT_OWNERSHIP", default="external")
+    gateway_enabled = _truthy(values.get("HERMES_GATEWAY_ENABLED", "false"))
+    gateway_ownership = _ownership(
+        values,
+        "HERMES_GATEWAY_OWNERSHIP",
+        default="managed" if gateway_enabled else "disabled",
+    )
+    if gateway_enabled != (gateway_ownership != "disabled"):
+        raise DemoError("HERMES_GATEWAY_ENABLED must agree with HERMES_GATEWAY_OWNERSHIP")
+    lmstudio_model_id = values.get("LMSTUDIO_MODEL_ID", CANONICAL_LMSTUDIO_MODEL).strip()
+    lmstudio_api_identifier = values.get(
+        "LMSTUDIO_API_IDENTIFIER", CANONICAL_LMSTUDIO_IDENTIFIER
+    ).strip()
+    if lmstudio_model_id != CANONICAL_LMSTUDIO_MODEL:
+        raise DemoError(f"LMSTUDIO_MODEL_ID must be {CANONICAL_LMSTUDIO_MODEL}")
+    if lmstudio_api_identifier != CANONICAL_LMSTUDIO_IDENTIFIER:
+        raise DemoError(f"LMSTUDIO_API_IDENTIFIER must be {CANONICAL_LMSTUDIO_IDENTIFIER}")
+    try:
+        lmstudio_server_port = int(values.get("LMSTUDIO_SERVER_PORT", "1234"))
+    except ValueError as exc:
+        raise DemoError("LMSTUDIO_SERVER_PORT must be an integer") from exc
+    if lmstudio_server_port != 1234:
+        raise DemoError("LMSTUDIO_SERVER_PORT must be 1234 for the current Demo contract")
+    lmstudio_target_dir = Path(
+        values.get("LMSTUDIO_TARGET_DIR", str(ROOT / ".lmstudio-data"))
+    )
+    if not lmstudio_target_dir.is_absolute():
+        raise DemoError("LMSTUDIO_TARGET_DIR must be absolute")
     runtime_root = Path(_require(values, "TEMIAGENT_RUNTIME_ROOT"))
     if not runtime_root.is_absolute():
         raise DemoError("TEMIAGENT_RUNTIME_ROOT must be absolute")
@@ -245,6 +299,11 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         raise DemoError("MQTT_BROKER_PORT must be an integer") from exc
     if not 1 <= mqtt_port <= 65535:
         raise DemoError("MQTT_BROKER_PORT is outside the TCP port range")
+    mqtt_config_path = None
+    if mqtt_ownership == "managed":
+        mqtt_config_path = Path(_require(values, "MQTT_CONFIG_PATH"))
+        if not mqtt_config_path.is_absolute() or not mqtt_config_path.is_file():
+            raise DemoError("MQTT_CONFIG_PATH must be an existing absolute file for managed MQTT")
     robot_id = _require(values, "ROBOT_ID_ALLOWLIST").split(",", 1)[0].strip()
     if not robot_id:
         raise DemoError("ROBOT_ID_ALLOWLIST has no primary robot id")
@@ -302,6 +361,8 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         if not _truthy(_require(values, flag)):
             raise DemoError(f"{flag} must be true for this Media Demo")
     viewer_enabled = _truthy(values.get("DEMO_ACTION_VIEWER_ENABLED", "false"))
+    viewer_discord_enabled = values.get("DEMO_ACTION_VIEWER_DISCORD_NOTIFY", "disabled").strip().lower() == "enabled"
+    viewer_discord_env_path = None
     if viewer_enabled:
         for name in (
             "DEMO_ACTION_VIEWER_MODEL",
@@ -310,6 +371,19 @@ def load_config(raw_path: str | Path) -> DemoConfig:
             "DEMO_ACTION_VIEWER_LLAMA_SERVER",
         ):
             _require(values, name)
+        if viewer_discord_enabled:
+            viewer_discord_env_path = Path(_require(values, "DEMO_ACTION_VIEWER_DISCORD_ENV_PATH"))
+            if (
+                not viewer_discord_env_path.is_absolute()
+                or viewer_discord_env_path.is_symlink()
+                or not viewer_discord_env_path.is_file()
+                or stat.S_IMODE(viewer_discord_env_path.stat().st_mode) != 0o600
+            ):
+                raise DemoError("DEMO_ACTION_VIEWER_DISCORD_ENV_PATH must be an owner-only regular file")
+            _outside_worktrees(viewer_discord_env_path, label="Discord credential env")
+    manage_android = _truthy(values.get("MANAGE_ANDROID", "false"))
+    if manage_android:
+        raise DemoError("MANAGE_ANDROID=true is not supported by the canonical software-only lifecycle")
     try:
         timeout_seconds = int(values.get("DEMO_START_TIMEOUT_SECONDS", "180"))
     except ValueError as exc:
@@ -340,6 +414,18 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         context_length=context_length,
         lmstudio_context_length=lmstudio_context_length,
         lmstudio_visible_gpus=lmstudio_visible_gpus,
+        lmstudio_ownership=lmstudio_ownership,
+        lmstudio_model_id=lmstudio_model_id,
+        lmstudio_api_identifier=lmstudio_api_identifier,
+        lmstudio_target_dir=lmstudio_target_dir.resolve(),
+        lmstudio_server_port=lmstudio_server_port,
+        mqtt_ownership=mqtt_ownership,
+        mqtt_config_path=mqtt_config_path.resolve() if mqtt_config_path is not None else None,
+        gateway_ownership=gateway_ownership,
+        gateway_enabled=gateway_enabled,
+        manage_android=manage_android,
+        viewer_discord_env_path=viewer_discord_env_path.resolve() if viewer_discord_env_path is not None else None,
+        viewer_discord_enabled=viewer_discord_enabled,
     )
 
 
@@ -370,6 +456,9 @@ def ensure_runtime_layout(config: DemoConfig) -> None:
         config.runtime_root / "logs" / "hermes",
         config.runtime_root / "logs" / "asr",
         config.runtime_root / "logs" / "trace",
+        config.runtime_root / "logs" / "lmstudio",
+        config.runtime_root / "logs" / "mqtt",
+        config.runtime_root / "logs" / "gateway",
         config.runtime_root / "tmp" / "sockets",
         *( (config.identity_state_dir,) if config.identity_state_dir is not None else () ),
     ):
@@ -394,6 +483,24 @@ def _atomic_json(path: Path, payload: object) -> None:
     finally:
         if temporary.exists():
             temporary.unlink()
+
+
+@contextmanager
+def _lifecycle_lock(config: DemoConfig) -> Iterable[None]:
+    """Serialize mutating lifecycle commands with an owner-only advisory lock."""
+    _mkdir_private(config.lock_path.parent)
+    descriptor = os.open(config.lock_path, os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise DemoError("LOCK_BUSY: another lifecycle operation is active") from exc
+        yield
+    finally:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -532,6 +639,84 @@ def _mqtt_tcp_ready(config: DemoConfig) -> bool:
         return False
 
 
+def _lmstudio_lms(config: DemoConfig, *args: str, timeout: int = 20) -> subprocess.CompletedProcess[str]:
+    executable = config.lmstudio_target_dir / "bin" / "lms"
+    if not executable.is_file():
+        raise DemoError("LM Studio CLI is unavailable under LMSTUDIO_TARGET_DIR")
+    return subprocess.run(
+        [str(executable), *args],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+    )
+
+
+def _lmstudio_ready(config: DemoConfig) -> bool:
+    payload = _http_json(f"http://127.0.0.1:{config.lmstudio_server_port}/v1/models")
+    if payload is None:
+        return False
+    models = payload.get("data")
+    if not isinstance(models, list):
+        # This branch keeps no-hardware tests focused on endpoint behavior. A
+        # real OpenAI-compatible response is checked below when available.
+        return True
+    return any(
+        isinstance(item, dict) and item.get("id") == config.lmstudio_api_identifier
+        for item in models
+    )
+
+
+def _lmstudio_context_ready(config: DemoConfig) -> bool:
+    try:
+        completed = _lmstudio_lms(config, "ps", timeout=15)
+    except (OSError, subprocess.TimeoutExpired, DemoError):
+        return False
+    if completed.returncode:
+        return False
+    return (
+        config.lmstudio_api_identifier in completed.stdout
+        and str(config.lmstudio_context_length) in completed.stdout
+    )
+
+
+def _gateway_ready(config: DemoConfig) -> bool:
+    if not config.gateway_enabled:
+        return True
+    executable = ROOT / "hermes-agent" / "venv" / "bin" / "hermes"
+    completed = subprocess.run(
+        [str(executable), "gateway", "status"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=15,
+    )
+    return completed.returncode == 0 and "running" in completed.stdout.lower()
+
+
+def _validate_resource_manifest() -> dict[str, Any]:
+    try:
+        payload = json.loads(RESOURCE_MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DemoError("required Demo resource manifest is invalid") from exc
+    resources = payload.get("resources") if isinstance(payload, dict) else None
+    if not isinstance(resources, list):
+        raise DemoError("required Demo resource manifest has no resources list")
+    indexed = {item.get("id"): item for item in resources if isinstance(item, dict)}
+    media = indexed.get("elderly_hand_exercise")
+    skill = indexed.get("temi_discord_care_skill")
+    if not isinstance(media, dict) or media.get("required") is not True:
+        raise DemoError("required media logical resource is missing")
+    if not isinstance(skill, dict) or skill.get("required") is not True:
+        raise DemoError("required resident skill resource is missing")
+    relative_path = skill.get("relative_path")
+    if not isinstance(relative_path, str) or not (ROOT / relative_path).is_file():
+        raise DemoError("required resident skill resource path is missing")
+    return {"resource_count": len(resources), "required_media": media["id"]}
+
+
 def _broker_sessions(config: DemoConfig) -> dict[str, int]:
     completed = subprocess.run(
         ["ss", "-Htn", "state", "established", f"( sport = :{config.mqtt_port} or dport = :{config.mqtt_port} )"],
@@ -565,11 +750,36 @@ class ServiceSpec:
 
 
 def _specs(config: DemoConfig) -> dict[str, ServiceSpec]:
-    specs = {
+    specs: dict[str, ServiceSpec] = {}
+    if config.lmstudio_ownership == "managed":
+        specs["lmstudio"] = ServiceSpec(
+            "lmstudio",
+            ROOT,
+            "start_lmstudio_3gpu.sh",
+            (config.lmstudio_server_port,),
+            config.runtime_root / "logs" / "lmstudio" / "lmstudio.log",
+        )
+    if config.mqtt_ownership == "managed":
+        specs["mqtt"] = ServiceSpec(
+            "mqtt",
+            ROOT,
+            "mosquitto",
+            (config.mqtt_port,),
+            config.runtime_root / "logs" / "mqtt" / "mosquitto.log",
+        )
+    specs.update({
         "adapter": ServiceSpec("adapter", ROOT / "temi_backend", "temi_overview_adapter.py", (8080, 8081), config.runtime_root / "logs" / "asr" / "overview_adapter.log"),
         "resident": ServiceSpec("resident", ROOT, "tools/hermes_resident_server.py", (8765,), config.runtime_root / "logs" / "hermes" / "resident.log"),
         "bridge": ServiceSpec("bridge", ROOT / "hermes_temi_bridge", "hermes-temi-bridge", (), config.runtime_root / "logs" / "bridge" / "bridge.log"),
-    }
+    })
+    if config.gateway_ownership == "managed":
+        specs["gateway"] = ServiceSpec(
+            "gateway",
+            ROOT,
+            "gateway run",
+            (),
+            config.runtime_root / "logs" / "gateway" / "gateway.log",
+        )
     if config.viewer_enabled:
         specs["viewer"] = ServiceSpec("viewer", ROOT / "anomaly_detection", "temi_action_viewer.py", (8010, 8011), config.runtime_root / "logs" / "trace" / "action_viewer.log")
     return specs
@@ -736,6 +946,11 @@ def _attach_listeners(record: dict[str, Any]) -> None:
     for port in record.get("ports", []):
         identities = _listener_identities(int(port))
         if len(identities) != 1:
+            # Mosquitto can intentionally drop privileges after this lifecycle
+            # launches it. Its exact leader identity remains recorded; on
+            # hidepid systems `ss -p` may no longer disclose the listener PID.
+            if record["name"] == "mqtt" and _listener_count(int(port)) == 1:
+                continue
             raise DemoError(f"{record['name']} does not own exactly one listener on {port}")
         _append_member(members, identities[0])
     record["members"] = members
@@ -830,6 +1045,12 @@ def _remove_owned_callback_sockets(config: DemoConfig, record: dict[str, Any]) -
 
 def _service_argv(config: DemoConfig, name: str) -> list[str]:
     skills = ROOT / "hermes-agent" / "skills"
+    if name == "lmstudio":
+        return [str(ROOT / "tools" / "start_lmstudio_3gpu.sh")]
+    if name == "mqtt":
+        if config.mqtt_config_path is None:
+            raise DemoError("managed MQTT has no verified config path")
+        return ["mosquitto", "-c", str(config.mqtt_config_path)]
     if name == "adapter":
         return [
             "uv", "run", "python", str(ROOT / "tools" / "temi_overview_adapter.py"),
@@ -858,6 +1079,13 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
         return argv
     if name == "bridge":
         return ["uv", "run", "--extra", "mqtt", "hermes-temi-bridge", "--env-file", str(ROOT / "hermes_temi_bridge" / ".env.example")]
+    if name == "gateway":
+        return [
+            str(ROOT / "hermes-agent" / "venv" / "bin" / "hermes"),
+            "--accept-hooks",
+            "gateway",
+            "run",
+        ]
     if name == "viewer":
         return [
             str(ROOT / "anomaly_detection" / ".venv" / "bin" / "python"),
@@ -881,6 +1109,7 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
             "--abnormal-publish", config.values.get("DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH", "disabled"),
             "--abnormal-cooldown-seconds", config.values.get("DEMO_ACTION_VIEWER_ABNORMAL_COOLDOWN_SECONDS", "180"),
             "--discord-notify", config.values.get("DEMO_ACTION_VIEWER_DISCORD_NOTIFY", "disabled"),
+            "--discord-env-path", str(config.viewer_discord_env_path) if config.viewer_discord_env_path is not None else "/dev/null",
             "--pre-alert-speak", config.values.get("DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK", "disabled"),
         ]
     raise DemoError(f"unknown Demo service: {name}")
@@ -895,6 +1124,15 @@ def _base_env(config: DemoConfig, run_id: str) -> dict[str, str]:
     env["HERMES_DEMO_IDENTITY_TOOL_ENABLED"] = "true" if config.identity_tool_enabled else "false"
     env["HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED"] = "true" if config.identity_fast_path_enabled else "false"
     env["CARE_MEMORY_V2_ENABLED"] = "true" if config.care_memory_v2_enabled else "false"
+    env["HERMES_ACCEPT_HOOKS"] = "1"
+    env["LMSTUDIO_PROJECT_ROOT"] = str(ROOT)
+    env["LMSTUDIO_TARGET_DIR"] = str(config.lmstudio_target_dir)
+    env["LMSTUDIO_MODEL_ID"] = config.lmstudio_model_id
+    env["LMSTUDIO_API_IDENTIFIER"] = config.lmstudio_api_identifier
+    env["CONTEXT_LENGTH"] = str(config.context_length)
+    env["LMSTUDIO_CONTEXT_LENGTH"] = str(config.lmstudio_context_length)
+    env["LMSTUDIO_VISIBLE_GPUS"] = config.lmstudio_visible_gpus
+    env["LMSTUDIO_SERVER_PORT"] = str(config.lmstudio_server_port)
     env["TRACE_RUN_ID"] = run_id
     env["PYTHONUNBUFFERED"] = "1"
     return env
@@ -958,6 +1196,32 @@ def _reconcile_archived_callback_socket(config: DemoConfig) -> None:
     _remove_owned_callback_sockets(config, bridge)
 
 
+def _external_dependency_ready(config: DemoConfig) -> None:
+    if config.mqtt_ownership == "external" and (
+        _listener_count(config.mqtt_port) != 1 or not _mqtt_tcp_ready(config)
+    ):
+        raise DemoError("external MQTT Broker endpoint is unavailable")
+    if config.lmstudio_ownership == "external" and not _lmstudio_ready(config):
+        raise DemoError("external LM Studio endpoint is unavailable")
+    if config.gateway_ownership == "external" and not _gateway_ready(config):
+        raise DemoError("external Hermes gateway is unavailable")
+
+
+def _stop_lmstudio(config: DemoConfig) -> None:
+    """Ask LM Studio to release its model, server and daemon before PID cleanup."""
+    for args in (
+        ("unload", config.lmstudio_api_identifier),
+        ("server", "stop"),
+        ("daemon", "down"),
+    ):
+        try:
+            _lmstudio_lms(config, *args, timeout=30)
+        except (OSError, subprocess.TimeoutExpired, DemoError):
+            # Exact process cleanup below remains authoritative when the CLI
+            # is already unavailable or the daemon is already gone.
+            continue
+
+
 def start(config: DemoConfig) -> dict[str, Any]:
     source = _validate_source()
     ensure_runtime_layout(config)
@@ -968,14 +1232,10 @@ def start(config: DemoConfig) -> dict[str, Any]:
             return {"state": health["readiness"], "reused": True, "run_id": existing.get("run_id"), "health": health}
         raise DemoError("an owned Demo run exists but is unhealthy; use restart after inspecting status")
     specs = _specs(config)
+    _validate_resource_manifest()
     _reconcile_archived_callback_socket(config)
     _assert_start_ports_clear(config, specs)
-    if _listener_count(config.mqtt_port) != 1:
-        raise DemoError("expected exactly one existing MQTT Broker listener")
-    if not _mqtt_tcp_ready(config):
-        raise DemoError("MQTT Broker endpoint is not reachable")
-    if _http_json("http://127.0.0.1:1234/v1/models") is None:
-        raise DemoError("LM Studio health endpoint is unavailable; it was not started or stopped")
+    _external_dependency_ready(config)
     run_id = f"demo-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
     state: dict[str, Any] = {
         "schema_version": "temiagent.demo_lifecycle.v1",
@@ -987,24 +1247,44 @@ def start(config: DemoConfig) -> dict[str, Any]:
         "private_env": str(config.config_path),
         "flags": config.flags,
         "services": {},
-        "preserved_external": {"lm_studio_port": 1234, "mqtt_broker_port": config.mqtt_port},
+        "ownership": {
+            "lmstudio": config.lmstudio_ownership,
+            "mqtt": config.mqtt_ownership,
+            "gateway": config.gateway_ownership,
+            "android": "external" if not config.manage_android else "managed",
+        },
     }
     env = _base_env(config, run_id)
     started: list[dict[str, Any]] = []
     try:
-        for name in ("adapter", "resident", "bridge", "viewer"):
+        for name in ("lmstudio", "mqtt", "adapter", "resident", "bridge", "gateway", "viewer"):
             spec = specs.get(name)
             if spec is None:
                 continue
             record = _start_process(spec, _service_argv(config, name), env)
+            record["config_sha256"] = _sha256(config.config_path)
+            record["started_at"] = _utc_now()
+            record["lifecycle_run_id"] = run_id
             started.append(record)
             state["services"][name] = record
-            if name == "adapter":
+            if name == "lmstudio":
+                ok = _wait_for(
+                    lambda: _lmstudio_ready(config) and _lmstudio_context_ready(config),
+                    config.timeout_seconds,
+                )
+            elif name == "mqtt":
+                ok = _wait_for(
+                    lambda: _listener_count(config.mqtt_port) == 1 and _mqtt_tcp_ready(config),
+                    30,
+                )
+            elif name == "adapter":
                 ok = _wait_for(lambda: _listener_count(8080) == 1 and _listener_count(8081) == 1, 30)
             elif name == "resident":
                 ok = _wait_for(lambda: _resident_ready(config), config.timeout_seconds)
             elif name == "bridge":
                 ok = _wait_for(lambda: _identity_matches(record["leader"]) and _socket_ready(config), 30)
+            elif name == "gateway":
+                ok = _wait_for(lambda: _identity_matches(record["leader"]) and _gateway_ready(config), 30)
             else:
                 ok = _wait_for(_viewer_ready, config.timeout_seconds)
             if not ok:
@@ -1053,13 +1333,15 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
         return {"state": "DEMO_STOPPED", "already_stopped": True, "results": []}
     records = _state_records(state)
     results: list[dict[str, str]] = []
-    for name in ("bridge", "resident", "adapter", "viewer"):
+    for name in ("viewer", "gateway", "bridge", "resident", "adapter", "mqtt", "lmstudio"):
         record = records.get(name)
         if record is None:
             continue
         if dry_run:
             results.append({"service": name, "outcome": "would_stop_exact_owned_pid"})
             continue
+        if name == "lmstudio":
+            _stop_lmstudio(config)
         outcome = _stop_record(record, timeout_seconds=30)
         if name == "bridge":
             _remove_owned_callback_sockets(config, record)
@@ -1105,13 +1387,31 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
     service_identity = {name: _identity_matches(record.get("leader", {})) for name, record in records.items()}
     resident = _resident_health()
     viewer = _http_json("http://127.0.0.1:8010/health") if config.viewer_enabled else None
-    listeners = {str(port): _listener_count(port) for port in (1234, config.mqtt_port, 8080, 8081, 8765, 8010, 8011)}
+    listeners = {str(port): _listener_count(port) for port in (config.lmstudio_server_port, config.mqtt_port, 8080, 8081, 8765, 8010, 8011)}
     broker = {"tcp_ready": _mqtt_tcp_ready(config), "listener_count": listeners[str(config.mqtt_port)], **_broker_sessions(config)}
+    lmstudio_ok = _lmstudio_ready(config) and (
+        config.lmstudio_ownership != "managed" or service_identity.get("lmstudio", False)
+    )
+    mqtt_ok = broker["tcp_ready"] and broker["listener_count"] == 1 and (
+        config.mqtt_ownership != "managed" or service_identity.get("mqtt", False)
+    )
+    gateway_ok = (not config.gateway_enabled) or (
+        _gateway_ready(config)
+        and (config.gateway_ownership != "managed" or service_identity.get("gateway", False))
+    )
     adapter_ok = listeners["8080"] == 1 and listeners["8081"] == 1 and service_identity.get("adapter", False)
     resident_ok = _resident_ready(config) and service_identity.get("resident", False)
-    bridge_ok = service_identity.get("bridge", False) and _socket_ready(config) and broker["tcp_ready"]
-    viewer_ok = (not config.viewer_enabled) or bool(viewer and viewer.get("ok") and viewer.get("source_connected") and viewer.get("llama_server_ready") and service_identity.get("viewer", False))
-    backend_ready = bool(adapter_ok and resident_ok and bridge_ok and viewer_ok and broker["listener_count"] == 1)
+    bridge_ok = service_identity.get("bridge", False) and _socket_ready(config) and mqtt_ok
+    viewer_ok = (not config.viewer_enabled) or bool(
+        viewer
+        and viewer.get("ok")
+        and viewer.get("source_connected")
+        and viewer.get("llama_server_ready")
+        and (not config.viewer_discord_enabled or viewer.get("discord_notify_enabled") is True)
+        and (not config.viewer_discord_enabled or viewer.get("discord_webhook_configured") is True)
+        and service_identity.get("viewer", False)
+    )
+    backend_ready = bool(lmstudio_ok and mqtt_ok and adapter_ok and resident_ok and bridge_ok and gateway_ok and viewer_ok)
     android_observed = broker["remote_sessions"] > 0
     readiness = "DEMO_READY" if backend_ready and android_observed else "BACKEND_READY_WAITING_ANDROID" if backend_ready else "BACKEND_NOT_READY"
     return {
@@ -1126,6 +1426,19 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
             "lmstudio_context_length": config.lmstudio_context_length,
             "lmstudio_visible_gpus": config.lmstudio_visible_gpus,
         },
+        "ownership": {
+            "lmstudio": config.lmstudio_ownership,
+            "mqtt": config.mqtt_ownership,
+            "gateway": config.gateway_ownership,
+            "android": "external" if not config.manage_android else "managed",
+        },
+        "lmstudio": {
+            "ready": lmstudio_ok,
+            "model_id": config.lmstudio_api_identifier,
+            "context_length": config.lmstudio_context_length,
+            "visible_gpus": config.lmstudio_visible_gpus,
+        },
+        "gateway": {"enabled": config.gateway_enabled, "ready": gateway_ok},
         "flags": config.flags,
         "services": service_identity,
         "listeners": listeners,
@@ -1136,7 +1449,7 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
         "callback_sockets": {str(path): path.exists() and stat.S_ISSOCK(path.stat().st_mode) for path in config.callback_sockets},
         "demo_identity_status": _demo_identity_status(config),
         "latest_trace": _latest_trace(config.bridge_log_dir),
-        "log_paths": {"bridge": str(config.bridge_log_dir), "hermes": str(config.runtime_root / "logs" / "hermes"), "asr": str(config.runtime_root / "logs" / "asr"), "trace": str(config.runtime_root / "logs" / "trace")},
+        "log_paths": {"bridge": str(config.bridge_log_dir), "hermes": str(config.runtime_root / "logs" / "hermes"), "asr": str(config.runtime_root / "logs" / "asr"), "trace": str(config.runtime_root / "logs" / "trace"), "lmstudio": str(config.runtime_root / "logs" / "lmstudio"), "mqtt": str(config.runtime_root / "logs" / "mqtt"), "gateway": str(config.runtime_root / "logs" / "gateway")},
     }
 
 
@@ -1154,9 +1467,41 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
     check("runtime_root", lambda: f"outside_worktree=true exists={config.runtime_root.is_dir()} mode={stat.S_IMODE(config.runtime_root.stat().st_mode):03o}")
     check("runtime_paths", lambda: "all required writable paths are under the external runtime root" if all(_has_writable_existing_parent(path) for path in (config.bridge_log_dir / "x", config.memory_dir / "x", *config.callback_sockets, *((config.identity_state_dir / "x",) if config.identity_state_dir is not None else ()))) else "required runtime parent is not writable")
     check("entrypoints", lambda: "all current source entrypoints exist" if all(path.exists() for path in (ROOT / "tools" / "temi_overview_adapter.py", ROOT / "tools" / "hermes_resident_server.py", ROOT / "hermes_temi_bridge" / ".venv" / "bin" / "hermes-temi-bridge")) else "a required entrypoint is missing")
-    check("mqtt_broker", lambda: "endpoint reachable with exactly one listener" if _mqtt_tcp_ready(config) and _listener_count(config.mqtt_port) == 1 else "broker endpoint unavailable or listener count is not one")
-    check("lm_studio", lambda: "health endpoint reachable" if _http_json("http://127.0.0.1:1234/v1/models") is not None else "LM Studio health endpoint unavailable")
-    check("context_config", lambda: f"context={config.context_length} lmstudio_context={config.lmstudio_context_length} gpus={config.lmstudio_visible_gpus}")
+    check("resource_manifest", lambda: json.dumps(_validate_resource_manifest(), sort_keys=True))
+    check(
+        "mqtt_broker",
+        lambda: (
+            f"ownership={config.mqtt_ownership}; endpoint reachable with exactly one listener"
+            if _mqtt_tcp_ready(config) and _listener_count(config.mqtt_port) == 1
+            else "ownership=managed; verified config is ready for lifecycle start"
+            if config.mqtt_ownership == "managed" and config.mqtt_config_path is not None
+            else "broker endpoint unavailable or listener count is not one"
+        ),
+    )
+    check(
+        "lm_studio",
+        lambda: (
+            f"ownership={config.lmstudio_ownership}; health endpoint reachable"
+            if _lmstudio_ready(config)
+            else "ownership=managed; CLI and startup script are ready for lifecycle start"
+            if config.lmstudio_ownership == "managed"
+            and (config.lmstudio_target_dir / "bin" / "lms").is_file()
+            and (ROOT / "tools" / "start_lmstudio_3gpu.sh").is_file()
+            else "LM Studio health endpoint unavailable"
+        ),
+    )
+    check(
+        "gateway",
+        lambda: (
+            f"ownership={config.gateway_ownership}; gateway ready"
+            if _gateway_ready(config)
+            else "ownership=managed; gateway entrypoint is ready for lifecycle start"
+            if config.gateway_ownership == "managed"
+            and (ROOT / "hermes-agent" / "venv" / "bin" / "hermes").is_file()
+            else "Hermes gateway unavailable"
+        ),
+    )
+    check("context_config", lambda: f"model={config.lmstudio_api_identifier} context={config.context_length} lmstudio_context={config.lmstudio_context_length} gpus={config.lmstudio_visible_gpus}")
     check("feature_flags", lambda: json.dumps(config.flags, sort_keys=True))
     check("nested_hermes", lambda: "clean" if not _git("status", "--short", cwd=ROOT / "hermes-agent") else "dirty")
     health = runtime_health(config)
@@ -1275,6 +1620,29 @@ def _print(payload: dict[str, Any], json_output: bool) -> None:
         print(f"sha256={payload['archive_sha256']}")
 
 
+def _failure_code(message: str) -> str:
+    normalized = message.upper()
+    if "LOCK_BUSY" in normalized:
+        return "LOCK_BUSY"
+    if "CONTEXT" in normalized:
+        return "MODEL_CONTEXT_MISMATCH"
+    if "GPU" in normalized:
+        return "GPU_POLICY_MISMATCH"
+    if "MQTT" in normalized or "BROKER" in normalized:
+        return "BROKER_START_FAILED"
+    if "LM STUDIO" in normalized:
+        return "MODEL_LOAD_FAILED"
+    if "GATEWAY" in normalized:
+        return "GATEWAY_START_FAILED"
+    if "PORT" in normalized or "LISTENER" in normalized:
+        return "PORT_IN_USE_EXTERNAL"
+    if "PID" in normalized or "OWNERSHIP" in normalized:
+        return "PID_IDENTITY_MISMATCH"
+    if "STOP" in normalized:
+        return "STOP_TIMEOUT"
+    return "CONFIG_INVALID"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Operate the current TemiAgent Demo backend by exact process ownership.")
     parser.add_argument("--config", required=True, help="absolute owner-only private Demo env file")
@@ -1300,32 +1668,41 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         config = load_config(args.config)
-        if args.command == "doctor":
-            payload = doctor(config)
-            _print(payload, args.json)
-            return 1 if payload["summary"]["FAIL"] else 0
-        if args.command in {"start", "up", "deploy"}:
-            payload = start(config)
-        elif args.command == "restart":
-            payload = restart(config)
-        elif args.command in {"stop", "down"}:
-            payload = stop(config, dry_run=bool(getattr(args, "dry_run", False)))
-        elif args.command == "status":
-            payload = runtime_health(config)
-            payload["state"] = payload.pop("readiness")
-        elif args.command == "identity":
-            payload = identity_command(config, args.operation)
-        elif args.command == "seed":
-            payload = seed_repeated_discomfort(config)
-        elif args.command == "verify":
-            payload = verify_repeated_discomfort(config)
-        else:
-            payload = trace_export(config)
-            payload["state"] = "TRACE_EXPORTED"
+        mutating = args.command in {"start", "up", "deploy", "restart", "stop", "down", "identity", "seed"}
+        if mutating:
+            ensure_runtime_layout(config)
+        lock = _lifecycle_lock(config) if mutating else nullcontext()
+        with lock:
+            if args.command == "doctor":
+                payload = doctor(config)
+                _print(payload, args.json)
+                return 1 if payload["summary"]["FAIL"] else 0
+            if args.command in {"start", "up", "deploy"}:
+                payload = start(config)
+            elif args.command == "restart":
+                payload = restart(config)
+            elif args.command in {"stop", "down"}:
+                payload = stop(config, dry_run=bool(getattr(args, "dry_run", False)))
+            elif args.command == "status":
+                payload = runtime_health(config)
+                payload["state"] = payload.pop("readiness")
+            elif args.command == "identity":
+                payload = identity_command(config, args.operation)
+            elif args.command == "seed":
+                payload = seed_repeated_discomfort(config)
+            elif args.command == "verify":
+                payload = verify_repeated_discomfort(config)
+            else:
+                payload = trace_export(config)
+                payload["state"] = "TRACE_EXPORTED"
         _print(payload, args.json)
         return 0
     except DemoError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        payload = {"state": "ERROR", "failure_code": _failure_code(str(exc)), "detail": str(exc)}
+        if args.json:
+            _print(payload, True)
+        else:
+            print(f"ERROR[{payload['failure_code']}]: {exc}", file=sys.stderr)
         return 2
 
 

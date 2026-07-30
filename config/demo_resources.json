@@ -1,0 +1,23 @@
+{
+  "schema_version": "temiagent.demo_resources.v1",
+  "resources": [
+    {
+      "id": "elderly_hand_exercise",
+      "relative_path": null,
+      "type": "android_deployed_logical_media",
+      "required": true,
+      "sha256": null,
+      "consumer": "Hermes media tool -> Bridge media v1.1 -> Temi Android App",
+      "validation": "Bridge allowlist and fake Android media tests; real Android asset mapping remains a device-owner acceptance check."
+    },
+    {
+      "id": "temi_discord_care_skill",
+      "relative_path": "hermes-agent/skills/temi-discord-care-assistant/SKILL.md",
+      "type": "resident_skill",
+      "required": true,
+      "sha256": null,
+      "consumer": "Resident Hermes and managed Hermes gateway",
+      "validation": "Lifecycle checks the canonical resident skill path before start."
+    }
+  ]
+}
