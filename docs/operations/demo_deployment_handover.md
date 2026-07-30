@@ -55,7 +55,7 @@ Each service has an explicit ownership mode in the private config:
 
 | Service | Default formal profile | Start/stop owner | Health evidence |
 |---|---|---|---|
-| LM Studio | managed | `tools/start_lmstudio_3gpu.sh` through lifecycle | `/v1/models`, `lms ps`, model context |
+| LM Studio | managed | lifecycle-owned LM Studio supervisor → existing startup script | `/v1/models`, `lms ps`, model context and exact supervisor PID identity |
 | MQTT | managed | lifecycle-owned Mosquitto supervisor | one listener, TCP probe and revalidated exact supervisor PID identity |
 | Overview adapter | managed | lifecycle | ports 8080 and 8081 |
 | Resident Hermes | managed | lifecycle | `GET /health` |
@@ -72,6 +72,10 @@ The managed broker keeps Mosquitto's normal privilege-drop behavior. A small
 lifecycle-owned supervisor remains as the recorded root process, relays TERM
 only to its direct broker child, and waits for the listener to close. This
 preserves exact lifecycle ownership without running the broker itself as root.
+LM Studio is similarly managed by a persistent lifecycle-owned supervisor: the
+existing startup script performs its reviewed model load, then the supervisor
+remains as the exact recorded PID until shutdown. It invokes the approved `lms`
+unload/server/daemon sequence; it does not alter model, GPU or context policy.
 
 ```bash
 ./scripts/demo --config <PRIVATE_CONFIG_PATH> doctor

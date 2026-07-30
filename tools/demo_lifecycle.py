@@ -755,7 +755,7 @@ def _specs(config: DemoConfig) -> dict[str, ServiceSpec]:
         specs["lmstudio"] = ServiceSpec(
             "lmstudio",
             ROOT,
-            "start_lmstudio_3gpu.sh",
+            "managed_lmstudio_supervisor.py",
             (config.lmstudio_server_port,),
             config.runtime_root / "logs" / "lmstudio" / "lmstudio.log",
         )
@@ -1050,7 +1050,16 @@ def _remove_owned_callback_sockets(config: DemoConfig, record: dict[str, Any]) -
 def _service_argv(config: DemoConfig, name: str) -> list[str]:
     skills = ROOT / "hermes-agent" / "skills"
     if name == "lmstudio":
-        return [str(ROOT / "tools" / "start_lmstudio_3gpu.sh")]
+        return [
+            sys.executable,
+            str(ROOT / "tools" / "managed_lmstudio_supervisor.py"),
+            "--startup-script",
+            str(ROOT / "tools" / "start_lmstudio_3gpu.sh"),
+            "--target-dir",
+            str(config.lmstudio_target_dir),
+            "--identifier",
+            config.lmstudio_api_identifier,
+        ]
     if name == "mqtt":
         if config.mqtt_config_path is None:
             raise DemoError("managed MQTT has no verified config path")

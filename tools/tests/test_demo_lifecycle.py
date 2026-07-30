@@ -162,6 +162,17 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             argv = demo._service_argv(config, "mqtt")
         self.assertIn("managed_mosquitto_supervisor.py", " ".join(argv))
 
+    def test_managed_lmstudio_uses_exact_identity_supervisor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = self.make_config(root)
+            with config_path.open("a", encoding="utf-8") as handle:
+                handle.write("LMSTUDIO_OWNERSHIP=managed\n")
+            config = demo.load_config(config_path)
+            argv = demo._service_argv(config, "lmstudio")
+        self.assertIn("managed_lmstudio_supervisor.py", " ".join(argv))
+        self.assertIn(config.lmstudio_api_identifier, argv)
+
     def test_lifecycle_lock_rejects_concurrent_holder(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_config(Path(temporary)))
