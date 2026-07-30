@@ -56,7 +56,7 @@ Each service has an explicit ownership mode in the private config:
 | Service | Default formal profile | Start/stop owner | Health evidence |
 |---|---|---|---|
 | LM Studio | managed | `tools/start_lmstudio_3gpu.sh` through lifecycle | `/v1/models`, `lms ps`, model context |
-| MQTT | managed | lifecycle `mosquitto -c` | one listener and TCP probe |
+| MQTT | managed | lifecycle-owned Mosquitto supervisor | one listener, TCP probe and revalidated exact supervisor PID identity |
 | Overview adapter | managed | lifecycle | ports 8080 and 8081 |
 | Resident Hermes | managed | lifecycle | `GET /health` |
 | HermesTemiBridge | managed | lifecycle | process identity and callback sockets |
@@ -68,6 +68,10 @@ Each service has an explicit ownership mode in the private config:
 `disabled` applies only to optional services such as the gateway. The standard
 software-only profile keeps `MANAGE_ANDROID=0`; ordinary `start` never starts
 recording, hardware activity, test abnormal events, or Discord delivery.
+The managed broker keeps Mosquitto's normal privilege-drop behavior. A small
+lifecycle-owned supervisor remains as the recorded root process, relays TERM
+only to its direct broker child, and waits for the listener to close. This
+preserves exact lifecycle ownership without running the broker itself as root.
 
 ```bash
 ./scripts/demo --config <PRIVATE_CONFIG_PATH> doctor

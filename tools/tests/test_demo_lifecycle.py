@@ -151,6 +151,17 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(demo.DemoError, "MQTT_CONFIG_PATH"):
                 demo.load_config(config_path)
 
+    def test_managed_broker_uses_exact_identity_supervisor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = self.make_config(root)
+            with config_path.open("a", encoding="utf-8") as handle:
+                handle.write("MQTT_OWNERSHIP=managed\n")
+                handle.write(f"MQTT_CONFIG_PATH={ROOT / 'mqtt' / 'mosquitto.conf'}\n")
+            config = demo.load_config(config_path)
+            argv = demo._service_argv(config, "mqtt")
+        self.assertIn("managed_mosquitto_supervisor.py", " ".join(argv))
+
     def test_lifecycle_lock_rejects_concurrent_holder(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_config(Path(temporary)))

@@ -763,7 +763,7 @@ def _specs(config: DemoConfig) -> dict[str, ServiceSpec]:
         specs["mqtt"] = ServiceSpec(
             "mqtt",
             ROOT,
-            "mosquitto",
+            "managed_mosquitto_supervisor.py",
             (config.mqtt_port,),
             config.runtime_root / "logs" / "mqtt" / "mosquitto.log",
         )
@@ -946,10 +946,14 @@ def _attach_listeners(record: dict[str, Any]) -> None:
     for port in record.get("ports", []):
         identities = _listener_identities(int(port))
         if len(identities) != 1:
-            # Mosquitto can intentionally drop privileges after this lifecycle
-            # launches it. Its exact leader identity remains recorded; on
-            # hidepid systems `ss -p` may no longer disclose the listener PID.
-            if record["name"] == "mqtt" and _listener_count(int(port)) == 1:
+            # Mosquitto intentionally drops privileges. The recorded root
+            # supervisor remains the exact lifecycle owner and relays TERM to
+            # that child; do not accept an unobservable listener otherwise.
+            if (
+                record["name"] == "mqtt"
+                and _identity_matches(record["leader"])
+                and _listener_count(int(port)) == 1
+            ):
                 continue
             raise DemoError(f"{record['name']} does not own exactly one listener on {port}")
         _append_member(members, identities[0])
@@ -1050,7 +1054,12 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
     if name == "mqtt":
         if config.mqtt_config_path is None:
             raise DemoError("managed MQTT has no verified config path")
-        return ["mosquitto", "-c", str(config.mqtt_config_path)]
+        return [
+            sys.executable,
+            str(ROOT / "tools" / "managed_mosquitto_supervisor.py"),
+            "--config",
+            str(config.mqtt_config_path),
+        ]
     if name == "adapter":
         return [
             "uv", "run", "python", str(ROOT / "tools" / "temi_overview_adapter.py"),
