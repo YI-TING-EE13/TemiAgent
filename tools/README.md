@@ -18,7 +18,7 @@
 | `hermes_media_fast_path.py` | Resident-only pure exact matcher；只在 private Demo flag 開啟時將受控中文 Media phrase 送入既有 native tool。 |
 | `hermes_demo_identity_fast_path.py` / `hermes_resident_identity_tools.py` | Demo-only exact operator identity matcher and root native tool; local Unix callback only. |
 | `hermes_repeated_discomfort_fast_path.py` / `hermes_resident_repeated_discomfort_tools.py` | Father-only exact three-step synthetic-memory matcher and root native tool; local Unix callback only. |
-| `demo_lifecycle.py` / `scripts/demo` | current Demo 的 exact-PID lifecycle；private external runtime、health gate、status 與 trace export。 |
+| `demo_lifecycle.py` / `scripts/demo` | Canonical Demo lifecycle; explicit managed/external ownership, exact-PID records, health gates, status and trace export. |
 | `temi_overview_adapter.py` | ASR/camera-only adapter：接 legacy `temi/event/asr` 與 WebSocket camera frames，產生 canonical `temi/{robot_id}/asr/final` 與三張 keyframe path；不轉發 command。 |
 | `e2e_test_runner.py` | 不需硬體的本地 mock E2E smoke test。 |
 | `media_v11_fake_e2e.py` | 以 in-memory MQTT 與 fake Android 驗證 media v1.1 lifecycle、stop linkage、replay 與 trace。 |
@@ -56,13 +56,16 @@ directory。腳本不啟動 MQTT broker、Hermes、Android 或 robot，也不保
 
 `scripts/demo` 是 current branch 的唯一 lifecycle。它要求 Git worktree 外、mode `0600`
 private env；`TEMIAGENT_RUNTIME_ROOT`、Bridge `LOG_DIR`、memory、shared ASR artifact、PID,
-socket、logs 和 trace 都必須在該 external root。它會保留 LM Studio 與健康的 existing MQTT
-broker，且只停止以 recorded exact PID identity 證明 ownership 的 adapter、resident、Bridge
+socket、logs 和 trace 都必須在該 external root。每項服務使用 `managed`、`external` 或
+`disabled` ownership；managed profile 可管理 LM Studio、MQTT、adapter、resident、Bridge、
+gateway 和 viewer，而 external service 只會 health-check。stop 僅接受 recorded exact PID
+identity，並以 viewer → gateway → Bridge → resident → adapter → MQTT → LM Studio 順序執行。
 與 optional viewer。
 
 ```bash
 cd /TemiAgent
 ./scripts/demo --config <private-demo-env> doctor
+./scripts/demo --config <private-demo-env> start
 ./scripts/demo --config <private-demo-env> restart
 ./scripts/demo --config <private-demo-env> status
 ./scripts/demo --config <private-demo-env> trace-export

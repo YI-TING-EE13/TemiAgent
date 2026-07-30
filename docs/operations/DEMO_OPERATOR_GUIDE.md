@@ -2,9 +2,11 @@
 
 最後更新日期：2026-07-29
 
-狀態：Demo-only。`scripts/demo` 是目前 checkout 的唯一 backend lifecycle。它只管理
-Overview adapter、resident Hermes、HermesTemiBridge，以及 private env 明確啟用的 action
-viewer；它不停止 LM Studio、既有健康的 MQTT broker、Android App 或 Hermes gateway。
+狀態：Demo-only。`scripts/demo` 是目前 checkout 的唯一 lifecycle。private env 為每個
+service 明確宣告 `managed`、`external` 或 `disabled` ownership；`managed` 服務會由同一
+lifecycle 啟動、記錄 exact PID identity、health-check 與停止，`external` 服務只 health-check
+且永不由 lifecycle 停止。正式 software-only profile 可管理 LM Studio、Mosquitto、Overview
+adapter、resident Hermes、Bridge、Hermes gateway 與 viewer；Android 預設 external。
 
 所有操作必須在指定 container 的 `/TemiAgent` 執行：
 
@@ -16,7 +18,12 @@ cd /TemiAgent
 ## 唯一操作指令
 
 `<private-demo-env>` 必須是 Git worktree 外、owner-only（mode `0600`）的 private env。它不
-能是 `hermes_temi_bridge/.env.example` 或其他 tracked env。
+能是 `hermes_temi_bridge/.env.example` 或其他 tracked env。從
+[`config/demo.env.example`](../../config/demo.env.example) 建立檔案，並在第一次操作前執行：
+
+```bash
+./scripts/bootstrap --check
+```
 
 ```bash
 ./scripts/demo --config <private-demo-env> doctor
@@ -200,6 +207,10 @@ entry bypasses detector, MQTT, TTS, Bridge, and care memory but uses the same
 production webhook sender; it requires a configured private webhook and explicit
 authorization for this operation.
 
+正常停止順序為 viewer → gateway → Bridge → resident → adapter → MQTT → LM Studio。每一項
+只接受 lifecycle state 裡同時匹配 PID、start time、cwd、executable 與 command digest 的
+record；stale 或不明 PID 會 fail closed，不會以 name-based kill 處理。
+
 結束 Demo 的唯一停止指令是：
 
 ```bash
@@ -211,3 +222,8 @@ authorization for this operation.
 只有在 recorded Bridge 的全部 exact PID 已停止、且 callback path 確實是 Unix socket 時才會刪除
 自己的 stale socket；unknown 或非-socket path 仍會 fail closed。使用
 `trace-export` 會在 external runtime root 建立 owner-only bundle、SHA-256 manifest 與 archive。
+
+`MANAGE_ANDROID=0` 是目前 canonical profile 的預設。只有 Android owner 提供正式 App
+lifecycle contract 與明確授權後，才可把 Android 納入 managed profile；一般 `start` 不會啟動
+錄影、TTS、測試 alert 或任何 abnormal event。Discord gateway 可以連線，但本 lifecycle 不會
+發布 Discord 測試或照護通知。

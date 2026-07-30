@@ -104,8 +104,29 @@ Hardware, GPU, Discord and live-stream acceptance require their documented exter
 
 ## Operations
 
+The canonical Demo entry point is `./scripts/demo`. Create an owner-only
+private env from [config/demo.env.example](config/demo.env.example), keep it
+outside every Git worktree, and run the same lifecycle for start, health, and
+stop:
+
+```bash
+cd /TemiAgent
+./scripts/demo --config <PRIVATE_CONFIG_PATH> doctor
+./scripts/demo --config <PRIVATE_CONFIG_PATH> start
+./scripts/demo --config <PRIVATE_CONFIG_PATH> status
+./scripts/demo --config <PRIVATE_CONFIG_PATH> stop
+```
+
+`start` and `stop` manage only services whose private config sets
+`<SERVICE>_OWNERSHIP=managed`; external ownership is health-checked but never
+stopped. The checked-in [resource manifest](config/demo_resources.json) lists
+the logical media and skill assets. `./scripts/bootstrap --check` verifies the
+local checkout and nested Hermes pin without starting services or creating
+credentials.
+
 - Cross-module startup, health checks and debugging: [Temi integration runbook](docs/operations/temi_integration_runbook.md)
 - Canonical current Demo lifecycle and real-device Media checks: [Demo operator guide](docs/operations/DEMO_OPERATOR_GUIDE.md)
+- Deployment, configuration, ownership and handover: [Demo deployment handover](docs/operations/demo_deployment_handover.md)
 - LM Studio headless operation: [LM Studio runbook](docs/operations/lmstudio_headless_3gpu_hdd_manual.md)
 - Safe service targeting, rollback and incident evidence: [Safe service operations](docs/operations/safe_service_operations.md)
 - First-year Demo execution: [Demo runbook](docs/operations/first_year_demo_runbook.md)

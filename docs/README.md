@@ -37,6 +37,7 @@ Runtime-owned schemas under `hermes_temi_bridge/schemas/` remain authoritative. 
 |---|---|---|---|
 | [safe_service_operations.md](operations/safe_service_operations.md) | Maintained policy | All service owners | Exact PID/port targeting, rollback, restore, retention and incident evidence. |
 | [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md) | Maintained, Demo-only | Demo operator | `scripts/demo` canonical lifecycle, Media capability boundary and live observers. |
+| [demo_deployment_handover.md](operations/demo_deployment_handover.md) | Maintained, Demo-only | Demo operator | Bootstrap, private configuration, managed/external ownership, resource manifest and handover limits. |
 | [DEMO_QUICK_REFERENCE.md](operations/DEMO_QUICK_REFERENCE.md) | Reference mirror; Demo-only | Demo operator | Compact command, status, evidence and recovery card. |
 | [demo_operations_runbook.md](operations/demo_operations_runbook.md) | Reference mirror; Demo-only | Demo operator | Exact-PID expert lifecycle and static/live Android gate boundaries. |
 | [temi_integration_runbook.md](operations/temi_integration_runbook.md) | Maintained | Integration | Hardware-free through real-device integration sequence. |
