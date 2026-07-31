@@ -132,6 +132,24 @@ def _wait_trace_contains(path: Path, needle: str, *, timeout: float = 8) -> None
     raise ScenarioFailure(f"Bridge trace did not record {needle}")
 
 
+def _wait_command_result_trace(path: Path, command_id: str, *, timeout: float = 8) -> None:
+    """Wait until Bridge, rather than only the observer, has consumed a result."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.is_file():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                payload = record.get("payload") if isinstance(record, dict) else None
+                result = payload.get("command_result") if isinstance(payload, dict) else None
+                if record.get("stage") == "command_result_received" and isinstance(result, dict) and result.get("command_id") == command_id:
+                    return
+        time.sleep(0.05)
+    raise ScenarioFailure(f"Bridge did not consume command result {command_id}")
+
+
 def _post_mock_discord(config: demo.DemoConfig) -> None:
     if config.mock_discord_url is None:
         raise ScenarioFailure("mock Discord endpoint is not configured")
@@ -168,7 +186,9 @@ def _media(config: demo.DemoConfig, capture: Capture, event_id: str) -> None:
         if response.get("status") != "published":
             raise ScenarioFailure(f"media callback rejected {action}: {response}")
         command_id = response.get("command_id")
-        capture.wait_for(lambda topic, item, command_id=command_id: topic.endswith("/cmd/result") and item.get("command_id") == command_id)
+        expected_status = "started" if action == "play_video" else "succeeded"
+        capture.wait_for(lambda topic, item, command_id=command_id, expected_status=expected_status: topic.endswith("/cmd/result") and item.get("command_id") == command_id and item.get("status") == expected_status)
+        _wait_command_result_trace(config.bridge_log_dir / f"{event_id}.jsonl", str(command_id))
 
 
 def _verify_discord_matrix(config: demo.DemoConfig, work_dir: Path) -> dict[str, Any]:
