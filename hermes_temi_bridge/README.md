@@ -1,6 +1,6 @@
 # HermesTemiBridge 模組 README
 
-最後更新日期：2026-07-26
+最後更新日期：2026-07-31
 
 ## 本文件維護規則
 
@@ -245,6 +245,11 @@ uv run --extra mqtt hermes-temi-bridge --env-file .env.example
 ```
 
 ## 重要環境變數
+
+The complete non-secret private Demo profile, ownership modes and feature-gate
+relationships are documented in the [Demo configuration reference](../docs/operations/demo_configuration_reference.md).
+This table describes Bridge-level inputs; runtime source and `BridgeConfig`
+remain authoritative.
 
 | Variable | Purpose |
 |---|---|

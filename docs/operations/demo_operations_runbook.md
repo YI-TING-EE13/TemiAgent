@@ -1,9 +1,11 @@
 # AI6 Demo Operations Runbook
 
-Status: maintained, Demo-only backend lifecycle. This compact runbook preserves the
-expert command sequence; the authoritative newcomer procedure is the
-[Demo 新手操作手冊](DEMO_OPERATOR_GUIDE.md), with a
-[quick reference](DEMO_QUICK_REFERENCE.md).
+Status: retained expert reference, Demo-only. This compact runbook preserves
+historical expert terminology and Android-evidence background. The authoritative
+current procedure is the [Demo 新手操作手冊](DEMO_OPERATOR_GUIDE.md), with the
+[configuration reference](demo_configuration_reference.md) and
+[quick reference](DEMO_QUICK_REFERENCE.md). Do not use this document as a
+second lifecycle contract.
 
 ## Safety contract
 
@@ -20,21 +22,21 @@ It preserves a pre-existing LM Studio service and an explicitly configured
 `reviewed_external` Broker. It never adopts an unknown listener, uses no broad
 process pattern, and publishes no Demo MQTT event.
 
-## Beginner lifecycle
+## Current operator lifecycle
 
 ```bash
-./scripts/demo --config <private-demo-config> deploy
-./scripts/demo --config <private-demo-config> deploy --backend-only
+./scripts/demo --config <private-demo-config> doctor
+./scripts/demo --config <private-demo-config> start
 ./scripts/demo --config <private-demo-config> status
 ./scripts/demo --config <private-demo-config> trace-export
 ./scripts/demo --config <private-demo-config> stop
 ```
 
-The first command runs `preflight`, `up`, backend health, and a bounded fresh
-Android live-evidence wait. It emits `DEMO_READY` only after every full gate
-passes. `deploy --backend-only` emits only `BACKEND_READY_WAITING_ANDROID`.
-`stop` is idempotent and emits `DEMO_STOPPED`; it stops only current-run owned
-processes.
+Use `doctor` before `start`. `start` emits `DEMO_READY` only after all backend
+health gates and a fresh remote Android MQTT session are observed; otherwise a
+healthy backend is `BACKEND_READY_WAITING_ANDROID`. `stop` is idempotent and
+emits `DEMO_STOPPED`; it stops only current-run owned processes. `deploy` is a
+compatibility alias retained for historical evidence, not a current instruction.
 
 ## Android gates
 
@@ -50,7 +52,7 @@ Media/Care outboxes, zero fatal count, and zero
 `RejectedExecutionException` count. Static evidence can never substitute for
 live evidence.
 
-## Expert commands
+## Historical expert aliases
 
 ```bash
 ./scripts/demo --config <private-demo-config> preflight
@@ -63,10 +65,9 @@ live evidence.
 ./scripts/demo --config <private-demo-config> reset
 ```
 
-`ready` may return `BACKEND_READY_WAITING_ANDROID` for a healthy backend while
-the Android gates are incomplete. `ready --require-android` exits nonzero unless
-the state is `DEMO_READY`. `reset --publish-unknown` remains fail-closed because
-there is no reviewed Bridge IPC for that publish operation.
+These aliases remain for compatibility with historical evidence. Do not create
+new operational procedures from them. `reset --publish-unknown` remains
+fail-closed because there is no reviewed Bridge IPC for that publish operation.
 
 ## Recovery evidence
 

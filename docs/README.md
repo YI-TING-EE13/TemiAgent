@@ -1,6 +1,6 @@
 # TemiAgent Documentation Index
 
-最後審查日期：2026-07-29
+最後審查日期：2026-07-31
 
 `docs/` 保存跨模組架構、契約、操作流程、專案範圍與 reader-facing schema。模組自己的執行、設定與測試方式應留在該模組 README。
 
@@ -16,6 +16,24 @@ docs/
 ```
 
 Runtime-owned schemas under `hermes_temi_bridge/schemas/` remain authoritative. `docs/schemas/` is not an independent contract source.
+
+## Canonical coverage map
+
+Use this table to find the current source of explanation before consulting a dated
+handover, planning record, or reference mirror. Runtime code and schemas remain
+authoritative when any prose conflicts with them.
+
+| Surface | Current document | Owner / verification boundary |
+|---|---|---|
+| Repository entry, scope, module map | [`README.md`](../README.md) | Root maintainers; hardware-free checks only unless recorded otherwise. |
+| Data flow, module boundary and capability classification | [project overview](architecture/project_overview.md) | Architecture; sections 6–13 are historical planning material. |
+| Cross-module topic, schema and update-together rule | [contract traceability](architecture/contract_traceability.md) | Bridge and contract owners; runtime schemas are authoritative. |
+| Demo lifecycle and operator workflow | [Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md) | Demo operator; `scripts/demo` is the only current lifecycle. |
+| Private Demo configuration and ownership | [Demo configuration reference](operations/demo_configuration_reference.md) | Operator-supplied owner-only env; never commit values or credentials. |
+| Incident diagnosis and recovery boundary | [Demo troubleshooting](operations/demo_troubleshooting.md) | Exact-PID investigation; no broad process control. |
+| Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; hardware, Android, GPU and Discord remain external gates. |
+| Module commands and artifacts | Each module README in the root module index | Owning module; do not infer contracts from a README alone. |
+| Hermes integration overlay | [`third_party/hermes/`](../third_party/hermes/README.md) and reconstructed `hermes-agent/README.TemiAgent.md` | Tracked manifest/patches; do not stage the generated nested gitlink. |
 
 ## Architecture
 
@@ -36,11 +54,14 @@ Runtime-owned schemas under `hermes_temi_bridge/schemas/` remain authoritative. 
 | Document | Status | Owner | Purpose |
 |---|---|---|---|
 | [safe_service_operations.md](operations/safe_service_operations.md) | Maintained policy | All service owners | Exact PID/port targeting, rollback, restore, retention and incident evidence. |
-| [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md) | Maintained, Demo-only | Demo operator | `scripts/demo` canonical lifecycle, Media capability boundary and live observers. |
+| [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md) | Maintained, Demo-only | Demo operator | Canonical `scripts/demo` lifecycle, Media capability boundary and live observers. |
+| [demo_configuration_reference.md](operations/demo_configuration_reference.md) | Maintained, Demo-only | Demo operator | Complete non-secret `config/demo.env.example` key groups, ownership and feature gates. |
+| [demo_troubleshooting.md](operations/demo_troubleshooting.md) | Maintained, Demo-only | Demo operator | Symptom-to-evidence troubleshooting without unowned process or runtime-data changes. |
+| [verification_and_acceptance.md](operations/verification_and_acceptance.md) | Maintained | Maintainers | Hardware-free checks, external acceptance gates and evidence vocabulary. |
 | [demo_deployment_handover.md](operations/demo_deployment_handover.md) | Maintained, Demo-only | Demo operator | Bootstrap, private configuration, managed/external ownership, resource manifest and handover limits. |
 | [demo_temporary_content_inventory_20260730.md](operations/demo_temporary_content_inventory_20260730.md) | Dated integration inventory | Demo maintainer | Retention-only classification of `/tmp/temiagent*` Demo artifacts and local archive policy. |
-| [DEMO_QUICK_REFERENCE.md](operations/DEMO_QUICK_REFERENCE.md) | Reference mirror; Demo-only | Demo operator | Compact command, status, evidence and recovery card. |
-| [demo_operations_runbook.md](operations/demo_operations_runbook.md) | Reference mirror; Demo-only | Demo operator | Exact-PID expert lifecycle and static/live Android gate boundaries. |
+| [DEMO_QUICK_REFERENCE.md](operations/DEMO_QUICK_REFERENCE.md) | Maintained compact reference; Demo-only | Demo operator | Current canonical commands, status meanings and recovery first actions. |
+| [demo_operations_runbook.md](operations/demo_operations_runbook.md) | Retained expert reference; Demo-only | Demo operator | Historical expert aliases and Android-evidence background; not the newcomer procedure. |
 | [temi_integration_runbook.md](operations/temi_integration_runbook.md) | Maintained | Integration | Hardware-free through real-device integration sequence. |
 | [lmstudio_headless_3gpu_hdd_manual.md](operations/lmstudio_headless_3gpu_hdd_manual.md) | Maintained, machine-dependent | LM Studio runtime | Headless model service startup, health and recovery. |
 | [lmstudio_gpu_selection.md](operations/lmstudio_gpu_selection.md) | Experimental evidence | ML runtime | GPU selection observations; not a portable default. |

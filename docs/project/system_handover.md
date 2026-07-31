@@ -1,5 +1,13 @@
 # TemiAgent 智慧居家照護系統交接文件
 
+> Status: legacy handover snapshot dated 2026-07-22. Its branch names, worktree
+> paths, historical acceptance claims and command examples are not the current
+> source of truth. Start with the root [`README.md`](../../README.md), the
+> [documentation coverage map](../README.md#canonical-coverage-map), and the
+> maintained [Demo operator guide](../operations/DEMO_OPERATOR_GUIDE.md). Keep
+> this file only as historical context; do not copy its private-path or
+> worktree instructions into a current Demo.
+
 ## 文件資訊
 
 * **文件用途：** 提供後續接手 TemiAgent 專案的研究生、開發者與維護人員閱讀

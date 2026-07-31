@@ -36,3 +36,13 @@ Do not edit a patch in place without updating its manifest SHA-256 and running
 the clean-room reconstruction check. Do not add credentials, webhook URLs,
 runtime memory, recordings, virtual environments, or downloaded model assets
 to this directory.
+
+## Documentation ownership boundary
+
+The reconstructed `hermes-agent/README.TemiAgent.md` is the canonical nested
+Hermes integration explanation. This root directory is its reproducible source:
+patches `0002`, `0003`, `0004`, `0007`, and `0009` carry the documented Temi
+integration history. A documentation-only root change must not edit the nested
+checkout or stage its gitlink. If the nested README needs a change, update the
+appropriate patch, its manifest hash, and the clean-room reconstruction evidence
+in a separately scoped overlay change.

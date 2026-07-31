@@ -1,5 +1,13 @@
 # LM Studio Headless 啟動手冊：HDD 專案路徑與指定 GPU 組合
 
+> Status: machine-dependent reference. The current managed Demo profile is
+> defined by `config/demo.env.example` and
+> [demo_configuration_reference.md](demo_configuration_reference.md): it
+> requires context `64000` and visible GPUs `0,1`. The exploratory 16K/32K
+> examples below must not be used with `scripts/demo`; that lifecycle rejects
+> context or GPU-policy drift. This manual does not authorize changing a live
+> model service.
+
 本手冊用於在 **Linux / headless / container-like environment** 中啟動 LM Studio local server，並將 LM Studio 的資料目錄固定在專案 HDD 路徑 `/TemiAgent/.lmstudio-data`，同時用 LMSTUDIO_VISIBLE_GPUS 控制 LM Studio daemon 與模型 worker 使用單卡、雙卡或三卡。
 
 路徑說明：`/TemiAgent` 是 TemiAgent GPU container 內的專案路徑；host workspace 對應路徑是 `<host-workspace>`。

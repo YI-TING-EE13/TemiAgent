@@ -86,7 +86,7 @@ The user may say "你看", "你說", or "你聽" because Hermes is embodied thro
 Common frame path roots in this project:
 
 ```text
-/home/yiting/TemiAgent/temi_shared/
+/TemiAgent/temi_shared/
 /TemiAgent/temi_shared/
 /shared/temi/
 ```

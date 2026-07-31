@@ -1,6 +1,6 @@
 # TemiAgent Demo 操作入口
 
-最後更新日期：2026-07-29
+最後更新日期：2026-07-31
 
 狀態：Demo-only。`scripts/demo` 是目前 checkout 的唯一 lifecycle。private env 為每個
 service 明確宣告 `managed`、`external` 或 `disabled` ownership；`managed` 服務會由同一
@@ -14,6 +14,16 @@ adapter、resident Hermes、Bridge、Hermes gateway 與 viewer；Android 預設 
 docker exec -it yiting.TemiAgent_gpu_all bash
 cd /TemiAgent
 ```
+
+## Current documentation boundary
+
+This is the formal current operator workflow. Use the
+[configuration reference](demo_configuration_reference.md) to prepare the
+private env, [troubleshooting guide](demo_troubleshooting.md) for a symptom and
+evidence path, and [verification and acceptance guide](verification_and_acceptance.md)
+to classify a result. `DEMO_QUICK_REFERENCE.md` is a compact companion;
+`demo_operations_runbook.md`, dated project handovers, and temporary-content
+inventories are reference material, not substitute lifecycle contracts.
 
 ## 唯一操作指令
 

@@ -18,6 +18,18 @@
 Architecture narrative 不得取代 runtime validator、schema 或 owning module config。
 若本文與 executable source 不一致，先保留 runtime 行為並把差異列入治理修正。
 
+## Current reading order
+
+Read the root [`README.md`](../../README.md),
+[contract traceability](contract_traceability.md), and the owning module README
+before operating or changing the system. The current Demo lifecycle, private
+configuration and incident boundaries are in
+[`docs/operations/`](../operations/), especially the
+[Demo operator guide](../operations/DEMO_OPERATOR_GUIDE.md). Sections 6–13
+below are retained architecture, planning and validation history. They explain
+how the design evolved, but their commands, deployment examples and milestones
+are not the current operator contract.
+
 ## 0. 文件目的
 
 本文件用於說明目前分散的專案模組如何整合成一套完整的 Embodied AI 系統。
@@ -631,7 +643,11 @@ Temi publish：
 
 ***
 
-# 6. Docker / Runtime 架構
+# 6. Historical Docker / Runtime 架構
+
+> Historical architecture example. Do not use this section to choose a current
+> lifecycle, private path, service ownership or configuration value; use the
+> maintained Demo operations documents instead.
 
 ## 6.1 真實運行時需要啟動的服務
 
@@ -718,7 +734,11 @@ services:
 
 ***
 
-# 7. 各模組功能驗證計畫
+# 7. Historical Validation Plan
+
+> Historical validation examples. The maintained verification command set and
+> the distinction between hardware-free and external acceptance live in
+> [`verification_and_acceptance.md`](../operations/verification_and_acceptance.md).
 
 這一段非常重要。  
 請先不要一開始就測整套系統，應該先確認每個模組獨立正常。

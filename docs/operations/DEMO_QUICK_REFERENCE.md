@@ -1,7 +1,9 @@
 # TemiAgent Demo 快速參考
 
-完整說明請看 [Demo 新手操作手冊](DEMO_OPERATOR_GUIDE.md)。所有 `<...>` 都是 operator
-自行提供的 placeholder；不要把真實 endpoint、path、hash 或 account 寫入 tracked file。
+完整說明請看 [Demo 新手操作手冊](DEMO_OPERATOR_GUIDE.md)、
+[設定參考](demo_configuration_reference.md)與
+[troubleshooting](demo_troubleshooting.md)。所有 `<...>` 都是 operator 自行提供的
+placeholder；不要把真實 endpoint、path、hash 或 account 寫入 tracked file。
 
 ## 最短流程
 
@@ -9,37 +11,33 @@
 docker exec -it <designated-container> bash
 cd <project-root>
 ./scripts/demo --config <private-demo-config> doctor
-./scripts/demo --config <private-demo-config> deploy
+./scripts/demo --config <private-demo-config> start
 ./scripts/demo --config <private-demo-config> status
 ./scripts/demo --config <private-demo-config> stop
 ```
 
-`deploy` 成功時 human output 只有 `DEMO_READY`。沒有 fresh Android runtime evidence 時，
-不要重複期待 `DEMO_READY`；改用：
-
-```bash
-./scripts/demo --config <private-demo-config> deploy --backend-only
-```
-
-成功時是 `BACKEND_READY_WAITING_ANDROID`。
+`start` 成功後請以 `status` 判讀 readiness。沒有 fresh Android MQTT session 時，正確結果是
+`BACKEND_READY_WAITING_ANDROID`，不是失敗；只有 backend healthy 且 broker 觀察到 fresh remote
+Android session 時才是 `DEMO_READY`。
 
 ## 每個指令
 
 | Command | What it does | Safe result |
 |---|---|---|
 | `doctor` | 唯讀診斷 source、config、artifact、live evidence、service、Care、port 與 PID。 | `PASS`／`PENDING`／`WARNING`／`FAIL` 加 recovery。 |
-| `deploy` | `preflight` → `up` → health → bounded Android live gate。 | 僅完整成功時 `DEMO_READY`。 |
-| `deploy --backend-only` | backend lifecycle，但不要求 Android ready。 | `BACKEND_READY_WAITING_ANDROID`。 |
+| `start` | 以 recorded ownership 啟動 managed services，並執行 health gates。 | `DEMO_READY` 或 `BACKEND_READY_WAITING_ANDROID`。 |
+| `restart` | 先保存 pre-restart evidence，再只停止並重啟已驗證的 Demo processes。 | 同 `start`；不處理 unknown listener。 |
 | `status` | 唯讀 ownership／health／artifact／live summary。 | 不輸出 private host 或 path。 |
 | `trace-export` | 匯出既有 de-identified trace summary。 | 不發布 MQTT event。 |
 | `stop` | 停止 active run 的 owned process。 | `DEMO_STOPPED`；external services preserved。 |
-| `preflight`、`up`、`ready`、`down`、`reset` | 保留的 low-level expert commands。 | 依各自 JSON／state。 |
+| `up`、`down`、`deploy` | Compatibility aliases；不作為 current operator instructions。 | 與 canonical command 相同或較窄的 legacy behavior。 |
+| `identity`、`seed`、`verify` | 已明確啟用的 synthetic identity/care Demo helper。 | 只在正式 guide 的 feature gates 都成立時使用。 |
 
 JSON output：
 
 ```bash
 ./scripts/demo --config <private-demo-config> --json doctor
-./scripts/demo --config <private-demo-config> --json deploy
+./scripts/demo --config <private-demo-config> --json start
 ```
 
 ## Android evidence 一句話

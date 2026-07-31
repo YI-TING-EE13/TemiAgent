@@ -1,6 +1,6 @@
 # Cross-Module Contract Traceability
 
-最後審查日期：2026-07-26
+最後審查日期：2026-07-31
 
 This document identifies the authoritative source, producers, consumers, validation owner, tests and synchronization rule for TemiAgent cross-module contracts. It does not replace runtime code or schemas.
 
@@ -9,6 +9,12 @@ This document identifies the authoritative source, producers, consumers, validat
 The executable runtime definition is authoritative. A README or file under `docs/schemas/` explains that definition but MUST NOT introduce behavior independently.
 
 When no single generated contract package exists, the producer and consumer implementations jointly define current behavior. Such duplication is a governance risk and requires cross-module review.
+
+For current lifecycle, private configuration and acceptance evidence, use the
+[Demo operator guide](../operations/DEMO_OPERATOR_GUIDE.md),
+[configuration reference](../operations/demo_configuration_reference.md), and
+[verification guide](../operations/verification_and_acceptance.md). These
+documents do not replace the runtime sources named in this matrix.
 
 ## Contract Matrix
 
