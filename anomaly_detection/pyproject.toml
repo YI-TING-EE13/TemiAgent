@@ -9,6 +9,7 @@ dependencies = [
     "av>=17.0.1",
     "numpy>=2.4.4",
     "opencv-python>=4.13.0.92",
+    "requests>=2.34.2",
 ]
 
 [project.optional-dependencies]

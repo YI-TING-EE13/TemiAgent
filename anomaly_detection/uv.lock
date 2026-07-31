@@ -1499,6 +1499,7 @@ dependencies = [
     { name = "av" },
     { name = "numpy" },
     { name = "opencv-python" },
+    { name = "requests" },
 ]
 
 [package.optional-dependencies]
@@ -1512,6 +1513,7 @@ requires-dist = [
     { name = "av", specifier = ">=17.0.1" },
     { name = "numpy", specifier = ">=2.4.4" },
     { name = "opencv-python", specifier = ">=4.13.0.92" },
+    { name = "requests", specifier = ">=2.34.2" },
     { name = "ultralytics", marker = "extra == 'pose'", specifier = ">=8.3.0" },
 ]
 provides-extras = ["pose"]
