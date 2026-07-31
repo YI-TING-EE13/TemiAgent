@@ -268,6 +268,32 @@ def _verify_discord_matrix(config: demo.DemoConfig, work_dir: Path) -> dict[str,
         is_test=False,
     )
     results["timeout"] = str(timeout_receipt.get("failure_code"))
+    connection_credential = work_dir / "discord-connection.env"
+    connection_credential.write_text(
+        "DISCORD_WEBHOOK_URL=http://127.0.0.1:1/connection-refused\n",
+        encoding="utf-8",
+    )
+    connection_credential.chmod(0o600)
+    connection_config = replace(
+        demo_bridge_config(config),
+        abnormal_notification_mode="discord_webhook",
+        abnormal_notification_discord_env_path=connection_credential.as_posix(),
+        abnormal_notification_timeout_seconds=1,
+    )
+    connection_receipt = AbnormalNotificationDispatcher(connection_config).dispatch(
+        stage="initial_alert",
+        event_id="evt-discord-connection",
+        event_type="falls_down",
+        robot_id=config.robot_id,
+        resident_id="test-resident",
+        detected_timestamp_ms=int(time.time() * 1000),
+        run_id=None,
+        scenario_id=None,
+        is_test=False,
+    )
+    if connection_receipt.get("failure_code") != "DISCORD_CONNECTION_FAILED":
+        raise ScenarioFailure(f"Bridge Discord adapter did not classify connection failure: {connection_receipt}")
+    results["connection"] = str(connection_receipt.get("failure_code"))
     return results
 
 
