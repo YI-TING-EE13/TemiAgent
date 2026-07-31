@@ -31,6 +31,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import demo_lifecycle as demo  # noqa: E402
 from create_mock_event_images import JPEG_1X1, build_event  # noqa: E402
 from hermes_temi_bridge.media_callback_socket import invoke_media_callback_socket  # noqa: E402
+from hermes_temi_bridge.memory_store import StructuredMemoryStore  # noqa: E402
 
 
 class ScenarioFailure(RuntimeError):
@@ -130,6 +131,18 @@ def _post_mock_discord(config: demo.DemoConfig) -> None:
             raise ScenarioFailure("mock Discord did not produce the expected local receipt")
 
 
+def _seed_reminder(config: demo.DemoConfig) -> None:
+    """Seed one synthetic reminder through the public Bridge memory-store API."""
+    store = StructuredMemoryStore(config.memory_dir)
+    store.seed_synthetic_demo(
+        seed_id="newcomer-reminder-fixture-v1",
+        profile={"schema_version": "1.0", "display_name": "Synthetic newcomer resident"},
+        reminders={"schema_version": "1.0", "reminders": [{"reminder_id": "breakfast-medication", "title": "早餐後用藥", "status": "active", "synthetic": True}]},
+        daily_state={"schema_version": "1.0", "active_reminders": ["breakfast-medication"], "synthetic": True},
+        events=[],
+    )
+
+
 def _media(config: demo.DemoConfig, capture: Capture, event_id: str) -> None:
     for action in ("play_video", "pause_video", "resume_video", "stop_video"):
         response = invoke_media_callback_socket(
@@ -183,11 +196,17 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
         results["S1_general_asr_tts"] = "PASS"
 
         # S2 memory action remains Bridge-owned while Android receives only speak.
+        _seed_reminder(config)
         s2 = "s2_reminder"
         capture.publish("asr/final", _event(config, s2, "我吃完早餐後的藥了"))
         _wait_legacy(capture, s2)
-        if not (config.memory_dir / "reminders.json").is_file():
+        reminders = json.loads((config.memory_dir / "reminders.json").read_text(encoding="utf-8"))
+        if not any(item.get("reminder_id") == "breakfast-medication" and item.get("status") == "completed" for item in reminders.get("reminders", [])):
             raise ScenarioFailure("reminder completion did not create isolated Bridge memory evidence")
+        capture.publish("asr/final", _event(config, s2, "我吃完早餐後的藥了"))
+        trace = (config.bridge_log_dir / f"{s2}.jsonl").read_text(encoding="utf-8")
+        if "duplicate_event_ignored" not in trace:
+            raise ScenarioFailure("reminder retry did not preserve Bridge event idempotency")
         results["S2_reminder_completion"] = "PASS"
 
         s3 = "s3_discomfort"
