@@ -14,19 +14,22 @@ starts.
 
 ```bash
 cd /TemiAgent
+# Required source reconstruction for a clean clone; no dependency install.
 ./scripts/bootstrap --hermes
+# Run only after the documented Hermes and module environments exist:
 ./scripts/bootstrap --check
 # Only when dependency environments need repair:
 ./scripts/bootstrap --sync
 ```
 
-`--hermes` is the clean-clone reconstruction step: it clones the public
+`--hermes` is the clean-clone source-reconstruction step: it clones the public
 upstream, verifies the tracked patch SHA-256 values, creates the local-only
 `temiagent/integration` branch and verifies the expected tree hash. It starts
 no service and installs no dependency. `--check` makes no credentials, starts
-no service, and changes no runtime state. `--sync` uses each existing project's
-`uv sync --frozen`; it does not update lockfiles. The gitlink remains a local
-historical reference; reproducibility is defined by
+no service, and changes no runtime state, but it is a readiness gate that
+requires the documented Hermes and module environments to already exist.
+`--sync` uses each existing project's `uv sync --frozen`; it does not update
+lockfiles. The gitlink remains a local historical reference; reproducibility is defined by
 [`third_party/hermes/manifest.json`](../../third_party/hermes/manifest.json)
 and its patch series, so no unavailable private Hermes commit or remote push is
 required.

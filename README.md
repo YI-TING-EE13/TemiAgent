@@ -122,9 +122,9 @@ cd /TemiAgent
 stopped. The checked-in [resource manifest](config/demo_resources.json) lists
 the logical media and skill assets. From a clean clone, run
 `./scripts/bootstrap --hermes` once to reconstruct the reviewed local Hermes
-overlay from public upstream and tracked patches, then run
-`./scripts/bootstrap --check`. Neither command starts services or creates
-credentials.
+overlay from public upstream and tracked patches. Run
+`./scripts/bootstrap --check` only after the documented dependency environments
+have been provisioned. Neither command starts services or creates credentials.
 
 - Cross-module startup, health checks and debugging: [Temi integration runbook](docs/operations/temi_integration_runbook.md)
 - Canonical current Demo lifecycle and real-device Media checks: [Demo operator guide](docs/operations/DEMO_OPERATOR_GUIDE.md)

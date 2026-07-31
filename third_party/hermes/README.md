@@ -9,6 +9,7 @@ From a clean TemiAgent clone, run:
 
 ```bash
 ./scripts/bootstrap --hermes
+# After the documented Hermes and module environments are provisioned:
 ./scripts/bootstrap --check
 ```
 
@@ -17,6 +18,8 @@ checkout is absent, verifies every tracked patch hash, creates the local-only
 `temiagent/integration` branch, applies the series, and verifies the resulting
 Git tree hash. It starts no service, installs no dependency, and writes no
 private configuration. A second invocation is a no-op tree verification.
+`bootstrap --check` remains a separate local dependency-readiness gate; a fresh
+source clone intentionally does not contain virtual environments.
 
 The root gitlink is retained for local historical traceability, but clean-clone
 reproducibility is defined by `manifest.json` plus `patches/`, not by requiring
