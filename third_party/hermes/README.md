@@ -13,11 +13,12 @@ From a clean TemiAgent clone, run:
 ./scripts/bootstrap --check
 ```
 
-`bootstrap_hermes.sh` clones the exact public upstream URL when the nested
-checkout is absent, verifies every tracked patch hash, creates the local-only
-`temiagent/integration` branch, applies the series, and verifies the resulting
-Git tree hash. It starts no service, installs no dependency, and writes no
-private configuration. A second invocation is a no-op tree verification.
+`bootstrap_hermes.sh` initializes an independent nested checkout and fetches
+the exact public upstream base when it is absent, verifies every tracked patch
+hash, creates the local-only `temiagent/integration` branch, applies the series,
+and verifies the resulting Git tree hash. It starts no service, installs no
+dependency, and writes no private configuration. A second invocation is a
+no-op tree verification.
 `bootstrap --check` remains a separate local dependency-readiness gate; a fresh
 source clone intentionally does not contain virtual environments.
 

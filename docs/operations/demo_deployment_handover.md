@@ -22,8 +22,9 @@ cd /TemiAgent
 ./scripts/bootstrap --sync
 ```
 
-`--hermes` is the clean-clone source-reconstruction step: it clones the public
-upstream, verifies the tracked patch SHA-256 values, creates the local-only
+`--hermes` is the clean-clone source-reconstruction step: it initializes an
+independent nested checkout, fetches the public upstream base, verifies the
+tracked patch SHA-256 values, creates the local-only
 `temiagent/integration` branch and verifies the expected tree hash. It starts
 no service and installs no dependency. `--check` makes no credentials, starts
 no service, and changes no runtime state, but it is a readiness gate that

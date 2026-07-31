@@ -85,8 +85,10 @@ if [[ ! -e "$RUNTIME_PATH/.git" ]]; then
     echo "Hermes checkout is absent; run without --check to reconstruct it" >&2
     exit 1
   }
-  mkdir -p "$(dirname "$RUNTIME_PATH")"
-  git clone "$UPSTREAM_URL" "$RUNTIME_PATH"
+  mkdir -p "$RUNTIME_PATH"
+  git -C "$RUNTIME_PATH" init --quiet
+  git -C "$RUNTIME_PATH" remote add origin "$UPSTREAM_URL"
+  git -C "$RUNTIME_PATH" fetch --no-tags origin "$BASE_COMMIT"
 fi
 
 git -C "$RUNTIME_PATH" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
