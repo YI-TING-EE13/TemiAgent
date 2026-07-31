@@ -71,6 +71,19 @@ class DemoLifecycleConfigTests(unittest.TestCase):
         config.chmod(0o600)
         return config
 
+    def make_mock_config(self, root: Path) -> Path:
+        """Materialize the tracked newcomer sample as an owner-only test config."""
+        runtime = root / "newcomer-runtime"
+        config = root / "demo.mock.env"
+        config.write_text(
+            (ROOT / "config" / "demo.mock.env.example").read_text(encoding="utf-8").replace(
+                "/tmp/temiagent_newcomer_acceptance_<RUN_ID>", str(runtime)
+            ),
+            encoding="utf-8",
+        )
+        config.chmod(0o600)
+        return config
+
     def test_external_owner_only_config_loads(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -173,6 +186,27 @@ class DemoLifecycleConfigTests(unittest.TestCase):
         self.assertIn("managed_lmstudio_supervisor.py", " ".join(argv))
         self.assertIn(config.lmstudio_api_identifier, argv)
 
+    def test_newcomer_mock_profile_uses_isolated_ports_and_formal_test_doubles(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_mock_config(Path(temporary)))
+            specs = demo._specs(config)
+            self.assertTrue(config.is_newcomer_mock)
+            self.assertEqual(config.lmstudio_server_port, 29134)
+            self.assertEqual(config.adapter_ports, (29080, 29081))
+            self.assertEqual(config.resident_invoke_url, "http://127.0.0.1:29765/invoke")
+            self.assertEqual(config.viewer_health_url, "http://127.0.0.1:29010/health")
+            self.assertEqual(specs["mock_android"].ports, (29012,))
+            self.assertIn("mock_resident_server.py", " ".join(demo._service_argv(config, "resident")))
+            self.assertIn("mock_lmstudio_server.py", " ".join(demo._service_argv(config, "lmstudio")))
+
+    def test_production_defaults_remain_fixed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            self.assertEqual(config.profile, "production")
+            self.assertEqual(config.expected_git_branch, "main")
+            self.assertEqual(config.lifecycle_ports, (1234, 1883, 8080, 8081, 8765, 8010, 8011))
+            self.assertEqual(config.resident_invoke_url, "http://127.0.0.1:8765/invoke")
+
     def test_lifecycle_lock_rejects_concurrent_holder(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_config(Path(temporary)))
@@ -183,8 +217,10 @@ class DemoLifecycleConfigTests(unittest.TestCase):
                         pass
 
     def test_source_gate_allows_both_index_and_worktree_memory_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
         source = {
-            "branch": demo.EXPECTED_BRANCH,
+            "branch": "main",
             "head": "test",
             "tree": [
                 " M memory/daily_state.json",
@@ -196,7 +232,23 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             mock.patch.object(demo, "_source_record", return_value=source),
             mock.patch.object(demo, "_git", return_value=""),
         ):
-            self.assertEqual(demo._validate_source(), source)
+            self.assertEqual(demo._validate_source(config), source)
+
+    def test_source_gate_rejects_stale_branch_and_accepts_explicitly_disabled_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            production = demo.load_config(self.make_config(root))
+            disabled = demo.load_config(self.make_mock_config(root))
+            stale = {"branch": "codex/stale", "head": "test", "tree": []}
+            detached = {"branch": "", "head": "test", "tree": []}
+            with mock.patch.object(demo, "_git", return_value=""):
+                with mock.patch.object(demo, "_source_record", return_value=stale):
+                    with self.assertRaisesRegex(demo.DemoError, "unexpected branch"):
+                        demo._validate_source(production)
+                with mock.patch.object(demo, "_source_record", return_value=detached):
+                    with self.assertRaisesRegex(demo.DemoError, "detached HEAD"):
+                        demo._validate_source(production)
+                    self.assertEqual(demo._validate_source(disabled), detached)
 
     def test_stop_is_idempotent_without_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -213,17 +265,132 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             demo.ensure_runtime_layout(config)
             before = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
             with (
-                mock.patch.object(demo, "_validate_source", return_value={"branch": demo.EXPECTED_BRANCH, "head": "test"}),
+                mock.patch.object(demo, "_validate_source", return_value={"branch": "main", "head": "test"}),
                 mock.patch.object(demo, "_git", return_value=""),
                 mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
                 mock.patch.object(demo, "_listener_count", side_effect=lambda port: 1 if port == 1883 else 0),
-                mock.patch.object(demo, "_http_json", return_value={"status": "ok"}),
+                mock.patch.object(
+                    demo,
+                    "_http_health",
+                    side_effect=lambda url: (
+                        {"data": [{"id": "google/gemma-4-31b"}]} if url.endswith("/v1/models") else {"status": "ok", "media_tool_enabled": True, "media_fast_path_enabled": True},
+                        "HEALTHY",
+                        "test health",
+                    ),
+                ),
+                mock.patch.object(demo, "_http_json", return_value={"status": "ok", "media_tool_enabled": True, "media_fast_path_enabled": True, "media_tool_names": list(demo.MEDIA_TOOLS)}),
                 mock.patch.object(demo, "_broker_sessions", return_value={"loopback_sessions": 2, "remote_sessions": 0}),
             ):
                 result = demo.doctor(config)
             after = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
             self.assertEqual(before, after)
             self.assertEqual(result["summary"]["FAIL"], 0)
+
+    def test_doctor_marks_required_external_endpoint_unavailable_as_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            with (
+                mock.patch.object(demo, "_validate_source", return_value={"branch": "main", "head": "test"}),
+                mock.patch.object(demo, "_git", return_value=""),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
+                mock.patch.object(demo, "_listener_count", return_value=1),
+                mock.patch.object(demo, "_http_health", return_value=(None, "ENDPOINT_UNAVAILABLE", "unavailable")),
+                mock.patch.object(demo, "_http_json", return_value=None),
+                mock.patch.object(demo, "_broker_sessions", return_value={"loopback_sessions": 0, "remote_sessions": 0}),
+            ):
+                result = demo.doctor(config)
+        item = next(check for check in result["checks"] if check["name"] == "lm_studio")
+        self.assertEqual(item["status"], "FAIL")
+        self.assertEqual(item["code"], "ENDPOINT_UNAVAILABLE")
+        self.assertTrue(item["required"])
+
+    def test_doctor_marks_required_external_endpoint_timeout_as_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            with (
+                mock.patch.object(demo, "_validate_source", return_value={"branch": "main", "head": "test"}),
+                mock.patch.object(demo, "_git", return_value=""),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
+                mock.patch.object(demo, "_listener_count", return_value=1),
+                mock.patch.object(demo, "_http_health", return_value=(None, "ENDPOINT_TIMEOUT", "timed out")),
+                mock.patch.object(demo, "_http_json", return_value=None),
+                mock.patch.object(demo, "_broker_sessions", return_value={"loopback_sessions": 0, "remote_sessions": 0}),
+            ):
+                result = demo.doctor(config)
+        item = next(check for check in result["checks"] if check["name"] == "lm_studio")
+        self.assertEqual((item["status"], item["code"]), ("FAIL", "ENDPOINT_TIMEOUT"))
+
+    def test_doctor_mock_endpoint_healthy_and_optional_items_are_explicit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_mock_config(Path(temporary)))
+            def health(url: str) -> tuple[dict[str, object], str, str]:
+                if url.endswith("/v1/models"):
+                    return {"data": [{"id": config.lmstudio_api_identifier}]}, "HEALTHY", "ok"
+                if url.endswith("/health") and ":29012/" in url:
+                    return {"ok": True, "test_double": "android"}, "HEALTHY", "ok"
+                if url.endswith("/health") and ":29013/" in url:
+                    return {"ok": True, "test_double": "discord"}, "HEALTHY", "ok"
+                if url.endswith("/health") and ":29010/" in url:
+                    return {"ok": True, "source_connected": True, "llama_server_ready": True}, "HEALTHY", "ok"
+                return {"status": "ok", "media_tool_enabled": True, "media_fast_path_enabled": True}, "HEALTHY", "ok"
+            with (
+                mock.patch.object(demo, "_validate_source", return_value={"branch": "", "head": "test"}),
+                mock.patch.object(demo, "_git", return_value=""),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
+                mock.patch.object(demo, "_listener_count", side_effect=lambda port: 1 if port == config.mqtt_port else 0),
+                mock.patch.object(demo, "_http_health", side_effect=health),
+                mock.patch.object(demo, "_http_json", return_value={"status": "ok", "media_tool_enabled": True, "media_fast_path_enabled": True, "media_tool_names": list(demo.MEDIA_TOOLS)}),
+                mock.patch.object(demo, "_broker_sessions", return_value={"loopback_sessions": 0, "remote_sessions": 0}),
+            ):
+                result = demo.doctor(config)
+        for check in result["checks"]:
+            self.assertEqual(set(check), {"name", "status", "code", "message", "required"})
+        self.assertEqual(next(check for check in result["checks"] if check["name"] == "lm_studio")["status"], "PASS")
+        self.assertEqual(next(check for check in result["checks"] if check["name"] == "gateway")["status"], "SKIPPED")
+
+    def test_doctor_rejects_malformed_required_health(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            with (
+                mock.patch.object(demo, "_validate_source", return_value={"branch": "main", "head": "test"}),
+                mock.patch.object(demo, "_git", return_value=""),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
+                mock.patch.object(demo, "_listener_count", return_value=1),
+                mock.patch.object(demo, "_http_health", return_value=({}, "HEALTHY", "response")),
+                mock.patch.object(demo, "_http_json", return_value=None),
+                mock.patch.object(demo, "_broker_sessions", return_value={"loopback_sessions": 0, "remote_sessions": 0}),
+            ):
+                result = demo.doctor(config)
+        item = next(check for check in result["checks"] if check["name"] == "lm_studio")
+        self.assertEqual((item["status"], item["code"]), ("FAIL", "HEALTH_MALFORMED"))
+
+    def test_doctor_detects_an_unowned_port_conflict(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_mock_config(Path(temporary)))
+            healthy = {"status": "ok", "media_tool_enabled": True, "media_fast_path_enabled": True, "media_tool_names": list(demo.MEDIA_TOOLS)}
+            with (
+                mock.patch.object(demo, "_validate_source", return_value={"branch": "", "head": "test"}),
+                mock.patch.object(demo, "_git", return_value=""),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
+                mock.patch.object(demo, "_listener_count", side_effect=lambda port: 1 if port in {config.mqtt_port, config.adapter_vision_port} else 0),
+                mock.patch.object(demo, "_http_health", return_value=({"data": [{"id": config.lmstudio_api_identifier}]}, "HEALTHY", "ok")),
+                mock.patch.object(demo, "_http_json", return_value=healthy),
+                mock.patch.object(demo, "_broker_sessions", return_value={"loopback_sessions": 0, "remote_sessions": 0}),
+            ):
+                result = demo.doctor(config)
+        item = next(check for check in result["checks"] if check["name"] == f"port_{config.adapter_vision_port}")
+        self.assertEqual((item["status"], item["code"]), ("FAIL", "PORT_CONFLICT"))
+
+    def test_doctor_exit_code_fails_only_when_a_fail_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            warning_only = {"summary": {"PASS": 0, "WARNING": 1, "SKIPPED": 1, "FAIL": 0}}
+            required_failure = {"summary": {"PASS": 0, "WARNING": 0, "SKIPPED": 0, "FAIL": 1}}
+            with mock.patch.object(demo, "load_config", return_value=config):
+                with mock.patch.object(demo, "doctor", return_value=warning_only):
+                    self.assertEqual(demo.main(["--config", str(config.config_path), "doctor"]), 0)
+                with mock.patch.object(demo, "doctor", return_value=required_failure):
+                    self.assertEqual(demo.main(["--config", str(config.config_path), "doctor"]), 1)
 
     def test_trace_export_requires_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -245,7 +412,7 @@ class DemoLifecycleRecordTests(unittest.TestCase):
                 {"run_id": "demo-existing", "status": "running", "services": expected_services},
             )
             with (
-                mock.patch.object(demo, "_source_record", return_value={"branch": demo.EXPECTED_BRANCH, "head": "test"}),
+                mock.patch.object(demo, "_source_record", return_value={"branch": "main", "head": "test"}),
                 mock.patch.object(demo, "_listener_identities", return_value=[]),
                 mock.patch.object(demo, "_broker_sessions", return_value={"loopback_sessions": 1, "remote_sessions": 1}),
                 mock.patch.object(demo, "_http_json", return_value={"status": "ok"}),

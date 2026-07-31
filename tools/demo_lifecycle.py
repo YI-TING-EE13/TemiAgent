@@ -40,7 +40,6 @@ if BRIDGE_SRC.as_posix() not in sys.path:
 from hermes_temi_bridge.demo_callback_socket import invoke_demo_callback_socket
 from hermes_temi_bridge.demo_care_memory import seed_demo_care_memory, verify_demo_care_memory
 
-EXPECTED_BRANCH = "codex/media-v11-bridge-runtime"
 ALLOWED_DIRTY_FILES = {
     "memory/daily_state.json",
     "memory/event_log.jsonl",
@@ -63,6 +62,30 @@ CANONICAL_LMSTUDIO_VISIBLE_GPUS = "0,1"
 CANONICAL_LMSTUDIO_MODEL = "temi/gemma-4-31b-it-qat"
 CANONICAL_LMSTUDIO_IDENTIFIER = "google/gemma-4-31b"
 RESOURCE_MANIFEST_PATH = ROOT / "config" / "demo_resources.json"
+PROFILE_PRODUCTION = "production"
+PROFILE_NEWCOMER_MOCK = "newcomer_mock"
+BRANCH_POLICY_REQUIRED = "required"
+BRANCH_POLICY_DISABLED = "disabled"
+PRODUCTION_PORTS = {
+    "lmstudio": 1234,
+    "mqtt": 1883,
+    "adapter_vision": 8080,
+    "adapter_frame": 8081,
+    "resident": 8765,
+    "viewer": 8010,
+    "viewer_aux": 8011,
+}
+NEWCOMER_MOCK_PORTS = {
+    "lmstudio": 29134,
+    "mqtt": 29183,
+    "adapter_vision": 29080,
+    "adapter_frame": 29081,
+    "resident": 29765,
+    "viewer": 29010,
+    "viewer_aux": 29011,
+    "mock_android": 29012,
+    "mock_discord": 29013,
+}
 
 
 class DemoError(RuntimeError):
@@ -157,6 +180,17 @@ def _ownership(values: dict[str, str], name: str, *, default: str) -> str:
     return value
 
 
+def _port(values: dict[str, str], name: str, *, default: int) -> int:
+    """Read one TCP port without accepting a partially parsed value."""
+    try:
+        value = int(values.get(name, str(default)))
+    except ValueError as exc:
+        raise DemoError(f"{name} must be an integer") from exc
+    if not 1 <= value <= 65535:
+        raise DemoError(f"{name} is outside the TCP port range")
+    return value
+
+
 @dataclass(frozen=True)
 class DemoConfig:
     """Validated private configuration and derived paths for one Demo lifecycle."""
@@ -164,6 +198,9 @@ class DemoConfig:
     config_path: Path
     runtime_root: Path
     values: dict[str, str]
+    profile: str
+    branch_policy: str
+    expected_git_branch: str | None
     mqtt_host: str
     mqtt_port: int
     robot_id: str
@@ -189,6 +226,11 @@ class DemoConfig:
     lmstudio_api_identifier: str
     lmstudio_target_dir: Path
     lmstudio_server_port: int
+    adapter_vision_port: int
+    adapter_frame_broadcast_port: int
+    resident_http_port: int
+    viewer_http_port: int
+    viewer_aux_port: int
     mqtt_ownership: str
     mqtt_config_path: Path | None
     gateway_ownership: str
@@ -196,6 +238,69 @@ class DemoConfig:
     manage_android: bool
     viewer_discord_env_path: Path | None
     viewer_discord_enabled: bool
+    mock_android_health_port: int | None
+    mock_discord_port: int | None
+
+    @property
+    def is_newcomer_mock(self) -> bool:
+        """Return whether this resolved config uses only newcomer test doubles."""
+        return self.profile == PROFILE_NEWCOMER_MOCK
+
+    @property
+    def lmstudio_models_url(self) -> str:
+        """Return the configured OpenAI-compatible model-list endpoint."""
+        return f"http://127.0.0.1:{self.lmstudio_server_port}/v1/models"
+
+    @property
+    def resident_health_url(self) -> str:
+        """Return the health URL derived from the resident port."""
+        return f"http://127.0.0.1:{self.resident_http_port}/health"
+
+    @property
+    def resident_invoke_url(self) -> str:
+        """Return the Bridge HTTP client URL derived from the resident port."""
+        return f"http://127.0.0.1:{self.resident_http_port}/invoke"
+
+    @property
+    def viewer_health_url(self) -> str:
+        """Return the viewer health URL derived from the viewer port."""
+        return f"http://127.0.0.1:{self.viewer_http_port}/health"
+
+    @property
+    def mock_android_health_url(self) -> str | None:
+        """Return the managed test Android health URL when the profile owns it."""
+        if self.mock_android_health_port is None:
+            return None
+        return f"http://127.0.0.1:{self.mock_android_health_port}/health"
+
+    @property
+    def mock_discord_url(self) -> str | None:
+        """Return the local test-only Discord endpoint when configured."""
+        if self.mock_discord_port is None:
+            return None
+        return f"http://127.0.0.1:{self.mock_discord_port}/webhook"
+
+    @property
+    def adapter_ports(self) -> tuple[int, int]:
+        """Return the two Overview adapter listeners in contract order."""
+        return (self.adapter_vision_port, self.adapter_frame_broadcast_port)
+
+    @property
+    def lifecycle_ports(self) -> tuple[int, ...]:
+        """Return every listener owned or inspected by this resolved lifecycle."""
+        ports = [
+            self.lmstudio_server_port,
+            self.mqtt_port,
+            *self.adapter_ports,
+            self.resident_http_port,
+            self.viewer_http_port,
+            self.viewer_aux_port,
+        ]
+        if self.mock_android_health_port is not None:
+            ports.append(self.mock_android_health_port)
+        if self.mock_discord_port is not None:
+            ports.append(self.mock_discord_port)
+        return tuple(ports)
 
     @property
     def state_path(self) -> Path:
@@ -250,6 +355,70 @@ def load_config(raw_path: str | Path) -> DemoConfig:
     if path.stat().st_uid != os.geteuid():
         raise DemoError("private env must be owned by the lifecycle user")
     values = _read_env(path)
+    profile = values.get("DEMO_PROFILE", PROFILE_PRODUCTION).strip().lower()
+    if profile not in {PROFILE_PRODUCTION, PROFILE_NEWCOMER_MOCK}:
+        raise DemoError("DEMO_PROFILE must be production or newcomer_mock")
+    branch_policy = values.get("DEMO_GIT_BRANCH_POLICY", BRANCH_POLICY_REQUIRED).strip().lower()
+    if branch_policy not in {BRANCH_POLICY_REQUIRED, BRANCH_POLICY_DISABLED}:
+        raise DemoError("DEMO_GIT_BRANCH_POLICY must be required or disabled")
+    expected_git_branch = values.get("EXPECTED_GIT_BRANCH", "main").strip()
+    if branch_policy == BRANCH_POLICY_REQUIRED and not expected_git_branch:
+        raise DemoError("EXPECTED_GIT_BRANCH is required when branch validation is enabled")
+    if branch_policy == BRANCH_POLICY_DISABLED:
+        expected_git_branch = None
+    runtime_root = Path(_require(values, "TEMIAGENT_RUNTIME_ROOT"))
+    if not runtime_root.is_absolute():
+        raise DemoError("TEMIAGENT_RUNTIME_ROOT must be absolute")
+    _outside_worktrees(runtime_root, label="runtime root")
+    port_defaults = PRODUCTION_PORTS if profile == PROFILE_PRODUCTION else NEWCOMER_MOCK_PORTS
+    lmstudio_server_port = _port(values, "LMSTUDIO_SERVER_PORT", default=port_defaults["lmstudio"])
+    mqtt_port = _port(values, "MQTT_BROKER_PORT", default=port_defaults["mqtt"])
+    adapter_vision_port = _port(values, "ADAPTER_VISION_PORT", default=port_defaults["adapter_vision"])
+    adapter_frame_broadcast_port = _port(
+        values, "ADAPTER_FRAME_BROADCAST_PORT", default=port_defaults["adapter_frame"]
+    )
+    resident_http_port = _port(values, "RESIDENT_HTTP_PORT", default=port_defaults["resident"])
+    viewer_http_port = _port(values, "VIEWER_HTTP_PORT", default=port_defaults["viewer"])
+    viewer_aux_port = _port(values, "VIEWER_AUX_PORT", default=port_defaults["viewer_aux"])
+    mock_android_health_port = (
+        _port(values, "MOCK_ANDROID_HEALTH_PORT", default=NEWCOMER_MOCK_PORTS["mock_android"])
+        if profile == PROFILE_NEWCOMER_MOCK
+        else None
+    )
+    mock_discord_port = (
+        _port(values, "MOCK_DISCORD_PORT", default=NEWCOMER_MOCK_PORTS["mock_discord"])
+        if profile == PROFILE_NEWCOMER_MOCK
+        else None
+    )
+    configured_ports = {
+        "LMSTUDIO_SERVER_PORT": lmstudio_server_port,
+        "MQTT_BROKER_PORT": mqtt_port,
+        "ADAPTER_VISION_PORT": adapter_vision_port,
+        "ADAPTER_FRAME_BROADCAST_PORT": adapter_frame_broadcast_port,
+        "RESIDENT_HTTP_PORT": resident_http_port,
+        "VIEWER_HTTP_PORT": viewer_http_port,
+        "VIEWER_AUX_PORT": viewer_aux_port,
+    }
+    if profile == PROFILE_PRODUCTION:
+        expected_ports = {
+            "LMSTUDIO_SERVER_PORT": PRODUCTION_PORTS["lmstudio"],
+            "MQTT_BROKER_PORT": PRODUCTION_PORTS["mqtt"],
+            "ADAPTER_VISION_PORT": PRODUCTION_PORTS["adapter_vision"],
+            "ADAPTER_FRAME_BROADCAST_PORT": PRODUCTION_PORTS["adapter_frame"],
+            "RESIDENT_HTTP_PORT": PRODUCTION_PORTS["resident"],
+            "VIEWER_HTTP_PORT": PRODUCTION_PORTS["viewer"],
+            "VIEWER_AUX_PORT": PRODUCTION_PORTS["viewer_aux"],
+        }
+        for name, expected in expected_ports.items():
+            if configured_ports[name] != expected:
+                raise DemoError(f"{name} must be {expected} for the production Demo profile")
+    else:
+        configured_ports["MOCK_ANDROID_HEALTH_PORT"] = mock_android_health_port
+        configured_ports["MOCK_DISCORD_PORT"] = mock_discord_port
+        if any(port < 20_000 for port in configured_ports.values()):
+            raise DemoError("newcomer_mock ports must be isolated high ports (>=20000)")
+        if len(set(configured_ports.values())) != len(configured_ports):
+            raise DemoError("newcomer_mock listener ports must be unique")
     try:
         context_length = int(values.get("CONTEXT_LENGTH", str(CANONICAL_CONTEXT_LENGTH)))
         lmstudio_context_length = int(values.get("LMSTUDIO_CONTEXT_LENGTH", str(context_length)))
@@ -282,32 +451,25 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         raise DemoError(f"LMSTUDIO_MODEL_ID must be {CANONICAL_LMSTUDIO_MODEL}")
     if lmstudio_api_identifier != CANONICAL_LMSTUDIO_IDENTIFIER:
         raise DemoError(f"LMSTUDIO_API_IDENTIFIER must be {CANONICAL_LMSTUDIO_IDENTIFIER}")
-    try:
-        lmstudio_server_port = int(values.get("LMSTUDIO_SERVER_PORT", "1234"))
-    except ValueError as exc:
-        raise DemoError("LMSTUDIO_SERVER_PORT must be an integer") from exc
-    if lmstudio_server_port != 1234:
-        raise DemoError("LMSTUDIO_SERVER_PORT must be 1234 for the current Demo contract")
     lmstudio_target_dir = Path(
-        values.get("LMSTUDIO_TARGET_DIR", str(ROOT / ".lmstudio-data"))
+        values.get(
+            "LMSTUDIO_TARGET_DIR",
+            str(ROOT / ".lmstudio-data") if profile == PROFILE_PRODUCTION else str(runtime_root / "data" / "mock-lmstudio"),
+        )
     )
     if not lmstudio_target_dir.is_absolute():
         raise DemoError("LMSTUDIO_TARGET_DIR must be absolute")
-    runtime_root = Path(_require(values, "TEMIAGENT_RUNTIME_ROOT"))
-    if not runtime_root.is_absolute():
-        raise DemoError("TEMIAGENT_RUNTIME_ROOT must be absolute")
-    _outside_worktrees(runtime_root, label="runtime root")
-    try:
-        mqtt_port = int(_require(values, "MQTT_BROKER_PORT"))
-    except ValueError as exc:
-        raise DemoError("MQTT_BROKER_PORT must be an integer") from exc
-    if not 1 <= mqtt_port <= 65535:
-        raise DemoError("MQTT_BROKER_PORT is outside the TCP port range")
     mqtt_config_path = None
     if mqtt_ownership == "managed":
-        mqtt_config_path = Path(_require(values, "MQTT_CONFIG_PATH"))
-        if not mqtt_config_path.is_absolute() or not mqtt_config_path.is_file():
-            raise DemoError("MQTT_CONFIG_PATH must be an existing absolute file for managed MQTT")
+        if profile == PROFILE_NEWCOMER_MOCK:
+            mqtt_config_path = runtime_root / "config" / "mosquitto.conf"
+            supplied_path = values.get("MQTT_CONFIG_PATH", "").strip()
+            if supplied_path and Path(supplied_path) != mqtt_config_path:
+                raise DemoError("newcomer_mock MQTT_CONFIG_PATH must be its derived runtime config path")
+        else:
+            mqtt_config_path = Path(_require(values, "MQTT_CONFIG_PATH"))
+            if not mqtt_config_path.is_absolute() or not mqtt_config_path.is_file():
+                raise DemoError("MQTT_CONFIG_PATH must be an existing absolute file for managed MQTT")
     robot_id = _require(values, "ROBOT_ID_ALLOWLIST").split(",", 1)[0].strip()
     if not robot_id:
         raise DemoError("ROBOT_ID_ALLOWLIST has no primary robot id")
@@ -360,14 +522,16 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         raise DemoError("the current single-container Demo requires matching Bridge/Hermes shared roots")
     if _require(values, "HERMES_INVOKE_MODE").strip().lower() != "http":
         raise DemoError("HERMES_INVOKE_MODE must be http for the resident Demo route")
-    _require(values, "HERMES_HTTP_URL")
+    resident_invoke_url = f"http://127.0.0.1:{resident_http_port}/invoke"
+    if _require(values, "HERMES_HTTP_URL") != resident_invoke_url:
+        raise DemoError("HERMES_HTTP_URL must be derived from RESIDENT_HTTP_PORT")
     for flag in MEDIA_FLAGS:
         if not _truthy(_require(values, flag)):
             raise DemoError(f"{flag} must be true for this Media Demo")
     viewer_enabled = _truthy(values.get("DEMO_ACTION_VIEWER_ENABLED", "false"))
     viewer_discord_enabled = values.get("DEMO_ACTION_VIEWER_DISCORD_NOTIFY", "disabled").strip().lower() == "enabled"
     viewer_discord_env_path = None
-    if viewer_enabled:
+    if viewer_enabled and profile == PROFILE_PRODUCTION:
         for name in (
             "DEMO_ACTION_VIEWER_MODEL",
             "DEMO_ACTION_VIEWER_GGUF_MODEL_PATH",
@@ -385,6 +549,17 @@ def load_config(raw_path: str | Path) -> DemoConfig:
             ):
                 raise DemoError("DEMO_ACTION_VIEWER_DISCORD_ENV_PATH must be an owner-only regular file")
             _outside_worktrees(viewer_discord_env_path, label="Discord credential env")
+    if profile == PROFILE_NEWCOMER_MOCK:
+        if lmstudio_ownership != "managed" or mqtt_ownership != "managed":
+            raise DemoError("newcomer_mock must lifecycle-manage its LM and MQTT test doubles")
+        if _require(values, "MQTT_BROKER_HOST") != "127.0.0.1":
+            raise DemoError("newcomer_mock MQTT_BROKER_HOST must be loopback")
+        if gateway_enabled or gateway_ownership != "disabled":
+            raise DemoError("newcomer_mock must explicitly disable the Hermes gateway")
+        if not viewer_enabled:
+            raise DemoError("newcomer_mock requires DEMO_ACTION_VIEWER_ENABLED=true")
+        if viewer_discord_enabled:
+            raise DemoError("newcomer_mock does not permit a real Discord credential route")
     manage_android = _truthy(values.get("MANAGE_ANDROID", "false"))
     if manage_android:
         raise DemoError("MANAGE_ANDROID=true is not supported by the canonical software-only lifecycle")
@@ -398,6 +573,9 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         config_path=path.resolve(),
         runtime_root=runtime_root.resolve(),
         values=values,
+        profile=profile,
+        branch_policy=branch_policy,
+        expected_git_branch=expected_git_branch,
         mqtt_host=_require(values, "MQTT_BROKER_HOST"),
         mqtt_port=mqtt_port,
         robot_id=robot_id,
@@ -423,6 +601,11 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         lmstudio_api_identifier=lmstudio_api_identifier,
         lmstudio_target_dir=lmstudio_target_dir.resolve(),
         lmstudio_server_port=lmstudio_server_port,
+        adapter_vision_port=adapter_vision_port,
+        adapter_frame_broadcast_port=adapter_frame_broadcast_port,
+        resident_http_port=resident_http_port,
+        viewer_http_port=viewer_http_port,
+        viewer_aux_port=viewer_aux_port,
         mqtt_ownership=mqtt_ownership,
         mqtt_config_path=mqtt_config_path.resolve() if mqtt_config_path is not None else None,
         gateway_ownership=gateway_ownership,
@@ -430,6 +613,8 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         manage_android=manage_android,
         viewer_discord_env_path=viewer_discord_env_path.resolve() if viewer_discord_env_path is not None else None,
         viewer_discord_enabled=viewer_discord_enabled,
+        mock_android_health_port=mock_android_health_port,
+        mock_discord_port=mock_discord_port,
     )
 
 
@@ -471,6 +656,31 @@ def ensure_runtime_layout(config: DemoConfig) -> None:
         _mkdir_private(path)
     if stat.S_IMODE(config.config_path.parent.stat().st_mode) & (stat.S_IRWXG | stat.S_IRWXO):
         raise DemoError("private config parent directory must be owner-only")
+    if config.is_newcomer_mock:
+        _write_mock_mosquitto_config(config)
+
+
+def _write_mock_mosquitto_config(config: DemoConfig) -> None:
+    """Create the profile-derived, private broker config only during mutation."""
+    if not config.is_newcomer_mock or config.mqtt_config_path is None:
+        return
+    content = (
+        f"listener {config.mqtt_port} 127.0.0.1\n"
+        "allow_anonymous true\n"
+        "persistence false\n"
+        "log_dest stdout\n"
+    )
+    descriptor = os.open(
+        config.mqtt_config_path,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    try:
+        os.write(descriptor, content.encode("utf-8"))
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    os.chmod(config.mqtt_config_path, 0o600)
 
 
 def _atomic_json(path: Path, payload: object) -> None:
@@ -637,6 +847,26 @@ def _http_json(url: str, timeout: int = 5) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _http_health(url: str, timeout: int = 5) -> tuple[dict[str, Any] | None, str, str]:
+    """Fetch one health surface with a stable failure category for doctor."""
+    try:
+        with urlopen(url, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except TimeoutError:
+        return None, "ENDPOINT_TIMEOUT", f"timed out calling {url}"
+    except URLError as exc:
+        if isinstance(exc.reason, TimeoutError):
+            return None, "ENDPOINT_TIMEOUT", f"timed out calling {url}"
+        return None, "ENDPOINT_UNAVAILABLE", f"endpoint unavailable: {url}"
+    except OSError:
+        return None, "ENDPOINT_UNAVAILABLE", f"endpoint unavailable: {url}"
+    except (ValueError, json.JSONDecodeError):
+        return None, "HEALTH_MALFORMED", f"health response was not JSON: {url}"
+    if not isinstance(payload, dict):
+        return None, "HEALTH_MALFORMED", f"health response was not a JSON object: {url}"
+    return payload, "HEALTHY", f"health endpoint responded: {url}"
+
+
 def _mqtt_tcp_ready(config: DemoConfig) -> bool:
     try:
         with socket.create_connection((config.mqtt_host, config.mqtt_port), timeout=3):
@@ -660,14 +890,12 @@ def _lmstudio_lms(config: DemoConfig, *args: str, timeout: int = 20) -> subproce
 
 
 def _lmstudio_ready(config: DemoConfig) -> bool:
-    payload = _http_json(f"http://127.0.0.1:{config.lmstudio_server_port}/v1/models")
+    payload, _, _ = _http_health(config.lmstudio_models_url)
     if payload is None:
         return False
     models = payload.get("data")
     if not isinstance(models, list):
-        # This branch keeps no-hardware tests focused on endpoint behavior. A
-        # real OpenAI-compatible response is checked below when available.
-        return True
+        return False
     return any(
         isinstance(item, dict) and item.get("id") == config.lmstudio_api_identifier
         for item in models
@@ -675,6 +903,8 @@ def _lmstudio_ready(config: DemoConfig) -> bool:
 
 
 def _lmstudio_context_ready(config: DemoConfig) -> bool:
+    if config.is_newcomer_mock:
+        return _lmstudio_ready(config)
     try:
         completed = _lmstudio_lms(config, "ps", timeout=15)
     except (OSError, subprocess.TimeoutExpired, DemoError):
@@ -763,7 +993,7 @@ def _specs(config: DemoConfig) -> dict[str, ServiceSpec]:
         specs["lmstudio"] = ServiceSpec(
             "lmstudio",
             ROOT,
-            "managed_lmstudio_supervisor.py",
+            "mock_lmstudio_server.py" if config.is_newcomer_mock else "managed_lmstudio_supervisor.py",
             (config.lmstudio_server_port,),
             config.runtime_root / "logs" / "lmstudio" / "lmstudio.log",
         )
@@ -776,8 +1006,8 @@ def _specs(config: DemoConfig) -> dict[str, ServiceSpec]:
             config.runtime_root / "logs" / "mqtt" / "mosquitto.log",
         )
     specs.update({
-        "adapter": ServiceSpec("adapter", ROOT / "temi_backend", "temi_overview_adapter.py", (8080, 8081), config.runtime_root / "logs" / "asr" / "overview_adapter.log"),
-        "resident": ServiceSpec("resident", ROOT, "tools/hermes_resident_server.py", (8765,), config.runtime_root / "logs" / "hermes" / "resident.log"),
+        "adapter": ServiceSpec("adapter", ROOT / "temi_backend", "temi_overview_adapter.py", config.adapter_ports, config.runtime_root / "logs" / "asr" / "overview_adapter.log"),
+        "resident": ServiceSpec("resident", ROOT, "mock_resident_server.py" if config.is_newcomer_mock else "tools/hermes_resident_server.py", (config.resident_http_port,), config.runtime_root / "logs" / "hermes" / "resident.log"),
         "bridge": ServiceSpec("bridge", ROOT / "hermes_temi_bridge", "hermes-temi-bridge", (), config.runtime_root / "logs" / "bridge" / "bridge.log"),
     })
     if config.gateway_ownership == "managed":
@@ -789,7 +1019,11 @@ def _specs(config: DemoConfig) -> dict[str, ServiceSpec]:
             config.runtime_root / "logs" / "gateway" / "gateway.log",
         )
     if config.viewer_enabled:
-        specs["viewer"] = ServiceSpec("viewer", ROOT / "anomaly_detection", "temi_action_viewer.py", (8010, 8011), config.runtime_root / "logs" / "trace" / "action_viewer.log")
+        specs["viewer"] = ServiceSpec("viewer", ROOT if config.is_newcomer_mock else ROOT / "anomaly_detection", "mock_viewer_server.py" if config.is_newcomer_mock else "temi_action_viewer.py", (config.viewer_http_port, config.viewer_aux_port), config.runtime_root / "logs" / "trace" / "action_viewer.log")
+    if config.is_newcomer_mock:
+        assert config.mock_android_health_port is not None and config.mock_discord_port is not None
+        specs["mock_android"] = ServiceSpec("mock_android", ROOT, "mock_android_executor.py", (config.mock_android_health_port,), config.runtime_root / "logs" / "mock" / "android.log")
+        specs["mock_discord"] = ServiceSpec("mock_discord", ROOT, "mock_discord_server.py", (config.mock_discord_port,), config.runtime_root / "logs" / "mock" / "discord.log")
     return specs
 
 
@@ -816,10 +1050,10 @@ def _write_pre_restart_evidence(config: DemoConfig) -> Path:
         "recorded_at": _utc_now(),
         "source": _source_record(),
         "owned_processes_before_stop": previous_ownership,
-        "ports": {str(port): _listener_identities(port) for port in (1234, 1883, 8080, 8081, 8765, 8010, 8011)},
+        "ports": {str(port): _listener_identities(port) for port in config.lifecycle_ports},
         "broker_sessions": _broker_sessions(config),
-        "resident_health": _http_json("http://127.0.0.1:8765/health"),
-        "viewer_health": _http_json("http://127.0.0.1:8010/health"),
+        "resident_health": _resident_health(config),
+        "viewer_health": _http_json(config.viewer_health_url),
         "flags": config.flags,
         "callback_socket_exists": config.callback_socket.exists(),
         "callback_sockets": {str(path): path.exists() for path in config.callback_sockets},
@@ -829,12 +1063,12 @@ def _write_pre_restart_evidence(config: DemoConfig) -> Path:
     return path
 
 
-def _resident_health() -> dict[str, Any] | None:
-    return _http_json("http://127.0.0.1:8765/health")
+def _resident_health(config: DemoConfig) -> dict[str, Any] | None:
+    return _http_json(config.resident_health_url)
 
 
 def _resident_ready(config: DemoConfig) -> bool:
-    health = _resident_health()
+    health = _resident_health(config)
     if not (
         health
         and health.get("status") == "ok"
@@ -861,14 +1095,30 @@ def _resident_ready(config: DemoConfig) -> bool:
     return True
 
 
-def _viewer_ready() -> bool:
-    health = _http_json("http://127.0.0.1:8010/health")
+def _viewer_ready(config: DemoConfig) -> bool:
+    health = _http_json(config.viewer_health_url)
     return bool(
         health
         and health.get("ok") is True
         and health.get("source_connected") is True
         and health.get("llama_server_ready") is True
     )
+
+
+def _mock_android_ready(config: DemoConfig) -> bool:
+    """Verify the managed Android test double without claiming a real device."""
+    if config.mock_android_health_url is None:
+        return False
+    health = _http_json(config.mock_android_health_url)
+    return bool(health and health.get("ok") is True and health.get("test_double") == "android")
+
+
+def _mock_discord_ready(config: DemoConfig) -> bool:
+    """Verify the local notification test double without contacting Discord."""
+    if config.mock_discord_url is None:
+        return False
+    health = _http_json(config.mock_discord_url.removesuffix("/webhook") + "/health")
+    return bool(health and health.get("ok") is True and health.get("test_double") == "discord")
 
 
 def _socket_ready(config: DemoConfig) -> bool:
@@ -1058,6 +1308,14 @@ def _remove_owned_callback_sockets(config: DemoConfig, record: dict[str, Any]) -
 def _service_argv(config: DemoConfig, name: str) -> list[str]:
     skills = ROOT / "hermes-agent" / "skills"
     if name == "lmstudio":
+        if config.is_newcomer_mock:
+            return [
+                sys.executable,
+                str(ROOT / "tools" / "mocks" / "mock_lmstudio_server.py"),
+                "--host", "127.0.0.1",
+                "--port", str(config.lmstudio_server_port),
+                "--model-id", config.lmstudio_api_identifier,
+            ]
         return [
             sys.executable,
             str(ROOT / "tools" / "managed_lmstudio_supervisor.py"),
@@ -1083,17 +1341,25 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
             "--robot-id", config.robot_id,
             "--broker", config.mqtt_host,
             "--port", str(config.mqtt_port),
-            "--vision-port", "8080",
-            "--frame-broadcast-port", "8081",
+            "--vision-port", str(config.adapter_vision_port),
+            "--frame-broadcast-port", str(config.adapter_frame_broadcast_port),
             "--shared-root", str(config.shared_root),
             "--bridge-root", str(config.shared_root),
             "--conversation-id", "conv_first_year_demo",
         ]
     if name == "resident":
+        if config.is_newcomer_mock:
+            return [
+                sys.executable,
+                str(ROOT / "tools" / "mocks" / "mock_resident_server.py"),
+                "--host", "127.0.0.1",
+                "--port", str(config.resident_http_port),
+                "--state-dir", str(config.runtime_root / "data" / "mock-resident"),
+            ]
         argv = [
             str(ROOT / "hermes-agent" / "venv" / "bin" / "python3"),
             str(ROOT / "tools" / "hermes_resident_server.py"),
-            "--host", "127.0.0.1", "--port", "8765",
+            "--host", "127.0.0.1", "--port", str(config.resident_http_port),
         ]
         for skill in ("temi-robot-control", "temi-care-memory", "temi-home-esi", "temi-discord-care-assistant"):
             argv.extend(["--skill-path", str(skills / skill / "SKILL.md")])
@@ -1113,16 +1379,24 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
             "run",
         ]
     if name == "viewer":
+        if config.is_newcomer_mock:
+            return [
+                sys.executable,
+                str(ROOT / "tools" / "mocks" / "mock_viewer_server.py"),
+                "--host", "127.0.0.1",
+                "--port", str(config.viewer_http_port),
+                "--aux-port", str(config.viewer_aux_port),
+            ]
         return [
             str(ROOT / "anomaly_detection" / ".venv" / "bin" / "python"),
             str(ROOT / "anomaly_detection" / "temi_action_viewer.py"),
-            "--host", "0.0.0.0", "--port", "8010",
-            "--source-url", "ws://127.0.0.1:8081",
+            "--host", "0.0.0.0", "--port", str(config.viewer_http_port),
+            "--source-url", f"ws://127.0.0.1:{config.adapter_frame_broadcast_port}",
             "--model", config.values["DEMO_ACTION_VIEWER_MODEL"],
             "--gguf-model-path", config.values["DEMO_ACTION_VIEWER_GGUF_MODEL_PATH"],
             "--mmproj-path", config.values["DEMO_ACTION_VIEWER_MMPROJ_PATH"],
             "--llama-server", config.values["DEMO_ACTION_VIEWER_LLAMA_SERVER"],
-            "--llama-server-port", config.values.get("DEMO_ACTION_VIEWER_LLAMA_SERVER_PORT", "8011"),
+            "--llama-server-port", str(config.viewer_aux_port),
             "--llama-cuda-visible-devices", config.values.get("DEMO_ACTION_VIEWER_CUDA_VISIBLE_DEVICES", "3"),
             "--pose-mode", config.values.get("DEMO_ACTION_VIEWER_POSE_MODE", "auto"),
             "--pose-model", config.values.get("DEMO_ACTION_VIEWER_POSE_MODEL", "yolo26x-pose.pt"),
@@ -1137,6 +1411,27 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
             "--discord-notify", config.values.get("DEMO_ACTION_VIEWER_DISCORD_NOTIFY", "disabled"),
             "--discord-env-path", str(config.viewer_discord_env_path) if config.viewer_discord_env_path is not None else "/dev/null",
             "--pre-alert-speak", config.values.get("DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK", "disabled"),
+        ]
+    if name == "mock_android":
+        assert config.mock_android_health_port is not None
+        return [
+            str(ROOT / "hermes_temi_bridge" / ".venv" / "bin" / "python"),
+            str(ROOT / "tools" / "mocks" / "mock_android_executor.py"),
+            "--host", "127.0.0.1",
+            "--health-port", str(config.mock_android_health_port),
+            "--broker", config.mqtt_host,
+            "--mqtt-port", str(config.mqtt_port),
+            "--robot-id", config.robot_id,
+            "--trace-path", str(config.runtime_root / "logs" / "mock" / "android-events.jsonl"),
+        ]
+    if name == "mock_discord":
+        assert config.mock_discord_port is not None
+        return [
+            sys.executable,
+            str(ROOT / "tools" / "mocks" / "mock_discord_server.py"),
+            "--host", "127.0.0.1",
+            "--port", str(config.mock_discord_port),
+            "--trace-path", str(config.runtime_root / "logs" / "mock" / "discord-events.jsonl"),
         ]
     raise DemoError(f"unknown Demo service: {name}")
 
@@ -1159,15 +1454,29 @@ def _base_env(config: DemoConfig, run_id: str) -> dict[str, str]:
     env["LMSTUDIO_CONTEXT_LENGTH"] = str(config.lmstudio_context_length)
     env["LMSTUDIO_VISIBLE_GPUS"] = config.lmstudio_visible_gpus
     env["LMSTUDIO_SERVER_PORT"] = str(config.lmstudio_server_port)
+    env["MQTT_BROKER_HOST"] = config.mqtt_host
+    env["MQTT_BROKER_PORT"] = str(config.mqtt_port)
+    env["ADAPTER_VISION_PORT"] = str(config.adapter_vision_port)
+    env["ADAPTER_FRAME_BROADCAST_PORT"] = str(config.adapter_frame_broadcast_port)
+    env["RESIDENT_HTTP_PORT"] = str(config.resident_http_port)
+    env["HERMES_HTTP_URL"] = config.resident_invoke_url
+    env["VIEWER_HTTP_PORT"] = str(config.viewer_http_port)
+    env["VIEWER_AUX_PORT"] = str(config.viewer_aux_port)
+    env["DEMO_PROFILE"] = config.profile
     env["TRACE_RUN_ID"] = run_id
     env["PYTHONUNBUFFERED"] = "1"
     return env
 
 
-def _validate_source() -> dict[str, Any]:
+def _validate_source(config: DemoConfig) -> dict[str, Any]:
     source = _source_record()
-    if source["branch"] != EXPECTED_BRANCH:
-        raise DemoError(f"unexpected branch {source['branch']}; expected {EXPECTED_BRANCH}")
+    if config.branch_policy == BRANCH_POLICY_REQUIRED:
+        if not source["branch"]:
+            raise DemoError("detached HEAD is not allowed while branch validation is required")
+        if source["branch"] != config.expected_git_branch:
+            raise DemoError(
+                f"unexpected branch {source['branch']}; expected {config.expected_git_branch}"
+            )
     unexpected = [line for line in source["tree"] if line[3:] not in ALLOWED_DIRTY_FILES]
     if unexpected:
         raise DemoError("repository has non-runtime dirty files: " + ", ".join(unexpected))
@@ -1251,7 +1560,7 @@ def _stop_lmstudio(config: DemoConfig) -> None:
 def start(config: DemoConfig) -> dict[str, Any]:
     """Start or reuse only verified managed services in dependency order."""
 
-    source = _validate_source()
+    source = _validate_source(config)
     ensure_runtime_layout(config)
     existing = _read_json(config.state_path)
     if existing and existing.get("status") == "running":
@@ -1279,13 +1588,13 @@ def start(config: DemoConfig) -> dict[str, Any]:
             "lmstudio": config.lmstudio_ownership,
             "mqtt": config.mqtt_ownership,
             "gateway": config.gateway_ownership,
-            "android": "external" if not config.manage_android else "managed",
+            "android": "mock" if config.is_newcomer_mock else "external" if not config.manage_android else "managed",
         },
     }
     env = _base_env(config, run_id)
     started: list[dict[str, Any]] = []
     try:
-        for name in ("lmstudio", "mqtt", "adapter", "resident", "bridge", "gateway", "viewer"):
+        for name in ("lmstudio", "mqtt", "adapter", "resident", "bridge", "mock_android", "mock_discord", "gateway", "viewer"):
             spec = specs.get(name)
             if spec is None:
                 continue
@@ -1306,15 +1615,29 @@ def start(config: DemoConfig) -> dict[str, Any]:
                     30,
                 )
             elif name == "adapter":
-                ok = _wait_for(lambda: _listener_count(8080) == 1 and _listener_count(8081) == 1, 30)
+                ok = _wait_for(
+                    lambda: all(_listener_count(port) == 1 for port in config.adapter_ports), 30
+                )
             elif name == "resident":
                 ok = _wait_for(lambda: _resident_ready(config), config.timeout_seconds)
             elif name == "bridge":
                 ok = _wait_for(lambda: _identity_matches(record["leader"]) and _socket_ready(config), 30)
             elif name == "gateway":
                 ok = _wait_for(lambda: _identity_matches(record["leader"]) and _gateway_ready(config), 30)
+            elif name == "mock_android":
+                ok = _wait_for(
+                    lambda: _identity_matches(record["leader"])
+                    and _mock_android_ready(config),
+                    30,
+                )
+            elif name == "mock_discord":
+                ok = _wait_for(
+                    lambda: _identity_matches(record["leader"])
+                    and _mock_discord_ready(config),
+                    30,
+                )
             else:
-                ok = _wait_for(_viewer_ready, config.timeout_seconds)
+                ok = _wait_for(lambda: _viewer_ready(config), config.timeout_seconds)
             if not ok:
                 raise DemoError(f"{name} did not pass its health gate; inspect {spec.log_path}")
             _attach_listeners(record)
@@ -1363,7 +1686,7 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
         return {"state": "DEMO_STOPPED", "already_stopped": True, "results": []}
     records = _state_records(state)
     results: list[dict[str, str]] = []
-    for name in ("viewer", "gateway", "bridge", "resident", "adapter", "mqtt", "lmstudio"):
+    for name in ("viewer", "gateway", "mock_discord", "mock_android", "bridge", "resident", "adapter", "mqtt", "lmstudio"):
         record = records.get(name)
         if record is None:
             continue
@@ -1390,7 +1713,7 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
 def restart(config: DemoConfig) -> dict[str, Any]:
     """Archive pre-restart evidence, then perform one verified stop/start transition."""
 
-    source = _validate_source()
+    source = _validate_source(config)
     ensure_runtime_layout(config)
     before = _write_pre_restart_evidence(config)
     stopped = stop(config, adopt_for_restart=True)
@@ -1419,9 +1742,9 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
     state = state or _read_json(config.state_path) or {}
     records = _state_records(state) if state else {}
     service_identity = {name: _identity_matches(record.get("leader", {})) for name, record in records.items()}
-    resident = _resident_health()
-    viewer = _http_json("http://127.0.0.1:8010/health") if config.viewer_enabled else None
-    listeners = {str(port): _listener_count(port) for port in (config.lmstudio_server_port, config.mqtt_port, 8080, 8081, 8765, 8010, 8011)}
+    resident = _resident_health(config)
+    viewer = _http_json(config.viewer_health_url) if config.viewer_enabled else None
+    listeners = {str(port): _listener_count(port) for port in config.lifecycle_ports}
     broker = {"tcp_ready": _mqtt_tcp_ready(config), "listener_count": listeners[str(config.mqtt_port)], **_broker_sessions(config)}
     lmstudio_ok = _lmstudio_ready(config) and (
         config.lmstudio_ownership != "managed" or service_identity.get("lmstudio", False)
@@ -1433,7 +1756,7 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
         _gateway_ready(config)
         and (config.gateway_ownership != "managed" or service_identity.get("gateway", False))
     )
-    adapter_ok = listeners["8080"] == 1 and listeners["8081"] == 1 and service_identity.get("adapter", False)
+    adapter_ok = all(listeners[str(port)] == 1 for port in config.adapter_ports) and service_identity.get("adapter", False)
     resident_ok = _resident_ready(config) and service_identity.get("resident", False)
     bridge_ok = service_identity.get("bridge", False) and _socket_ready(config) and mqtt_ok
     viewer_ok = (not config.viewer_enabled) or bool(
@@ -1445,13 +1768,35 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
         and (not config.viewer_discord_enabled or viewer.get("discord_webhook_configured") is True)
         and service_identity.get("viewer", False)
     )
-    backend_ready = bool(lmstudio_ok and mqtt_ok and adapter_ok and resident_ok and bridge_ok and gateway_ok and viewer_ok)
+    mock_android_ok = (not config.is_newcomer_mock) or (
+        _mock_android_ready(config) and service_identity.get("mock_android", False)
+    )
+    mock_discord_ok = (not config.is_newcomer_mock) or (
+        _mock_discord_ready(config) and service_identity.get("mock_discord", False)
+    )
+    backend_ready = bool(
+        lmstudio_ok
+        and mqtt_ok
+        and adapter_ok
+        and resident_ok
+        and bridge_ok
+        and gateway_ok
+        and viewer_ok
+        and mock_android_ok
+        and mock_discord_ok
+    )
     android_observed = broker["remote_sessions"] > 0
-    readiness = "DEMO_READY" if backend_ready and android_observed else "BACKEND_READY_WAITING_ANDROID" if backend_ready else "BACKEND_NOT_READY"
+    if config.is_newcomer_mock:
+        readiness = "NEWCOMER_MOCK_READY" if backend_ready else "NEWCOMER_MOCK_NOT_READY"
+    else:
+        readiness = "DEMO_READY" if backend_ready and android_observed else "BACKEND_READY_WAITING_ANDROID" if backend_ready else "BACKEND_NOT_READY"
     return {
         "readiness": readiness,
+        "profile": config.profile,
         "backend_ready": backend_ready,
-        "android_connection_observed": android_observed,
+        "android_connection_observed": android_observed if not config.is_newcomer_mock else False,
+        "mock_android_ready": mock_android_ok if config.is_newcomer_mock else None,
+        "mock_discord_ready": mock_discord_ok if config.is_newcomer_mock else None,
         "source": state.get("source") if state else _source_record(),
         "runtime_root": str(config.runtime_root),
         "private_env": str(config.config_path),
@@ -1464,7 +1809,7 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
             "lmstudio": config.lmstudio_ownership,
             "mqtt": config.mqtt_ownership,
             "gateway": config.gateway_ownership,
-            "android": "external" if not config.manage_android else "managed",
+            "android": "mock" if config.is_newcomer_mock else "external" if not config.manage_android else "managed",
         },
         "lmstudio": {
             "ready": lmstudio_ok,
@@ -1479,6 +1824,13 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
         "broker": broker,
         "resident_health": resident,
         "viewer_health": viewer,
+        "endpoints": {
+            "lmstudio_models": config.lmstudio_models_url,
+            "resident_health": config.resident_health_url,
+            "resident_invoke": config.resident_invoke_url,
+            "viewer_health": config.viewer_health_url,
+            "mock_discord": config.mock_discord_url,
+        },
         "callback_socket": {"path": str(config.callback_socket), "exists": config.callback_socket.exists() and stat.S_ISSOCK(config.callback_socket.stat().st_mode)},
         "callback_sockets": {str(path): path.exists() and stat.S_ISSOCK(path.stat().st_mode) for path in config.callback_sockets},
         "demo_identity_status": _demo_identity_status(config),
@@ -1490,63 +1842,160 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
 def doctor(config: DemoConfig) -> dict[str, Any]:
     """Run non-mutating configuration, source, dependency, and ownership diagnostics."""
 
-    checks: list[dict[str, str]] = []
+    checks: list[dict[str, Any]] = []
+    state = _read_json(config.state_path) or {}
+    records = _state_records(state) if state else {}
 
-    def check(name: str, operation: Callable[[], str]) -> None:
+    def add(name: str, status: str, code: str, message: str, *, required: bool) -> None:
+        if status not in {"PASS", "WARNING", "SKIPPED", "FAIL"}:
+            raise DemoError(f"doctor emitted unsupported status {status}")
+        checks.append(
+            {"name": name, "status": status, "code": code, "message": message, "required": required}
+        )
+
+    def guarded(name: str, operation: Callable[[], str], *, required: bool = True) -> None:
         try:
-            checks.append({"name": name, "status": "PASS", "detail": operation()})
+            add(name, "PASS", "CHECK_PASSED", operation(), required=required)
         except Exception as exc:
-            checks.append({"name": name, "status": "FAIL", "detail": f"{type(exc).__name__}: {exc}"})
+            add(name, "FAIL", "CHECK_FAILED", f"{type(exc).__name__}: {exc}", required=required)
 
-    check("repository", lambda: f"branch={_validate_source()['branch']} head={_validate_source()['head']}")
-    check("private_env", lambda: f"mode={stat.S_IMODE(config.config_path.stat().st_mode):03o} outside_worktree=true")
-    check("runtime_root", lambda: f"outside_worktree=true exists={config.runtime_root.is_dir()} mode={stat.S_IMODE(config.runtime_root.stat().st_mode):03o}")
-    check("runtime_paths", lambda: "all required writable paths are under the external runtime root" if all(_has_writable_existing_parent(path) for path in (config.bridge_log_dir / "x", config.memory_dir / "x", *config.callback_sockets, *((config.identity_state_dir / "x",) if config.identity_state_dir is not None else ()))) else "required runtime parent is not writable")
-    check("entrypoints", lambda: "all current source entrypoints exist" if all(path.exists() for path in (ROOT / "tools" / "temi_overview_adapter.py", ROOT / "tools" / "hermes_resident_server.py", ROOT / "hermes_temi_bridge" / ".venv" / "bin" / "hermes-temi-bridge")) else "a required entrypoint is missing")
-    check("resource_manifest", lambda: json.dumps(_validate_resource_manifest(), sort_keys=True))
-    check(
-        "mqtt_broker",
+    guarded(
+        "repository",
         lambda: (
-            f"ownership={config.mqtt_ownership}; endpoint reachable with exactly one listener"
-            if _mqtt_tcp_ready(config) and _listener_count(config.mqtt_port) == 1
-            else "ownership=managed; verified config is ready for lifecycle start"
-            if config.mqtt_ownership == "managed" and config.mqtt_config_path is not None
-            else "broker endpoint unavailable or listener count is not one"
+            f"branch={_validate_source(config)['branch'] or 'detached'} "
+            f"head={_validate_source(config)['head']} policy={config.branch_policy}"
         ),
     )
-    check(
+    guarded(
+        "private_env",
+        lambda: f"mode={stat.S_IMODE(config.config_path.stat().st_mode):03o} outside_worktree=true",
+    )
+    if config.runtime_root.is_dir():
+        mode = stat.S_IMODE(config.runtime_root.stat().st_mode)
+        if mode == 0o700:
+            add("runtime_root", "PASS", "RUNTIME_ROOT_READY", "owner-only runtime root exists", required=True)
+        else:
+            add("runtime_root", "FAIL", "RUNTIME_ROOT_MODE_INVALID", f"runtime root mode is {mode:03o}, expected 700", required=True)
+    elif _has_writable_existing_parent(config.runtime_root / "probe"):
+        add("runtime_root", "WARNING", "RUNTIME_ROOT_WILL_BE_CREATED", "start will create the owner-only runtime root", required=False)
+    else:
+        add("runtime_root", "FAIL", "RUNTIME_ROOT_UNWRITABLE", "runtime root parent is not writable", required=True)
+    runtime_paths = (
+        config.bridge_log_dir / "x",
+        config.memory_dir / "x",
+        *config.callback_sockets,
+        *((config.identity_state_dir / "x",) if config.identity_state_dir is not None else ()),
+    )
+    if all(_has_writable_existing_parent(path) for path in runtime_paths):
+        add("runtime_paths", "PASS", "RUNTIME_PATHS_WRITABLE", "all runtime paths resolve below writable external parents", required=True)
+    else:
+        add("runtime_paths", "FAIL", "RUNTIME_PATH_UNWRITABLE", "a required runtime parent is not writable", required=True)
+
+    entrypoints = [ROOT / "tools" / "temi_overview_adapter.py", ROOT / "hermes_temi_bridge" / "pyproject.toml"]
+    if config.is_newcomer_mock:
+        entrypoints.extend(
+            ROOT / "tools" / "mocks" / name
+            for name in (
+                "mock_lmstudio_server.py",
+                "mock_resident_server.py",
+                "mock_viewer_server.py",
+                "mock_android_executor.py",
+                "mock_discord_server.py",
+            )
+        )
+    else:
+        entrypoints.append(ROOT / "tools" / "hermes_resident_server.py")
+        if config.viewer_enabled:
+            entrypoints.append(ROOT / "anomaly_detection" / "temi_action_viewer.py")
+    missing = [path.relative_to(ROOT).as_posix() for path in entrypoints if not path.is_file()]
+    if missing:
+        add("entrypoints", "FAIL", "ENTRYPOINT_MISSING", "missing: " + ", ".join(missing), required=True)
+    else:
+        add("entrypoints", "PASS", "ENTRYPOINTS_READY", "all profile entrypoints are present", required=True)
+    guarded("resource_manifest", lambda: json.dumps(_validate_resource_manifest(), sort_keys=True))
+
+    def endpoint(name: str, url: str, validator: Callable[[dict[str, Any]], bool], *, ownership: str, managed_name: str | None = None) -> None:
+        payload, code, message = _http_health(url)
+        running = managed_name is not None and managed_name in records and _identity_matches(records[managed_name].get("leader", {}))
+        if payload is None:
+            if ownership == "managed" and not running:
+                add(name, "WARNING", "MANAGED_ENDPOINT_NOT_STARTED", message, required=False)
+            else:
+                add(name, "FAIL", code, message, required=True)
+            return
+        if validator(payload):
+            add(name, "PASS", "ENDPOINT_HEALTHY", message, required=True)
+        else:
+            add(name, "FAIL", "HEALTH_MALFORMED", f"health response failed the {name} contract", required=True)
+
+    if _mqtt_tcp_ready(config) and _listener_count(config.mqtt_port) == 1:
+        add("mqtt_broker", "PASS", "BROKER_READY", f"ownership={config.mqtt_ownership}; endpoint reachable", required=True)
+    elif config.mqtt_ownership == "managed" and "mqtt" not in records:
+        add("mqtt_broker", "WARNING", "MANAGED_ENDPOINT_NOT_STARTED", "managed broker is configured but not started", required=False)
+    else:
+        add("mqtt_broker", "FAIL", "BROKER_UNAVAILABLE", "broker endpoint unavailable or listener count is not one", required=True)
+    endpoint(
         "lm_studio",
-        lambda: (
-            f"ownership={config.lmstudio_ownership}; health endpoint reachable"
-            if _lmstudio_ready(config)
-            else "ownership=managed; CLI and startup script are ready for lifecycle start"
-            if config.lmstudio_ownership == "managed"
-            and (config.lmstudio_target_dir / "bin" / "lms").is_file()
-            and (ROOT / "tools" / "start_lmstudio_3gpu.sh").is_file()
-            else "LM Studio health endpoint unavailable"
+        config.lmstudio_models_url,
+        lambda payload: isinstance(payload.get("data"), list) and any(
+            isinstance(item, dict) and item.get("id") == config.lmstudio_api_identifier
+            for item in payload["data"]
         ),
+        ownership=config.lmstudio_ownership,
+        managed_name="lmstudio" if config.lmstudio_ownership == "managed" else None,
     )
-    check(
-        "gateway",
-        lambda: (
-            f"ownership={config.gateway_ownership}; gateway ready"
-            if _gateway_ready(config)
-            else "ownership=managed; gateway entrypoint is ready for lifecycle start"
-            if config.gateway_ownership == "managed"
-            and (ROOT / "hermes-agent" / "venv" / "bin" / "hermes").is_file()
-            else "Hermes gateway unavailable"
-        ),
+    endpoint(
+        "resident",
+        config.resident_health_url,
+        lambda payload: payload.get("status") == "ok" and payload.get("media_tool_enabled") is True and payload.get("media_fast_path_enabled") is True,
+        ownership="managed",
+        managed_name="resident",
     )
-    check("context_config", lambda: f"model={config.lmstudio_api_identifier} context={config.context_length} lmstudio_context={config.lmstudio_context_length} gpus={config.lmstudio_visible_gpus}")
-    check("feature_flags", lambda: json.dumps(config.flags, sort_keys=True))
-    check("nested_hermes", lambda: "clean" if not _git("status", "--short", cwd=ROOT / "hermes-agent") else "dirty")
-    health = runtime_health(config)
-    for port in (8080, 8081, 8765, 8010, 8011):
-        if health["listeners"][str(port)]:
-            checks.append({"name": f"port_{port}", "status": "WARNING", "detail": "active listener; start will reuse only a recorded healthy run or restart exact ownership"})
-    checks.append({"name": "android_activity", "status": "PASS" if health["android_connection_observed"] else "PENDING", "detail": "fresh remote MQTT session observed" if health["android_connection_observed"] else "no fresh remote Android MQTT session observed"})
-    summary = {status: sum(item["status"] == status for item in checks) for status in ("PASS", "PENDING", "WARNING", "FAIL")}
-    return {"checks": checks, "summary": summary, "readiness": health["readiness"]}
+    if config.viewer_enabled:
+        endpoint(
+            "viewer",
+            config.viewer_health_url,
+            lambda payload: payload.get("ok") is True and payload.get("source_connected") is True and payload.get("llama_server_ready") is True,
+            ownership="managed",
+            managed_name="viewer",
+        )
+    if config.is_newcomer_mock:
+        assert config.mock_android_health_url is not None and config.mock_discord_url is not None
+        endpoint("mock_android", config.mock_android_health_url, lambda payload: payload.get("ok") is True and payload.get("test_double") == "android", ownership="managed", managed_name="mock_android")
+        endpoint("mock_discord", config.mock_discord_url.removesuffix("/webhook") + "/health", lambda payload: payload.get("ok") is True and payload.get("test_double") == "discord", ownership="managed", managed_name="mock_discord")
+        add("gateway", "SKIPPED", "SKIPPED_BY_PROFILE", "newcomer_mock explicitly disables the external gateway", required=False)
+        add("real_android", "SKIPPED", "REAL_DEVICE_SKIPPED", "software-only acceptance uses the local Android test double", required=False)
+    elif not config.gateway_enabled:
+        add("gateway", "SKIPPED", "SKIPPED_BY_CONFIG", "gateway is explicitly disabled", required=False)
+    elif _gateway_ready(config):
+        add("gateway", "PASS", "GATEWAY_READY", f"ownership={config.gateway_ownership}; gateway ready", required=True)
+    elif config.gateway_ownership == "managed" and "gateway" not in records:
+        add("gateway", "WARNING", "MANAGED_ENDPOINT_NOT_STARTED", "managed gateway is configured but not started", required=False)
+    else:
+        add("gateway", "FAIL", "GATEWAY_UNAVAILABLE", "Hermes gateway is unavailable", required=True)
+    add("context_config", "PASS", "CONTEXT_POLICY_VALID", f"model={config.lmstudio_api_identifier} context={config.context_length} lmstudio_context={config.lmstudio_context_length} gpus={config.lmstudio_visible_gpus}", required=True)
+    add("feature_flags", "PASS", "FLAGS_VALID", json.dumps(config.flags, sort_keys=True), required=True)
+    guarded("nested_hermes", lambda: "clean" if not _git("status", "--short", cwd=ROOT / "hermes-agent") else (_ for _ in ()).throw(DemoError("nested hermes-agent checkout is dirty")))
+
+    specs = _specs(config)
+    for name, spec in specs.items():
+        for port in spec.ports:
+            listeners = _listener_count(port)
+            if listeners == 0:
+                continue
+            record = records.get(name)
+            if listeners == 1 and record is not None and _identity_matches(record.get("leader", {})):
+                add(f"port_{port}", "PASS", "PORT_OWNED", f"{name} listener is recorded with exact PID ownership", required=True)
+            else:
+                add(f"port_{port}", "FAIL", "PORT_CONFLICT", f"{name} expected an unowned-clear port; found {listeners} listener(s)", required=True)
+    health = runtime_health(config, state)
+    if not config.is_newcomer_mock:
+        if health["android_connection_observed"]:
+            add("android_activity", "PASS", "ANDROID_ACTIVITY_OBSERVED", "fresh remote Android MQTT session observed", required=False)
+        else:
+            add("android_activity", "SKIPPED", "ANDROID_EXTERNAL_NOT_OBSERVED", "Android is external and no fresh remote session is observed", required=False)
+    summary = {status: sum(item["status"] == status for item in checks) for status in ("PASS", "WARNING", "SKIPPED", "FAIL")}
+    return {"profile": config.profile, "checks": checks, "summary": summary, "readiness": health["readiness"]}
 
 
 def _sha256(path: Path) -> str:
