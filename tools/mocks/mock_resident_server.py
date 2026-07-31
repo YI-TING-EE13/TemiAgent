@@ -26,13 +26,19 @@ def _plan(event_id: str, robot_id: str, language: str, text: str, prompt: str) -
     if "source_type: perception.abnormal" in prompt:
         intent = "abnormal_care_first"
         level = "L2"
-        reason = "A test abnormal observation requires a consent-first safety question."
-        action = [{"action_id": "act_001", "type": "speak", "text": "我注意到你可能需要協助。你現在安全嗎？需要我通知家人或照護者嗎？", "language": language}]
+        reason = "A test abnormal observation requires immediate alerting and a care-first safety question."
+        action = [{"action_id": "act_001", "type": "speak", "text": "我注意到您可能發生異常狀況。您現在安全嗎？有沒有哪裡不舒服或需要協助？", "language": language}]
     elif "source_type: care.follow_up" in prompt:
         intent = "abnormal_care_follow_up"
         level = "L2"
         reason = "A test abnormal-care episode needs a bounded follow-up response."
-        action = [{"action_id": "act_001", "type": "speak", "text": "我會繼續關心你的狀況。請先留在安全的位置；需要協助時請直接告訴我。", "language": language}]
+        if "response_class: needs_assistance" in prompt and "notification_status: mock_delivered" in prompt:
+            text = "我知道了，請先不要勉強移動。我已將您需要協助的情況通知照護人員，會繼續陪著您。"
+        elif "response_class: escalated" in prompt and "notification_status: mock_delivered" in prompt:
+            text = "我目前沒有收到您的回應，已通知照護人員前來確認。我會繼續留意您的狀況。"
+        else:
+            text = "我會繼續關心您的狀況。請先留在安全的位置；需要協助時請直接告訴我。"
+        action = [{"action_id": "act_001", "type": "speak", "text": text, "language": language}]
     elif text == "__unsupported_action__":
         # Deliberate failure injection: the Bridge validator must reject this
         # before it reaches the Android test double.

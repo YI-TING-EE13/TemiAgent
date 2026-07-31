@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT / "hermes_temi_bridge" / "src"))
 sys.path.insert(0, str(ROOT / "tools"))
 
 import demo_lifecycle as demo  # noqa: E402
-from create_mock_event_images import JPEG_1X1, build_event  # noqa: E402
+from create_mock_event_images import build_event  # noqa: E402
 from hermes_temi_bridge.media_callback_socket import invoke_media_callback_socket  # noqa: E402
 from hermes_temi_bridge.memory_store import StructuredMemoryStore  # noqa: E402
 from hermes_temi_bridge.abnormal_notification import AbnormalNotificationDispatcher  # noqa: E402
@@ -101,38 +101,51 @@ def _event(config: demo.DemoConfig, event_id: str, text: str) -> dict[str, Any]:
     )
 
 
-def _abnormal(config: demo.DemoConfig, event_id: str, event_type: str) -> dict[str, Any]:
-    labels = {
-        "falls_down": "falls down",
-        "lies_on_floor": "lies on the floor",
-        "fight": "fights",
-    }
-    evidence = config.shared_root / "events" / config.robot_id / event_id / "abnormal.jpg"
-    evidence.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    evidence.write_bytes(JPEG_1X1)
-    payload: dict[str, Any] = {
-        "schema_version": "1.0",
-        "type": "perception.abnormal",
-        "event_id": event_id,
-        "robot_id": config.robot_id,
-        "timestamp_ms": int(time.time() * 1000),
-        "event_type": event_type,
-        "observation": {"action_name": labels[event_type], "reason": "newcomer deterministic abnormal test"},
-        "evidence": {"frame_paths": [str(evidence)]},
-        "context": {
-            "source": "newcomer_mock_verifier",
-            "test": True,
-            "resident_id": "test-resident",
-            "request_id": f"req_{event_id}",
-            "run_id": "newcomer-mock",
-            "scenario_id": event_id,
-        },
-    }
-    return payload
+def _inject_abnormal(
+    config: demo.DemoConfig,
+    *,
+    event_type: str,
+    run_id: str,
+    scenario_id: str,
+) -> str:
+    """Use the documented injector rather than publishing an abnormal event directly."""
+    completed = subprocess.run(
+        [
+            str(ROOT / "scripts" / "inject_demo_event"),
+            "--config",
+            str(config.config_path),
+            "--event",
+            event_type,
+            "--resident-id",
+            "test-resident",
+            "--run-id",
+            run_id,
+            "--scenario-id",
+            scenario_id,
+        ],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise ScenarioFailure("formal abnormal injector returned invalid JSON") from exc
+    event_id = payload.get("event_id") if isinstance(payload, dict) else None
+    if not isinstance(payload, dict) or payload.get("status") != "published" or not isinstance(event_id, str):
+        raise ScenarioFailure(f"formal abnormal injector rejected the event: {payload}")
+    return event_id
 
 
-def _wait_legacy(capture: Capture, event_id: str) -> dict[str, Any]:
-    _, payload = capture.wait_for(lambda topic, item: topic.endswith("/cmd/result") and item.get("schema_version") == "1.0" and item.get("event_id") == event_id)
+def _wait_legacy(capture: Capture, event_id: str, *, timeout: float = 12) -> dict[str, Any]:
+    _, payload = capture.wait_for(
+        lambda topic, item: topic.endswith("/cmd/result")
+        and item.get("schema_version") == "1.0"
+        and item.get("event_id") == event_id,
+        timeout=timeout,
+    )
     return payload
 
 
@@ -221,6 +234,8 @@ def _verify_discord_matrix(config: demo.DemoConfig, work_dir: Path) -> dict[str,
             event_id=f"evt-discord-{status}",
             event_type="falls_down",
             robot_id=config.robot_id,
+            resident_id="test-resident",
+            detected_timestamp_ms=int(time.time() * 1000),
             run_id=None,
             scenario_id=None,
             is_test=False,
@@ -246,6 +261,8 @@ def _verify_discord_matrix(config: demo.DemoConfig, work_dir: Path) -> dict[str,
         event_id="evt-discord-timeout",
         event_type="falls_down",
         robot_id=config.robot_id,
+        resident_id="test-resident",
+        detected_timestamp_ms=int(time.time() * 1000),
         run_id=None,
         scenario_id=None,
         is_test=False,
@@ -275,6 +292,7 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
     capture = Capture(config)
     capture.start()
     results: dict[str, Any] = {}
+    abnormal_run_id = f"newcomer-{uuid.uuid4().hex[:12]}"
     try:
         # S1 general ASR -> Bridge -> HTTP resident -> validated speak -> mock Android -> cmd/result.
         s1 = "s1_general"
@@ -299,40 +317,64 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
         _wait_legacy(capture, s3)
         results["S3_discomfort_care_first"] = "PASS"
 
-        # S4 validates a canonical event, records a Demo mock receipt, then invokes Resident Hermes.
+        # S4 uses the formal injector for every canonical abnormal category.
         for index, category in enumerate(("falls_down", "lies_on_floor", "fight"), start=1):
-            event_id = f"s4_{index}_{category}"
-            capture.publish("perception/abnormal", _abnormal(config, event_id, category))
+            event_id = _inject_abnormal(
+                config,
+                event_type=category,
+                run_id=abnormal_run_id,
+                scenario_id=f"S4{index}",
+            )
             _wait_legacy(capture, event_id)
-            decline_id = f"{event_id}_decline"
-            capture.publish("asr/final", _event(config, decline_id, "不用，我沒事"))
-            _wait_legacy(capture, decline_id)
+            for suffix in ("okay", "confirmed"):
+                response_id = f"{event_id}_{suffix}"
+                capture.publish("asr/final", _event(config, response_id, "我沒事"))
+                _wait_legacy(capture, response_id)
         results["S4_abnormal_care_first"] = "PASS"
 
-        # S5 reuses the initial Bridge-owned mock receipt; affirmative speech does not create another alert.
-        s5 = "s5_affirmative_abnormal"
-        capture.publish("perception/abnormal", _abnormal(config, s5, "falls_down"))
+        # S5 reuses the initial Bridge-owned mock receipt for an assistance reply.
+        s5 = _inject_abnormal(
+            config,
+            event_type="falls_down",
+            run_id=abnormal_run_id,
+            scenario_id="S5",
+        )
         _wait_legacy(capture, s5)
         s5_yes = "s5_affirmative_followup"
-        capture.publish("asr/final", _event(config, s5_yes, "要，請通知家人"))
+        capture.publish("asr/final", _event(config, s5_yes, "我有點不舒服，需要幫忙"))
         _wait_legacy(capture, s5_yes)
+        for suffix in ("okay", "confirmed"):
+            response_id = f"s5_{suffix}"
+            capture.publish("asr/final", _event(config, response_id, "我沒事"))
+            _wait_legacy(capture, response_id)
         results["S5_affirmative_notification"] = "PASS"
 
-        s6 = "s6_decline_abnormal"
-        capture.publish("perception/abnormal", _abnormal(config, s6, "fight"))
+        s6 = _inject_abnormal(
+            config,
+            event_type="fight",
+            run_id=abnormal_run_id,
+            scenario_id="S6",
+        )
         _wait_legacy(capture, s6)
-        s6_no = "s6_decline_followup"
-        capture.publish("asr/final", _event(config, s6_no, "不用，我沒事"))
-        _wait_legacy(capture, s6_no)
+        for suffix in ("okay", "confirmed"):
+            response_id = f"s6_{suffix}"
+            capture.publish("asr/final", _event(config, response_id, "不用，我沒事"))
+            _wait_legacy(capture, response_id)
         results["S6_decline"] = "PASS"
 
-        s7 = "s7_ambiguous_abnormal"
-        capture.publish("perception/abnormal", _abnormal(config, s7, "lies_on_floor"))
+        s7 = _inject_abnormal(
+            config,
+            event_type="lies_on_floor",
+            run_id=abnormal_run_id,
+            scenario_id="S7",
+        )
         _wait_legacy(capture, s7)
-        for suffix, text in (("once", "嗯"), ("expire", "不確定")):
-            followup = f"s7_{suffix}"
-            capture.publish("asr/final", _event(config, followup, text))
-            _wait_legacy(capture, followup)
+        ambiguous = "s7_ambiguous"
+        capture.publish("asr/final", _event(config, ambiguous, "嗯"))
+        _wait_legacy(capture, ambiguous)
+        _wait_legacy(capture, f"{s7}:follow-up", timeout=30)
+        _wait_legacy(capture, f"{s7}:escalation", timeout=30)
+        _wait_trace_contains(config.bridge_log_dir / f"{s7}.jsonl", "escalation_notification_finished", timeout=30)
         results["S7_ambiguous_timeout"] = "PASS"
 
         _media(config, capture, "s8_media")
