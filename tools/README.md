@@ -19,6 +19,7 @@
 | `hermes_demo_identity_fast_path.py` / `hermes_resident_identity_tools.py` | Demo-only exact operator identity matcher and root native tool; local Unix callback only. |
 | `hermes_repeated_discomfort_fast_path.py` / `hermes_resident_repeated_discomfort_tools.py` | Father-only exact three-step synthetic-memory matcher and root native tool; local Unix callback only. |
 | `demo_lifecycle.py` / `scripts/demo` | Canonical Demo lifecycle; explicit managed/external ownership, exact-PID records, health gates, status and trace export. |
+| `verify_newcomer_mock.py` / `scripts/verify_newcomer_mock` | Verifies the already-running isolated newcomer profile through canonical Bridge events, callback media, command results and local test doubles; it does not start or own services. |
 | `temi_overview_adapter.py` | ASR/camera-only adapter：接 legacy `temi/event/asr` 與 WebSocket camera frames，產生 canonical `temi/{robot_id}/asr/final` 與三張 keyframe path；不轉發 command。 |
 | `e2e_test_runner.py` | 不需硬體的本地 mock E2E smoke test。 |
 | `media_v11_fake_e2e.py` | 以 in-memory MQTT 與 fake Android 驗證 media v1.1 lifecycle、stop linkage、replay 與 trace。 |
@@ -88,6 +89,23 @@ remain inside the same Bridge callback / memory boundary and do not raw-publish 
 `restart` 只在 current user-authorized transition 中採用已由 cwd、command line、start identity
 及 listener 驗證的 existing Demo process；它不使用 broad kill。詳細的 private config、Android
 evidence、Media phrase 和故障定位在 `docs/operations/demo_warm_start_runbook.md`。
+
+### Software-only newcomer profile
+
+The tracked `config/demo.mock.env.example` is the isolated acceptance profile.
+Materialize it below a unique owner-only
+`/tmp/temiagent_newcomer_acceptance_<RUN_ID>/` root, start it through
+`scripts/demo`, and then run the verifier:
+
+```bash
+./scripts/verify_newcomer_mock --config <owner-only-mock-env>
+```
+
+The verifier is not a mock orchestrator. It drives the existing Bridge with
+canonical events and checks the command/result and media callback contracts;
+the lifecycle retains service specs, locks, health checks, exact-PID records,
+restart and stop. See the [verification guide](../docs/operations/verification_and_acceptance.md#software-only-newcomer-acceptance)
+for the complete fresh-clone sequence and external-acceptance limits.
 
 ### Demo case runner
 

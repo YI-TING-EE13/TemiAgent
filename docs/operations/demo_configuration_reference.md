@@ -73,6 +73,41 @@ current runtime targets.
 | `HERMES_GATEWAY_OWNERSHIP` | `managed`, `external`, or `disabled`. | Must agree with gateway enablement and operator responsibility. |
 | `MANAGE_ANDROID` | `0` in the canonical software-only profile. | Android remains externally owned unless a separate contract authorizes management. |
 
+## Profile and branch policy
+
+`DemoConfig` resolves one profile before the lifecycle constructs service
+specifications, commands, health probes, ownership records, or ports. A
+profile is therefore not a second orchestrator and must not be assembled by
+ad-hoc shell commands.
+
+| Key / profile | Production contract | `newcomer_mock` contract |
+|---|---|---|
+| `DEMO_PROFILE` | Omit it or set `production`. | Set exactly `newcomer_mock` in the tracked [`config/demo.mock.env.example`](../../config/demo.mock.env.example). |
+| Git policy | `DEMO_GIT_BRANCH_POLICY=required` and `EXPECTED_GIT_BRANCH=main` by default. A different branch or detached HEAD fails source validation. | The sample sets `DEMO_GIT_BRANCH_POLICY=disabled` deliberately, so a disposable clone may be detached. This disables only the branch-name gate, not clean-source, resource, Bridge, or exact-PID checks. |
+| Model and broker | LM Studio `1234`; MQTT `1883`. | Local test doubles at `29134` and `29183`; neither contacts a GPU model or a real broker outside the profile. |
+| Adapter, resident, viewer | Adapter `8080/8081`, resident `8765`, viewer `8010/8011`. | Adapter `29080/29081`, resident `29765`, viewer `29010/29011`; Android and Discord test doubles use `29012` and `29013`. |
+| Runtime data | Operator-owned external runtime root. | `/tmp/temiagent_newcomer_acceptance_<RUN_ID>/`, with a unique `<RUN_ID>` for every run. |
+
+All mock ports are loopback high ports. `DemoConfig` rejects a production-port
+drift, a low or duplicate mock port, a mock URL not derived from the resolved
+ports, a non-loopback mock broker, or a mock gateway/Android ownership change.
+The production defaults remain model `google/gemma-4-31b`, context `64000`,
+GPUs `0,1`, and `MANAGE_ANDROID=0`.
+
+The mock resident returns only structured action plans to the existing Bridge;
+it never publishes MQTT or commands. The mock Android executor consumes the
+canonical Bridge command topic and publishes canonical results. Consequently
+action validation, Bridge dispatch, service specs, locks, health, status,
+restart, stop, and exact-PID ownership are the same lifecycle path as the
+production profile.
+
+Use `doctor` as a machine-readable readiness report, not as an assertion that
+an unchecked service works. Every check has `name`, `status`, `code`,
+`message`, and `required`. A required unavailable endpoint, timeout, malformed
+health payload, missing entrypoint, or unowned listener is `FAIL` and makes the
+CLI exit non-zero. A not-yet-started managed endpoint is `WARNING`; a profile
+or real-device exclusion is `SKIPPED`; neither makes the command fail.
+
 ## Bridge and resident contract
 
 | Key | Role | Constraint |

@@ -67,6 +67,61 @@ dependencies, and starts no service. For a clean source checkout, the separate
 operator/maintainer action is `./scripts/bootstrap --hermes`; it must not be
 combined with an unreviewed nested-gitlink change.
 
+## Software-only newcomer acceptance
+
+This is the reproducible, fresh-clone acceptance for a maintainer with no
+prior conversation context. It uses the tracked `newcomer_mock` sample and the
+same `scripts/demo` lifecycle as the normal profile. It is not real Temi,
+Android, GPU, camera, model, or Discord acceptance.
+
+In a disposable clone, run the documentation check *before* reconstructing
+Hermes, then bootstrap twice to prove idempotency. Substitute the canonical
+repository URL only at clone time; do not place a private URL in the sample.
+
+```bash
+git clone <canonical-repository-url> TemiAgent-newcomer
+cd TemiAgent-newcomer
+python3 tools/validate_documentation.py
+./scripts/bootstrap --hermes
+./scripts/bootstrap --hermes
+
+cd hermes_temi_bridge && uv sync --frozen --extra mqtt
+cd ../anomaly_detection && uv sync --frozen
+cd ..
+
+run_id="$(date -u +%Y%m%dT%H%M%SZ)"
+acceptance_root="/tmp/temiagent_newcomer_acceptance_${run_id}"
+umask 077
+mkdir -p "$acceptance_root/config"
+sed "s#<RUN_ID>#${run_id}#g" config/demo.mock.env.example > "$acceptance_root/config/demo.mock.env"
+chmod 600 "$acceptance_root/config/demo.mock.env"
+config="$acceptance_root/config/demo.mock.env"
+
+./scripts/demo --config "$config" --json doctor
+./scripts/demo --config "$config" --json start
+./scripts/demo --config "$config" --json start
+./scripts/demo --config "$config" --json status
+./scripts/verify_newcomer_mock --config "$config"
+./scripts/demo --config "$config" --json restart
+./scripts/demo --config "$config" --json stop
+```
+
+`verify_newcomer_mock` is a verifier, not an orchestrator: it requires the
+already-started lifecycle services, submits canonical events to the existing
+Bridge, invokes the Bridge media callback, observes canonical command results,
+and writes its evidence below the configured acceptance root. Its scenarios
+cover general ASR-to-TTS, reminder completion, discomfort and abnormal
+care-first responses, affirmative/decline/timeout consent, media
+play/pause/resume/stop, the local Discord failure matrix, and unsupported
+action defense. A second `start` must report reused ownership. `restart` must
+archive pre-restart evidence and reuse the same exact-PID ownership rules;
+`stop` must leave every configured mock port without a listener.
+
+Record the JSON results, scenario summary, exact PID records, and a final
+loopback-port inventory in the private acceptance root. Do not delete the root
+to conceal a failure, and do not convert mock delivery to a claim about a real
+Discord recipient.
+
 ## Hardware-free test matrix
 
 Run the narrowest relevant command first, then the wider checks appropriate to

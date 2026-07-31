@@ -131,6 +131,7 @@ have been provisioned. Neither command starts services or creates credentials.
 - Private configuration keys, ownership modes and feature-gate invariants: [Demo configuration reference](docs/operations/demo_configuration_reference.md)
 - Symptom-driven diagnosis that preserves protected services: [Demo troubleshooting](docs/operations/demo_troubleshooting.md)
 - Hardware-free and external acceptance boundaries: [Verification and acceptance guide](docs/operations/verification_and_acceptance.md)
+- Fresh-clone, software-only newcomer acceptance: [Verification and acceptance guide](docs/operations/verification_and_acceptance.md#software-only-newcomer-acceptance)
 - Deployment, configuration, ownership and handover: [Demo deployment handover](docs/operations/demo_deployment_handover.md)
 - LM Studio headless operation: [LM Studio runbook](docs/operations/lmstudio_headless_3gpu_hdd_manual.md)
 - Safe service targeting, rollback and incident evidence: [Safe service operations](docs/operations/safe_service_operations.md)

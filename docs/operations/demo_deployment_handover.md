@@ -108,6 +108,38 @@ The lifecycle emits JSON service results. It uses stable failure codes including
 `MODEL_CONTEXT_MISMATCH`, `GPU_POLICY_MISMATCH`, `BROKER_START_FAILED`,
 `GATEWAY_START_FAILED`, `PID_IDENTITY_MISMATCH`, and `STOP_TIMEOUT`.
 
+## Newcomer software-only profile
+
+`config/demo.mock.env.example` is a tracked, non-secret sample for the formal
+`DEMO_PROFILE=newcomer_mock` acceptance. Copy it to
+`/tmp/temiagent_newcomer_acceptance_<RUN_ID>/config/demo.mock.env`, replace
+`<RUN_ID>`, and set mode `0600`; never put an acceptance env in the source
+tree. The profile uses one resolved `DemoConfig` and the canonical lifecycle,
+not a test-specific service manager.
+
+| Service role | Production default | Newcomer mock replacement |
+|---|---|---|
+| LM/model endpoint | LM Studio on `1234` | Loopback model-list double on `29134`. |
+| MQTT | Broker on `1883` | Lifecycle-owned loopback Mosquitto on `29183`. |
+| Adapter/resident/viewer | `8080/8081`, `8765`, `8010/8011` | `29080/29081`, `29765`, `29010/29011`. |
+| Android and Discord | External Android; best-effort external side channel | Local health/contract doubles on `29012` and `29013`; no real endpoint is contacted. |
+
+The mock resident can return a structured plan but cannot publish MQTT. The
+Bridge remains the validation and dispatch boundary, and the mock Android
+executor is only a canonical command-result consumer. `start`, idempotent
+`start`, `doctor`, `status`, `restart`, and `stop` retain the same lock,
+service-spec, health and exact-PID rules. The explicit sample disables only
+the production branch-name requirement so a detached disposable clone is
+testable; it does not permit a dirty source, a validator bypass, or an
+unrecorded service.
+
+Use the exact fresh-clone sequence in the
+[verification guide](verification_and_acceptance.md#software-only-newcomer-acceptance).
+It creates runtime evidence under `/tmp`, including scenario summary,
+pre-restart ownership evidence, and final stop evidence. Mock success is never
+evidence of real Temi execution, GPU/model operation, camera behavior, or
+Discord delivery.
+
 ## Required configuration groups
 
 `config/demo.env.example` is the complete non-secret key list. Configure the

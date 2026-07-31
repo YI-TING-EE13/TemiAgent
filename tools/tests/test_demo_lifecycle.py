@@ -320,6 +320,21 @@ class DemoLifecycleConfigTests(unittest.TestCase):
         item = next(check for check in result["checks"] if check["name"] == "lm_studio")
         self.assertEqual((item["status"], item["code"]), ("FAIL", "ENDPOINT_TIMEOUT"))
 
+    def test_doctor_marks_a_missing_required_entrypoint_as_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_mock_config(Path(temporary)))
+            missing = ROOT / "tools" / "mocks" / "mock_resident_server.py"
+            original_is_file = Path.is_file
+
+            def is_file(path: Path) -> bool:
+                return False if path == missing else original_is_file(path)
+
+            with mock.patch.object(Path, "is_file", autospec=True, side_effect=is_file):
+                result = demo.doctor(config)
+        item = next(check for check in result["checks"] if check["name"] == "entrypoints")
+        self.assertEqual((item["status"], item["code"]), ("FAIL", "ENTRYPOINT_MISSING"))
+        self.assertTrue(item["required"])
+
     def test_doctor_mock_endpoint_healthy_and_optional_items_are_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_mock_config(Path(temporary)))
