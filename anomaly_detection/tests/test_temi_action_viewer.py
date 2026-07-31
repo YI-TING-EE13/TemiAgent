@@ -1,7 +1,9 @@
 import asyncio
+import json
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -12,6 +14,7 @@ from temi_action_viewer import (
     BufferedFrame,
     LlamaCppBackend,
     PosePreprocessor,
+    ViewerConfigurationError,
     abnormal_cooldown_elapsed,
     build_abnormal_event,
     build_inference_jpegs,
@@ -21,9 +24,11 @@ from temi_action_viewer import (
     normalize_action_response,
     parse_action_response,
     run_discord_delivery_test,
+    resolve_notification_config,
     sample_uniform_frames,
     save_abnormal_evidence_frames,
     should_publish_abnormal_event,
+    viewer_health_response,
 )
 from temi_video_action_tester import build_video_inference_batches, parse_args
 
@@ -220,15 +225,22 @@ class PromptParserTests(unittest.TestCase):
     def test_notification_health_reports_bridge_ownership_without_credentials(self) -> None:
         class Args:
             abnormal_publish = "enabled"
-        result = notification_health(Args)
-
-        self.assertEqual(
-            result,
-            {
-                "abnormal_publish_enabled": True,
-                "notification_bridge_owned": True,
-            },
+        config = resolve_notification_config(
+            SimpleNamespace(
+                discord_notify="disabled",
+                notification_mode="disabled",
+                discord_env_path="",
+                discord_test_mode="disabled",
+                demo_notification_mock_enabled="disabled",
+                demo_notification_mock_receipt_enabled="disabled",
+            )
         )
+        result = notification_health(Args, config)
+
+        self.assertTrue(result["abnormal_publish_enabled"])
+        self.assertTrue(result["notification_bridge_owned"])
+        self.assertEqual(result["real_discord"]["status"], "disabled")
+        self.assertNotIn("discord_env_path", result)
 
     def test_controlled_discord_delivery_test_is_rejected_as_bridge_owned(self) -> None:
         class Args:
@@ -317,6 +329,93 @@ class PromptParserTests(unittest.TestCase):
 
         self.assertEqual(fake_pose.calls, [0, 1, 2])
         self.assertEqual(len(jpegs), 3)
+
+
+class ViewerHealthTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def args(**overrides: object) -> SimpleNamespace:
+        values: dict[str, object] = {
+            "source_url": "ws://127.0.0.1:8081",
+            "model": "test-model",
+            "abnormal_publish": "disabled",
+            "abnormal_cooldown_seconds": 30.0,
+            "history_seconds": 3,
+            "current_second_samples": 5,
+            "discord_notify": "disabled",
+            "notification_mode": "disabled",
+            "discord_env_path": "",
+            "discord_test_mode": "disabled",
+            "demo_notification_mock_enabled": "disabled",
+            "demo_notification_mock_receipt_enabled": "disabled",
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    async def test_disabled_route_health_is_200_without_a_credential_path(self) -> None:
+        args = self.args()
+        response = await viewer_health_response(
+            ActionState(), args, resolve_notification_config(args)
+        )
+        payload = json.loads(response.body)
+
+        self.assertEqual(response.status, 200)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["components"]["viewer_core"]["status"], "healthy")
+        self.assertEqual(payload["components"]["real_discord"]["status"], "disabled")
+        self.assertNotIn("discord_env_path", payload)
+
+    async def test_demo_mock_health_reports_its_receipt_route_without_real_discord(self) -> None:
+        args = self.args(
+            notification_mode="demo_mock",
+            demo_notification_mock_enabled="enabled",
+            demo_notification_mock_receipt_enabled="enabled",
+        )
+        response = await viewer_health_response(
+            ActionState(), args, resolve_notification_config(args)
+        )
+        payload = json.loads(response.body)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(
+            payload["components"]["demo_notification_mock"]["status"],
+            "receipt_route_available",
+        )
+        self.assertEqual(payload["components"]["real_discord"]["status"], "disabled")
+
+    async def test_real_discord_health_is_redacted_and_skipped_by_the_viewer(self) -> None:
+        secret_path = "/private/real-discord.env"
+        args = self.args(
+            notification_mode="discord_webhook",
+            discord_env_path=secret_path,
+            discord_test_mode="enabled",
+        )
+        response = await viewer_health_response(
+            ActionState(), args, resolve_notification_config(args)
+        )
+        payload = json.loads(response.body)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["components"]["real_discord"]["status"], "skipped_by_viewer")
+        self.assertNotIn(secret_path, response.text)
+
+    def test_malformed_notification_namespace_fails_deterministically(self) -> None:
+        with self.assertRaisesRegex(ViewerConfigurationError, "missing notification_mode"):
+            resolve_notification_config(SimpleNamespace(discord_notify="disabled"))
+
+    async def test_unexpected_health_exception_is_redacted_and_unhealthy(self) -> None:
+        class BrokenState:
+            async def snapshot(self, *_args: object) -> dict[str, object]:
+                raise RuntimeError("credential=/private/should-not-leak")
+
+        args = self.args()
+        response = await viewer_health_response(
+            BrokenState(), args, resolve_notification_config(args)  # type: ignore[arg-type]
+        )
+        payload = json.loads(response.body)
+
+        self.assertEqual(response.status, 503)
+        self.assertEqual(payload["error_code"], "VIEWER_HEALTH_INTERNAL_ERROR")
+        self.assertNotIn("should-not-leak", response.text)
 
 
 class PoseBackendTests(unittest.TestCase):

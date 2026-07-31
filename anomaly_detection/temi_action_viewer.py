@@ -55,6 +55,136 @@ ABNORMAL_EVENT_TYPE_BY_ACTION = {
     "lies on the floor": "lies_on_floor",
 }
 ALERT_ACTIONS = set(ABNORMAL_EVENT_TYPE_BY_ACTION)
+
+
+class ViewerConfigurationError(ValueError):
+    """Raised when the lifecycle-facing viewer configuration is incomplete."""
+
+
+@dataclass(frozen=True)
+class ViewerNotificationConfig:
+    """Normalized notification route metadata visible to the perception viewer.
+
+    The Bridge remains the only component that reads a webhook credential or
+    performs notification delivery. The viewer receives only the resolved
+    route metadata needed to describe its own health boundary.
+    """
+
+    mode: str
+    discord_notify_enabled: bool
+    discord_env_path: Path | None
+    discord_test_mode: bool
+    demo_notification_mock_enabled: bool
+    demo_notification_mock_receipt_enabled: bool
+
+    def health(self) -> dict[str, Any]:
+        """Return redacted, component-level notification route health."""
+        real_discord_status = "skipped_by_viewer"
+        if not self.discord_notify_enabled:
+            real_discord_status = "disabled"
+        demo_mock_status = "disabled"
+        if self.demo_notification_mock_enabled:
+            demo_mock_status = (
+                "receipt_route_available"
+                if self.demo_notification_mock_receipt_enabled
+                else "misconfigured"
+            )
+        return {
+            "notification_bridge_owned": True,
+            "notification_mode": self.mode,
+            "real_discord": {
+                "enabled": self.discord_notify_enabled,
+                "test_mode": self.discord_test_mode,
+                "status": real_discord_status,
+            },
+            "demo_notification_mock": {
+                "enabled": self.demo_notification_mock_enabled,
+                "receipt_enabled": self.demo_notification_mock_receipt_enabled,
+                "status": demo_mock_status,
+            },
+        }
+
+
+def _notification_arg(args: argparse.Namespace, name: str) -> Any:
+    """Read one required parser field without silently accepting a partial Namespace."""
+    try:
+        return getattr(args, name)
+    except AttributeError as exc:
+        raise ViewerConfigurationError(
+            f"viewer notification configuration is missing {name}"
+        ) from exc
+
+
+def _notification_bool(value: Any, name: str) -> bool:
+    """Normalize an explicit CLI-style boolean and reject malformed values."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"enabled", "true", "1", "yes", "on"}:
+            return True
+        if normalized in {"disabled", "false", "0", "no", "off", ""}:
+            return False
+    raise ViewerConfigurationError(f"{name} must be enabled or disabled")
+
+
+def resolve_notification_config(args: argparse.Namespace) -> ViewerNotificationConfig:
+    """Build the complete, typed notification metadata expected by health.
+
+    This validation intentionally does not open ``discord_env_path``: the
+    lifecycle and Bridge validate/read the owner-only credential, respectively.
+    The viewer therefore cannot become an alternate notification owner.
+    """
+    legacy_notify = str(_notification_arg(args, "discord_notify")).strip().lower()
+    if legacy_notify != "disabled":
+        raise ViewerConfigurationError(
+            "--discord-notify is retired; hermes_temi_bridge owns abnormal notifications"
+        )
+    mode = str(_notification_arg(args, "notification_mode")).strip().lower()
+    if mode not in {"disabled", "demo_mock", "discord_webhook"}:
+        raise ViewerConfigurationError(
+            "notification_mode must be disabled, demo_mock, or discord_webhook"
+        )
+    raw_env_path = str(_notification_arg(args, "discord_env_path")).strip()
+    discord_test_mode = _notification_bool(
+        _notification_arg(args, "discord_test_mode"), "discord_test_mode"
+    )
+    demo_mock_enabled = _notification_bool(
+        _notification_arg(args, "demo_notification_mock_enabled"),
+        "demo_notification_mock_enabled",
+    )
+    demo_mock_receipt_enabled = _notification_bool(
+        _notification_arg(args, "demo_notification_mock_receipt_enabled"),
+        "demo_notification_mock_receipt_enabled",
+    )
+    if mode == "discord_webhook":
+        if not raw_env_path:
+            raise ViewerConfigurationError(
+                "discord_webhook notification mode requires lifecycle-validated discord_env_path"
+            )
+        if demo_mock_enabled or demo_mock_receipt_enabled:
+            raise ViewerConfigurationError(
+                "real Discord and Demo mock notification routes cannot be enabled together"
+            )
+    elif mode == "demo_mock":
+        if not (demo_mock_enabled and demo_mock_receipt_enabled):
+            raise ViewerConfigurationError(
+                "demo_mock notification mode requires mock and receipt flags"
+            )
+    elif demo_mock_enabled or demo_mock_receipt_enabled:
+        raise ViewerConfigurationError(
+            "Demo notification mock flags require notification_mode=demo_mock"
+        )
+    return ViewerNotificationConfig(
+        mode=mode,
+        discord_notify_enabled=mode == "discord_webhook",
+        discord_env_path=Path(raw_env_path) if mode == "discord_webhook" else None,
+        discord_test_mode=discord_test_mode,
+        demo_notification_mock_enabled=demo_mock_enabled,
+        demo_notification_mock_receipt_enabled=demo_mock_receipt_enabled,
+    )
+
+
 @dataclass(frozen=True)
 class BufferedFrame:
     """One decoded JPEG frame from the 8081 broadcaster."""
@@ -931,12 +1061,84 @@ def format_publish_error(exc: Exception) -> str:
     return str(exc)
 
 
-def notification_health(args: argparse.Namespace) -> dict[str, bool]:
-    """Report viewer publication state without reading notification credentials."""
+def notification_health(
+    args: argparse.Namespace,
+    notification_config: ViewerNotificationConfig,
+) -> dict[str, Any]:
+    """Report the redacted Bridge-owned notification boundary for viewer health."""
     return {
-        "abnormal_publish_enabled": getattr(args, "abnormal_publish", "disabled") == "enabled",
-        "notification_bridge_owned": True,
+        "abnormal_publish_enabled": args.abnormal_publish == "enabled",
+        **notification_config.health(),
     }
+
+
+def build_health_payload(
+    args: argparse.Namespace,
+    notification_config: ViewerNotificationConfig,
+    snapshot_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Build a redacted health response from one atomic viewer-state snapshot."""
+    prediction_age_ms = None
+    if snapshot_data["prediction_age"] is not None:
+        prediction_age_ms = int((time.time() - snapshot_data["prediction_age"]) * 1000)
+    frame_count = snapshot_data["frame_count"]
+    notification = notification_health(args, notification_config)
+    return {
+        "ok": True,
+        "source_url": args.source_url,
+        "source_connected": snapshot_data["source_connected"],
+        "source_error": snapshot_data["source_error"],
+        "frame_count": frame_count,
+        "buffered_frames": len(snapshot_data["frames"]),
+        "history_frames": snapshot_data["history_frames"],
+        "current_second_frames": snapshot_data["current_second_frames"],
+        "sampled_current_second_frames": snapshot_data["sampled_current_second_frames"],
+        "ready_for_inference": snapshot_data["ready_for_inference"],
+        "inference_in_flight": snapshot_data["inference_in_flight"],
+        **snapshot_data["backend_status"],
+        **snapshot_data["pose_status"],
+        "model": args.model,
+        "latest_prediction": snapshot_data["latest_prediction"],
+        "latest_action": snapshot_data["latest_action"],
+        "latest_abnormal_event": snapshot_data["latest_abnormal_event"],
+        "abnormal_publish_count": snapshot_data["abnormal_publish_count"],
+        "abnormal_publish_error": snapshot_data["abnormal_publish_error"],
+        "abnormal_publish": args.abnormal_publish,
+        "abnormal_cooldown_seconds": args.abnormal_cooldown_seconds,
+        **notification,
+        "prediction_count": snapshot_data["prediction_count"],
+        "prediction_age_ms": prediction_age_ms,
+        "average_inference_ms": snapshot_data["average_inference_ms"],
+        "latest_inference_ms": snapshot_data["latest_inference_ms"],
+        "latest_timing_ms": snapshot_data["latest_timing_ms"],
+        "average_timing_ms": snapshot_data["average_timing_ms"],
+        "fps": calculate_fps(snapshot_data["frames"], time.time()),
+        "inference_error": snapshot_data["inference_error"],
+        "components": {
+            "viewer_core": {"status": "healthy"},
+            "event_ingestion": {"status": "connected" if snapshot_data["source_connected"] else "waiting"},
+            "frame_state": {"status": "receiving" if frame_count else "waiting", "frame_count": frame_count},
+            "real_discord": notification["real_discord"],
+            "demo_notification_mock": notification["demo_notification_mock"],
+        },
+    }
+
+
+async def viewer_health_response(
+    state: ActionState,
+    args: argparse.Namespace,
+    notification_config: ViewerNotificationConfig,
+) -> web.Response:
+    """Return health without exposing internal exceptions or credential metadata."""
+    try:
+        snapshot_data = await state.snapshot(args.history_seconds, args.current_second_samples)
+        return web.json_response(build_health_payload(args, notification_config, snapshot_data))
+    except Exception:
+        LOGGER.error("viewer health snapshot failed")
+        return web.json_response(
+            {"ok": False, "error_code": "VIEWER_HEALTH_INTERNAL_ERROR", "components": {"viewer_core": {"status": "unhealthy"}}},
+            status=503,
+        )
 
 
 def run_discord_delivery_test(args: argparse.Namespace) -> dict[str, Any]:
@@ -1112,12 +1314,14 @@ async def inference_loop(
 
 def build_app(args: argparse.Namespace) -> web.Application:
     """Build the browser app."""
+    notification_config = resolve_notification_config(args)
     state = ActionState()
     pose_preprocessor = PosePreprocessor(args.pose_mode, args.pose_model, args.pose_device)
     backend = LlamaCppBackend(args)
     app = web.Application()
     app["state"] = state
     app["args"] = args
+    app["notification_config"] = notification_config
     app["pose_preprocessor"] = pose_preprocessor
     app["backend"] = backend
     app["tasks"] = []
@@ -1233,47 +1437,7 @@ def build_app(args: argparse.Namespace) -> web.Application:
         return web.Response(body=jpeg, content_type="image/jpeg")
 
     async def health(request: web.Request) -> web.Response:
-        snapshot_data = await state.snapshot(args.history_seconds, args.current_second_samples)
-        prediction_age_ms = None
-        if snapshot_data["prediction_age"] is not None:
-            prediction_age_ms = int((time.time() - snapshot_data["prediction_age"]) * 1000)
-        return web.json_response(
-            {
-                "ok": True,
-                "source_url": args.source_url,
-                "source_connected": snapshot_data["source_connected"],
-                "source_error": snapshot_data["source_error"],
-                "frame_count": snapshot_data["frame_count"],
-                "buffered_frames": len(snapshot_data["frames"]),
-                "history_frames": snapshot_data["history_frames"],
-                "current_second_frames": snapshot_data["current_second_frames"],
-                "sampled_current_second_frames": snapshot_data["sampled_current_second_frames"],
-                "ready_for_inference": snapshot_data["ready_for_inference"],
-                "inference_in_flight": snapshot_data["inference_in_flight"],
-                **snapshot_data["backend_status"],
-                **snapshot_data["pose_status"],
-                "model": args.model,
-                "latest_prediction": snapshot_data["latest_prediction"],
-                "latest_action": snapshot_data["latest_action"],
-                "latest_abnormal_event": snapshot_data["latest_abnormal_event"],
-                "abnormal_publish_count": snapshot_data["abnormal_publish_count"],
-                "abnormal_publish_error": snapshot_data["abnormal_publish_error"],
-                "abnormal_publish": args.abnormal_publish,
-                "abnormal_cooldown_seconds": args.abnormal_cooldown_seconds,
-                "discord_notify": args.discord_notify,
-                "discord_env_path": args.discord_env_path,
-                "discord_max_files": args.discord_max_files,
-                **notification_health(args),
-                "prediction_count": snapshot_data["prediction_count"],
-                "prediction_age_ms": prediction_age_ms,
-                "average_inference_ms": snapshot_data["average_inference_ms"],
-                "latest_inference_ms": snapshot_data["latest_inference_ms"],
-                "latest_timing_ms": snapshot_data["latest_timing_ms"],
-                "average_timing_ms": snapshot_data["average_timing_ms"],
-                "fps": calculate_fps(snapshot_data["frames"], time.time()),
-                "inference_error": snapshot_data["inference_error"],
-            }
-        )
+        return await viewer_health_response(state, args, notification_config)
 
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
@@ -1343,6 +1507,33 @@ def parse_args() -> argparse.Namespace:
         help="Retired compatibility flag. Notifications are owned by hermes_temi_bridge.",
     )
     parser.add_argument(
+        "--notification-mode",
+        choices=["disabled", "demo_mock", "discord_webhook"],
+        default="disabled",
+        help="Resolved Bridge-owned notification route; the viewer never delivers it.",
+    )
+    parser.add_argument(
+        "--discord-env-path",
+        default="",
+        help="Lifecycle-validated credential path metadata; never returned by /health.",
+    )
+    parser.add_argument(
+        "--discord-test-mode",
+        choices=["enabled", "disabled"],
+        default="disabled",
+        help="Expose the Bridge test-recipient authorization state without testing delivery.",
+    )
+    parser.add_argument(
+        "--demo-notification-mock-enabled",
+        choices=["enabled", "disabled"],
+        default="disabled",
+    )
+    parser.add_argument(
+        "--demo-notification-mock-receipt-enabled",
+        choices=["enabled", "disabled"],
+        default="disabled",
+    )
+    parser.add_argument(
         "--discord-delivery-test",
         action="store_true",
         help="Verify that the retired viewer-owned Discord probe is rejected.",
@@ -1382,6 +1573,7 @@ def main() -> None:
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         raise SystemExit(1)
 
+    resolve_notification_config(args)
     app = build_app(args)
     LOGGER.info("open http://127.0.0.1:%s/ to view action predictions", args.port)
     LOGGER.info("reading frames from %s", args.source_url)
