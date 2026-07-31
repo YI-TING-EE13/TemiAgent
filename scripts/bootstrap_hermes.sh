@@ -102,7 +102,11 @@ if [[ "$(git -C "$RUNTIME_PATH" remote get-url origin)" != "$UPSTREAM_URL" ]]; t
   exit 1
 fi
 
-if [[ "$(git -C "$RUNTIME_PATH" rev-parse HEAD^{tree})" == "$EXPECTED_TREE" ]]; then
+CURRENT_TREE=""
+if git -C "$RUNTIME_PATH" rev-parse --verify HEAD^{tree} >/dev/null 2>&1; then
+  CURRENT_TREE="$(git -C "$RUNTIME_PATH" rev-parse HEAD^{tree})"
+fi
+if [[ "$CURRENT_TREE" == "$EXPECTED_TREE" ]]; then
   echo "bootstrap_hermes: PASS (already reconstructed)"
   exit 0
 fi
