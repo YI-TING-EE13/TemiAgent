@@ -2307,6 +2307,8 @@ def _failure_code(message: str) -> str:
         return "STOP_INCOMPLETE_OWNERSHIP"
     if "LOCK_BUSY" in normalized:
         return "LOCK_BUSY"
+    if "HEALTH GATE" in normalized or "DID NOT PASS" in normalized:
+        return "SERVICE_HEALTH_FAILED"
     if "CONTEXT" in normalized:
         return "MODEL_CONTEXT_MISMATCH"
     if "GPU" in normalized:

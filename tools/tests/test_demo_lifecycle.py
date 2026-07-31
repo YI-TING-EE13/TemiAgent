@@ -193,6 +193,21 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(demo.DemoError, "DISCORD_WEBHOOK_URL"):
                 demo.load_config(config_path)
 
+    def test_real_discord_rejects_mock_flags_even_with_a_valid_credential(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = self.make_config(root)
+            credential = root / "discord.env"
+            credential.write_text("DISCORD_WEBHOOK_URL=https://example.invalid/webhook\n", encoding="utf-8")
+            credential.chmod(0o600)
+            with config_path.open("a", encoding="utf-8") as handle:
+                handle.write("ABNORMAL_NOTIFICATION_MODE=discord_webhook\n")
+                handle.write(f"ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH={credential}\n")
+                handle.write("DEMO_NOTIFICATION_MOCK_ENABLED=true\n")
+                handle.write("DEMO_NOTIFICATION_MOCK_RECEIPT_ENABLED=true\n")
+            with self.assertRaisesRegex(demo.DemoError, "requires ABNORMAL_NOTIFICATION_MODE=demo_mock"):
+                demo.load_config(config_path)
+
     def test_viewer_discord_flag_is_rejected_before_service_start(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config_path = self.make_config(Path(temporary), viewer_enabled=True)
@@ -411,7 +426,18 @@ class DemoLifecycleConfigTests(unittest.TestCase):
                 if url.endswith("/health") and ":29013/" in url:
                     return {"ok": True, "test_double": "discord"}, "HEALTHY", "ok"
                 if url.endswith("/health") and ":29010/" in url:
-                    return {"ok": True, "source_connected": True, "llama_server_ready": True}, "HEALTHY", "ok"
+                    return {
+                        "ok": True,
+                        "source_connected": True,
+                        "llama_server_ready": True,
+                        "components": {
+                            "viewer_core": {"status": "healthy"},
+                            "event_ingestion": {"status": "healthy"},
+                            "frame_state": {"status": "healthy"},
+                            "real_discord": {"status": "disabled"},
+                            "demo_notification_mock": {"status": "healthy"},
+                        },
+                    }, "HEALTHY", "ok"
                 return {"status": "ok", "media_tool_enabled": True, "media_fast_path_enabled": True}, "HEALTHY", "ok"
             with (
                 mock.patch.object(demo, "_validate_source", return_value={"branch": "", "head": "test"}),
@@ -427,6 +453,7 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             self.assertEqual(set(check), {"name", "status", "code", "message", "required"})
         self.assertEqual(next(check for check in result["checks"] if check["name"] == "lm_studio")["status"], "PASS")
         self.assertEqual(next(check for check in result["checks"] if check["name"] == "gateway")["status"], "SKIPPED")
+        self.assertEqual(next(check for check in result["checks"] if check["name"] == "viewer")["status"], "PASS")
 
     def test_doctor_rejects_malformed_required_health(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -493,22 +520,40 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             state = {"status": demo.STATE_STARTING, "services": {}}
             observed: list[dict[str, object]] = []
             original_atomic = demo._atomic_json
-
             def record_atomic(path: Path, payload: object) -> None:
                 observed.append(deepcopy(payload))
                 original_atomic(path, payload)
-
             with (
                 mock.patch.object(demo, "_identity_matches", return_value=True),
                 mock.patch.object(demo, "_atomic_json", side_effect=record_atomic),
             ):
                 demo._persist_starting_record(config, state, "viewer", record, ["viewer", "--port", "29010"])
-
         self.assertEqual(observed[0]["status"], demo.STATE_STARTING)
         stored = observed[0]["services"]["viewer"]
         self.assertEqual(stored["process_start_identity"]["pid"], 777)
         self.assertIn("command_fingerprint", stored)
         self.assertIn("spawned_at", stored)
+
+    def test_main_returns_nonzero_for_stop_incomplete_ownership(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            result = {"state": "STOP_INCOMPLETE_OWNERSHIP", "already_stopped": False, "findings": [{"service": "viewer"}]}
+            with (
+                mock.patch.object(demo, "load_config", return_value=config),
+                mock.patch.object(demo, "stop", return_value=result),
+            ):
+                self.assertEqual(demo.main(["--config", str(config.config_path), "stop"]), 2)
+
+    def test_failure_code_classifies_health_gate_failures(self) -> None:
+        self.assertEqual(demo._failure_code("HEALTH GATE: viewer did not pass health"), "SERVICE_HEALTH_FAILED")
+
+    def test_doctor_reports_unwritable_state_pid_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            with mock.patch.object(demo, "_has_writable_existing_parent", return_value=False):
+                result = demo.doctor(config)
+        item = next(check for check in result["checks"] if check["name"] == "state_pid_root")
+        self.assertEqual((item["status"], item["code"]), ("FAIL", "STATE_PID_ROOT_UNWRITABLE"))
 
     def test_failed_health_retains_starting_ownership_and_archives_rollback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
