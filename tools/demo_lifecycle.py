@@ -1651,6 +1651,8 @@ def start(config: DemoConfig) -> dict[str, Any]:
         for record in reversed(started):
             try:
                 _stop_record(record, timeout_seconds=20)
+                if record.get("name") == "bridge":
+                    _remove_owned_callback_sockets(config, record)
             except DemoError:
                 pass
         state["status"] = "failed_rolled_back"

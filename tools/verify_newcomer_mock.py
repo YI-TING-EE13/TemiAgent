@@ -72,7 +72,7 @@ class Capture:
         raise ScenarioFailure("timed out waiting for canonical command evidence")
 
     def _on_connect(self, client: mqtt.Client, _userdata: Any, _flags: Any, reason_code: Any, _properties: Any) -> None:
-        if int(reason_code) == 0:
+        if not bool(getattr(reason_code, "is_failure", reason_code != 0)):
             client.subscribe(f"temi/{self.config.robot_id}/cmd/#", qos=1)
             self.ready.set()
 

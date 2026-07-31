@@ -40,7 +40,7 @@ class Executor:
         self.client.on_message = self._on_message
 
     def _on_connect(self, client: mqtt.Client, _userdata: Any, _flags: Any, reason_code: Any, _properties: Any) -> None:
-        if int(reason_code) == 0:
+        if not bool(getattr(reason_code, "is_failure", reason_code != 0)):
             client.subscribe(f"temi/{self.robot_id}/cmd/request", qos=1)
 
     def _on_message(self, _client: mqtt.Client, _userdata: Any, message: Any) -> None:
