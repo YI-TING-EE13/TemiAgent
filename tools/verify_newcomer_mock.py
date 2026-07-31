@@ -318,17 +318,17 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
     capture = Capture(config)
     capture.start()
     results: dict[str, Any] = {}
-    abnormal_run_id = f"newcomer-{uuid.uuid4().hex[:12]}"
+    run_id = f"newcomer-{uuid.uuid4().hex[:12]}"
     try:
         # S1 general ASR -> Bridge -> HTTP resident -> validated speak -> mock Android -> cmd/result.
-        s1 = "s1_general"
+        s1 = f"{run_id}-s1_general"
         capture.publish("asr/final", _event(config, s1, "你好，請說一句測試語音"))
         _wait_legacy(capture, s1)
         results["S1_general_asr_tts"] = "PASS"
 
         # S2 memory action remains Bridge-owned while Android receives only speak.
         _seed_reminder(config)
-        s2 = "s2_reminder"
+        s2 = f"{run_id}-s2_reminder"
         capture.publish("asr/final", _event(config, s2, "我吃完早餐後的藥了"))
         _wait_legacy(capture, s2)
         reminders = json.loads((config.memory_dir / "reminders.json").read_text(encoding="utf-8"))
@@ -338,7 +338,7 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
         _wait_trace_contains(config.bridge_log_dir / f"{s2}.jsonl", "duplicate_event_ignored")
         results["S2_reminder_completion"] = "PASS"
 
-        s3 = "s3_discomfort"
+        s3 = f"{run_id}-s3_discomfort"
         capture.publish("asr/final", _event(config, s3, "我有點不舒服，頭有點暈"))
         _wait_legacy(capture, s3)
         results["S3_discomfort_care_first"] = "PASS"
@@ -348,7 +348,7 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
             event_id = _inject_abnormal(
                 config,
                 event_type=category,
-                run_id=abnormal_run_id,
+                run_id=run_id,
                 scenario_id=f"S4{index}",
             )
             _wait_legacy(capture, event_id)
@@ -362,15 +362,15 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
         s5 = _inject_abnormal(
             config,
             event_type="falls_down",
-            run_id=abnormal_run_id,
+            run_id=run_id,
             scenario_id="S5",
         )
         _wait_legacy(capture, s5)
-        s5_yes = "s5_affirmative_followup"
+        s5_yes = f"{run_id}-s5_affirmative_followup"
         capture.publish("asr/final", _event(config, s5_yes, "我有點不舒服，需要幫忙"))
         _wait_legacy(capture, s5_yes)
         for suffix in ("okay", "confirmed"):
-            response_id = f"s5_{suffix}"
+            response_id = f"{run_id}-s5_{suffix}"
             capture.publish("asr/final", _event(config, response_id, "我沒事"))
             _wait_legacy(capture, response_id)
         results["S5_affirmative_notification"] = "PASS"
@@ -378,12 +378,12 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
         s6 = _inject_abnormal(
             config,
             event_type="fight",
-            run_id=abnormal_run_id,
+            run_id=run_id,
             scenario_id="S6",
         )
         _wait_legacy(capture, s6)
         for suffix in ("okay", "confirmed"):
-            response_id = f"s6_{suffix}"
+            response_id = f"{run_id}-s6_{suffix}"
             capture.publish("asr/final", _event(config, response_id, "不用，我沒事"))
             _wait_legacy(capture, response_id)
         results["S6_decline"] = "PASS"
@@ -391,11 +391,11 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
         s7 = _inject_abnormal(
             config,
             event_type="lies_on_floor",
-            run_id=abnormal_run_id,
+            run_id=run_id,
             scenario_id="S7",
         )
         _wait_legacy(capture, s7)
-        ambiguous = "s7_ambiguous"
+        ambiguous = f"{run_id}-s7_ambiguous"
         capture.publish("asr/final", _event(config, ambiguous, "嗯"))
         _wait_legacy(capture, ambiguous)
         _wait_legacy(capture, f"{s7}:follow-up", timeout=30)
@@ -403,12 +403,12 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
         _wait_trace_contains(config.bridge_log_dir / f"{s7}.jsonl", "escalation_notification_finished", timeout=30)
         results["S7_ambiguous_timeout"] = "PASS"
 
-        _media(config, capture, "s8_media")
+        _media(config, capture, f"{run_id}-s8_media")
         results["S8_media_v11"] = "PASS"
 
         results["S9_discord_failure_matrix"] = _verify_discord_matrix(config, artifacts / "discord")
 
-        s10 = "s10_unsupported"
+        s10 = f"{run_id}-s10_unsupported"
         capture.publish("asr/final", _event(config, s10, "__unsupported_action__"))
         _wait_legacy(capture, s10)
         android_trace = config.runtime_root / "logs" / "mock" / "android-events.jsonl"
