@@ -34,7 +34,8 @@ authoritative when any prose conflicts with them.
 | Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes the Bridge-backed software-only newcomer acceptance. Hardware, Android, GPU and Discord remain external gates. |
 | Bridge-owned abnormal alert, follow-up, and Demo injection | [Immediate abnormal-care flow](operations/immediate_abnormal_care_flow.md) | Bridge owner; formal injector is synthetic-only and real Discord remains an authorization-gated external path. |
 | Module commands and artifacts | Each module README in the root module index | Owning module; do not infer contracts from a README alone. |
-| Hermes integration overlay | [`third_party/hermes/`](../third_party/hermes/README.md) and reconstructed `hermes-agent/README.TemiAgent.md` | Tracked manifest/patches; do not stage the generated nested gitlink. |
+| External source bootstrap | [`third_party/hermes/`](../third_party/hermes/README.md), [`third_party/llama_cpp/`](../third_party/llama_cpp/README.md), and reconstructed `hermes-agent/README.TemiAgent.md` | Tracked pins and Hermes patches; generated checkouts are ignored, not gitlinks. |
+| Final Demo release reconciliation | [2026-07-31 consolidation record](project/final_demo_release_consolidation_20260731.md) | Release owner; retained worktree commits, owner disposition, and clean-clone delivery boundary. |
 
 ## Architecture
 

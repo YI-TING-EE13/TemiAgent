@@ -70,11 +70,12 @@ Bridge logs, shared media and callback sockets to remain below an external
 owner-only runtime root; private config and Discord credential files remain
 outside every Git worktree.
 
-The Hermes overlay verifies source equivalence by tree hash. A clean-room
-checkout can display only the historical nested gitlink as modified after a
-successful reconstruction because patch application creates local commit IDs;
-the generated gitlink must not be staged. The canonical `/TemiAgent` checkout
-is the clean source-of-record for `main`.
+Historical note: before the external-bootstrap conversion, the Hermes overlay
+used a nested gitlink whose commit ID differed after local patch application.
+The current release uses ignored external checkouts instead: source equivalence
+is verified by the tracked manifest tree hash and the root repository remains
+clean after reconstruction. The canonical `/TemiAgent` checkout is the clean
+source-of-record for `main`.
 
 ## Duplicates, risks and deferred ownership
 

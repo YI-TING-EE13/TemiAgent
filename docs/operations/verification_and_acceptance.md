@@ -44,7 +44,7 @@ a live command, model, Android, or Discord test.
 Check shell syntax only for changed shell entrypoints:
 
 ```bash
-bash -n scripts/demo scripts/bootstrap scripts/bootstrap_hermes.sh
+bash -n scripts/demo scripts/bootstrap scripts/bootstrap_hermes.sh scripts/bootstrap_llama_cpp.sh
 bash -n anomaly_detection/restart_action_viewer_8010.sh anomaly_detection/stop_action_viewer_8010.sh
 ```
 
@@ -64,8 +64,9 @@ cd /TemiAgent
 `--check` verifies the existing reconstructed source and provisioned dependency
 environment. It is not a clean-clone source reconstruction, does not install
 dependencies, and starts no service. For a clean source checkout, the separate
-operator/maintainer action is `./scripts/bootstrap --hermes`; it must not be
-combined with an unreviewed nested-gitlink change.
+operator/maintainer action is `./scripts/bootstrap --sources`; it reconstructs
+the reviewed external checkouts from manifests and must not be combined with an
+unreviewed nested-checkout change.
 
 ## Software-only newcomer acceptance
 
@@ -82,8 +83,8 @@ repository URL only at clone time; do not place a private URL in the sample.
 git clone <canonical-repository-url> TemiAgent-newcomer
 cd TemiAgent-newcomer
 python3 tools/validate_documentation.py
-./scripts/bootstrap --hermes
-./scripts/bootstrap --hermes
+./scripts/bootstrap --sources
+./scripts/bootstrap --sources
 
 cd hermes_temi_bridge && uv sync --frozen --extra mqtt
 cd ../anomaly_detection && uv sync --frozen
@@ -120,12 +121,12 @@ action defense. A second `start` must report reused ownership. `restart` must
 archive pre-restart evidence and reuse the same exact-PID ownership rules;
 `stop` must leave every configured mock port without a listener.
 
-Bootstrap reconstructs the reviewed nested Hermes integration branch from the
-tracked manifest. In a fresh clone the root Git status can therefore show the
-historical `hermes-agent` gitlink as modified even though the nested checkout
-is clean. The lifecycle accepts only that exact difference after it verifies
-the tracked manifest tree, integration branch, nested-clean status, and tracked
-gitlink mode; any other source difference remains a required failure.
+Bootstrap reconstructs the reviewed Hermes integration branch and the pinned
+llama.cpp checkout from tracked manifests. Both generated checkouts are ignored
+external dependencies, so a successful fresh-clone reconstruction leaves the
+root repository clean. The lifecycle rejects every non-runtime source
+difference; nested checkout cleanliness and manifest tree verification remain
+separate bootstrap gates.
 
 Record the JSON results, scenario summary, exact PID records, and a final
 loopback-port inventory in the private acceptance root. Do not delete the root

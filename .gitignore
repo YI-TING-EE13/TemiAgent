@@ -68,11 +68,7 @@ node_modules/
 .vscode/
 .idea/
 
-# Hermes generated/local state in nested checkout
-hermes-agent/venv/
-hermes-agent/hermes_agent.egg-info/
-hermes-agent/.env
-hermes-agent/logs/
-hermes-agent/.pytest_cache/
-hermes-agent/__pycache__/
-hermes-agent/skills/**/__pycache__/
+# Bootstrap-managed external source checkouts. Their reviewed pins and Hermes
+# overlay patches are tracked below third_party/; the generated checkouts are not.
+hermes-agent/
+anomaly_detection/third_party/llama.cpp/

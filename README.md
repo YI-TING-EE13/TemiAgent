@@ -123,8 +123,8 @@ cd /TemiAgent
 `<SERVICE>_OWNERSHIP=managed`; external ownership is health-checked but never
 stopped. The checked-in [resource manifest](config/demo_resources.json) lists
 the logical media and skill assets. From a clean clone, run
-`./scripts/bootstrap --hermes` once to reconstruct the reviewed local Hermes
-overlay from public upstream and tracked patches. Run
+`./scripts/bootstrap --sources` once to reconstruct the reviewed Hermes overlay
+and the pinned optional llama.cpp source checkout from public upstream. Run
 `./scripts/bootstrap --check` only after the documented dependency environments
 have been provisioned. Neither command starts services or creates credentials.
 

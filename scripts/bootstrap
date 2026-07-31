@@ -4,33 +4,29 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:---check}"
 
-if [[ "$MODE" == "--hermes" ]]; then
-  exec "$ROOT/scripts/bootstrap_hermes.sh"
-fi
-
-if [[ "$MODE" != "--check" && "$MODE" != "--sync" ]]; then
-  echo "usage: ./scripts/bootstrap [--check|--sync|--hermes]" >&2
-  exit 2
-fi
+case "$MODE" in
+  --hermes)
+    exec "$ROOT/scripts/bootstrap_hermes.sh" --bootstrap
+    ;;
+  --llama-cpp)
+    exec "$ROOT/scripts/bootstrap_llama_cpp.sh" --bootstrap
+    ;;
+  --sources)
+    "$ROOT/scripts/bootstrap_hermes.sh" --bootstrap
+    exec "$ROOT/scripts/bootstrap_llama_cpp.sh" --bootstrap
+    ;;
+  --check|--sync)
+    ;;
+  *)
+    echo "usage: ./scripts/bootstrap [--check|--sync|--sources|--hermes|--llama-cpp]" >&2
+    exit 2
+    ;;
+esac
 
 cd "$ROOT"
 test "$(git rev-parse --show-toplevel)" = "$ROOT"
-test -d hermes-agent/.git
-MANIFEST="$ROOT/third_party/hermes/manifest.json"
-test -f "$MANIFEST"
-EXPECTED_TREE="$(python3 - "$MANIFEST" <<'PY'
-import json
-import sys
-
-manifest = json.load(open(sys.argv[1], encoding="utf-8"))
-print(manifest["target_tree_sha"])
-PY
-)"
-CURRENT_TREE="$(git -C hermes-agent rev-parse HEAD^{tree})"
-if [[ "$EXPECTED_TREE" != "$CURRENT_TREE" ]]; then
-  echo "nested Hermes tree does not match third_party/hermes/manifest.json; run ./scripts/bootstrap --hermes" >&2
-  exit 1
-fi
+"$ROOT/scripts/bootstrap_hermes.sh" --check
+"$ROOT/scripts/bootstrap_llama_cpp.sh" --check
 
 for command in uv mosquitto; do
   command -v "$command" >/dev/null

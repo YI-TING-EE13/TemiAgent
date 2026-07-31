@@ -8,7 +8,7 @@ base and the small Temi-specific patch series required by the canonical Demo.
 From a clean TemiAgent clone, run:
 
 ```bash
-./scripts/bootstrap --hermes
+./scripts/bootstrap --sources
 # After the documented Hermes and module environments are provisioned:
 ./scripts/bootstrap --check
 ```
@@ -22,15 +22,14 @@ no-op tree verification.
 `bootstrap --check` remains a separate local dependency-readiness gate; a fresh
 source clone intentionally does not contain virtual environments.
 
-The root gitlink is retained for local historical traceability, but clean-clone
+The generated Hermes checkout is ignored, not a root gitlink. Clean-clone
 reproducibility is defined by `manifest.json` plus `patches/`, not by requiring
 an unavailable private commit object. The one historical host-specific path in
 the captured source was normalized to the canonical container path
 `/TemiAgent/temi_shared/`; this is a documentation portability correction only.
-Applying the series creates local commit IDs, so a clean clone can report the
-historical gitlink as changed even when reconstruction succeeds. Treat the
-manifest tree hash and nested-clean check as the source-equivalence gate; do
-not stage that generated gitlink change in a clean-room checkout.
+Applying the series creates local commit IDs, so source equivalence is proven by
+the manifest tree hash and nested-clean check while the root repository remains
+clean.
 
 Do not edit a patch in place without updating its manifest SHA-256 and running
 the clean-room reconstruction check. Do not add credentials, webhook URLs,
@@ -43,6 +42,6 @@ The reconstructed `hermes-agent/README.TemiAgent.md` is the canonical nested
 Hermes integration explanation. This root directory is its reproducible source:
 patches `0002`, `0003`, `0004`, `0007`, and `0009` carry the documented Temi
 integration history. A documentation-only root change must not edit the nested
-checkout or stage its gitlink. If the nested README needs a change, update the
+checkout. If the nested README needs a change, update the
 appropriate patch, its manifest hash, and the clean-room reconstruction evidence
 in a separately scoped overlay change.
