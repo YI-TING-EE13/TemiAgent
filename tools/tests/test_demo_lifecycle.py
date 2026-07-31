@@ -250,6 +250,24 @@ class DemoLifecycleConfigTests(unittest.TestCase):
                         demo._validate_source(production)
                     self.assertEqual(demo._validate_source(disabled), detached)
 
+    def test_source_gate_allows_only_the_verified_bootstrap_gitlink_difference(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_mock_config(Path(temporary)))
+        source = {"branch": "", "head": "test", "tree": [" M hermes-agent"]}
+        with (
+            mock.patch.object(demo, "_source_record", return_value=source),
+            mock.patch.object(demo, "_git", return_value=""),
+            mock.patch.object(demo, "_verified_bootstrap_hermes_gitlink", return_value=True),
+        ):
+            self.assertEqual(demo._validate_source(config), source)
+        with (
+            mock.patch.object(demo, "_source_record", return_value=source),
+            mock.patch.object(demo, "_git", return_value=""),
+            mock.patch.object(demo, "_verified_bootstrap_hermes_gitlink", return_value=False),
+        ):
+            with self.assertRaisesRegex(demo.DemoError, "non-runtime dirty files"):
+                demo._validate_source(config)
+
     def test_stop_is_idempotent_without_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

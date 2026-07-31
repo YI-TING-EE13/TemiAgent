@@ -92,7 +92,10 @@ cd ..
 run_id="$(date -u +%Y%m%dT%H%M%SZ)"
 acceptance_root="/tmp/temiagent_newcomer_acceptance_${run_id}"
 umask 077
+mkdir -p "$acceptance_root"
+chmod 700 "$acceptance_root"
 mkdir -p "$acceptance_root/config"
+chmod 700 "$acceptance_root/config"
 sed "s#<RUN_ID>#${run_id}#g" config/demo.mock.env.example > "$acceptance_root/config/demo.mock.env"
 chmod 600 "$acceptance_root/config/demo.mock.env"
 config="$acceptance_root/config/demo.mock.env"
@@ -116,6 +119,13 @@ play/pause/resume/stop, the local Discord failure matrix, and unsupported
 action defense. A second `start` must report reused ownership. `restart` must
 archive pre-restart evidence and reuse the same exact-PID ownership rules;
 `stop` must leave every configured mock port without a listener.
+
+Bootstrap reconstructs the reviewed nested Hermes integration branch from the
+tracked manifest. In a fresh clone the root Git status can therefore show the
+historical `hermes-agent` gitlink as modified even though the nested checkout
+is clean. The lifecycle accepts only that exact difference after it verifies
+the tracked manifest tree, integration branch, nested-clean status, and tracked
+gitlink mode; any other source difference remains a required failure.
 
 Record the JSON results, scenario summary, exact PID records, and a final
 loopback-port inventory in the private acceptance root. Do not delete the root

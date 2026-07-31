@@ -62,6 +62,7 @@ CANONICAL_LMSTUDIO_VISIBLE_GPUS = "0,1"
 CANONICAL_LMSTUDIO_MODEL = "temi/gemma-4-31b-it-qat"
 CANONICAL_LMSTUDIO_IDENTIFIER = "google/gemma-4-31b"
 RESOURCE_MANIFEST_PATH = ROOT / "config" / "demo_resources.json"
+HERMES_RECONSTRUCTION_MANIFEST_PATH = ROOT / "third_party" / "hermes" / "manifest.json"
 PROFILE_PRODUCTION = "production"
 PROFILE_NEWCOMER_MOCK = "newcomer_mock"
 BRANCH_POLICY_REQUIRED = "required"
@@ -1037,6 +1038,30 @@ def _source_record() -> dict[str, Any]:
     }
 
 
+def _verified_bootstrap_hermes_gitlink() -> bool:
+    """Accept only the clean gitlink difference produced by tracked bootstrap."""
+    try:
+        manifest = json.loads(HERMES_RECONSTRUCTION_MANIFEST_PATH.read_text(encoding="utf-8"))
+        runtime_relative_path = manifest.get("runtime_path")
+        integration_branch = manifest.get("integration_branch")
+        expected_tree = manifest.get("target_tree_sha")
+        if not all(isinstance(value, str) and value for value in (runtime_relative_path, integration_branch, expected_tree)):
+            return False
+        runtime_path = (ROOT / runtime_relative_path).resolve()
+        if runtime_path.parent != ROOT.resolve() or runtime_path.name != "hermes-agent":
+            return False
+        index_record = _git("ls-files", "-s", "--", runtime_relative_path)
+        if not index_record.startswith("160000 "):
+            return False
+        return (
+            _git("status", "--short", cwd=runtime_path) == ""
+            and _git("branch", "--show-current", cwd=runtime_path) == integration_branch
+            and _git("rev-parse", "HEAD^{tree}", cwd=runtime_path) == expected_tree
+        )
+    except (DemoError, OSError, json.JSONDecodeError):
+        return False
+
+
 def _write_pre_restart_evidence(config: DemoConfig) -> Path:
     previous_state = _read_json(config.state_path)
     previous_ownership = None
@@ -1477,7 +1502,12 @@ def _validate_source(config: DemoConfig) -> dict[str, Any]:
             raise DemoError(
                 f"unexpected branch {source['branch']}; expected {config.expected_git_branch}"
             )
-    unexpected = [line for line in source["tree"] if line[3:] not in ALLOWED_DIRTY_FILES]
+    unexpected = [
+        line
+        for line in source["tree"]
+        if line[3:] not in ALLOWED_DIRTY_FILES
+        and not (line == " M hermes-agent" and _verified_bootstrap_hermes_gitlink())
+    ]
     if unexpected:
         raise DemoError("repository has non-runtime dirty files: " + ", ".join(unexpected))
     nested = _git("status", "--short", cwd=ROOT / "hermes-agent")
