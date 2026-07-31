@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import importlib.util
 import json
 from pathlib import Path
@@ -144,6 +145,53 @@ class DemoLifecycleConfigTests(unittest.TestCase):
         )
         self.assertNotIn("--discord-notify", viewer_argv)
         self.assertNotIn("--discord-env-path", viewer_argv)
+        self.assertEqual(viewer_argv[viewer_argv.index("--notification-mode") + 1], "disabled")
+
+    def test_real_discord_requires_a_valid_private_credential_before_start(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = self.make_config(root)
+            credential = root / "discord.env"
+            credential.write_text("DISCORD_WEBHOOK_URL=https://example.invalid/webhook\n", encoding="utf-8")
+            credential.chmod(0o600)
+            with config_path.open("a", encoding="utf-8") as handle:
+                handle.write("ABNORMAL_NOTIFICATION_MODE=discord_webhook\n")
+                handle.write(f"ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH={credential}\n")
+            config = demo.load_config(config_path)
+
+        self.assertEqual(config.notification_mode, "discord_webhook")
+        self.assertEqual(config.discord_env_path, credential)
+        self.assertFalse(config.demo_notification_mock_enabled)
+
+    def test_real_discord_missing_or_unsafe_credential_fails_during_config_load(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = self.make_config(root)
+            missing = root / "missing.env"
+            with config_path.open("a", encoding="utf-8") as handle:
+                handle.write("ABNORMAL_NOTIFICATION_MODE=discord_webhook\n")
+                handle.write(f"ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH={missing}\n")
+            with self.assertRaisesRegex(demo.DemoError, "Discord credential file"):
+                demo.load_config(config_path)
+
+            missing.write_text("DISCORD_WEBHOOK_URL=https://example.invalid/webhook\n", encoding="utf-8")
+            missing.chmod(0o644)
+            with self.assertRaisesRegex(demo.DemoError, "mode 0600"):
+                demo.load_config(config_path)
+
+    def test_real_discord_requires_the_webhook_key_and_rejects_mock_mix(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = self.make_config(root)
+            credential = root / "discord.env"
+            credential.write_text("OTHER_KEY=value\n", encoding="utf-8")
+            credential.chmod(0o600)
+            with config_path.open("a", encoding="utf-8") as handle:
+                handle.write("ABNORMAL_NOTIFICATION_MODE=discord_webhook\n")
+                handle.write(f"ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH={credential}\n")
+                handle.write("DEMO_NOTIFICATION_MOCK_ENABLED=true\n")
+            with self.assertRaisesRegex(demo.DemoError, "DISCORD_WEBHOOK_URL"):
+                demo.load_config(config_path)
 
     def test_viewer_discord_flag_is_rejected_before_service_start(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -430,6 +478,104 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(demo.DemoError, "no lifecycle state"):
                 demo.trace_export(config)
 
+
+    def test_starting_record_is_atomically_persisted_before_health_wait(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(DemoLifecycleConfigTests().make_mock_config(Path(temporary)))
+            demo.ensure_runtime_layout(config)
+            record = {
+                "name": "viewer",
+                "leader": {"pid": 777, "start_ticks": 1},
+                "members": [],
+                "ports": [config.viewer_http_port],
+                "log_path": str(config.runtime_root / "logs" / "trace" / "viewer.log"),
+            }
+            state = {"status": demo.STATE_STARTING, "services": {}}
+            observed: list[dict[str, object]] = []
+            original_atomic = demo._atomic_json
+
+            def record_atomic(path: Path, payload: object) -> None:
+                observed.append(deepcopy(payload))
+                original_atomic(path, payload)
+
+            with (
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_atomic_json", side_effect=record_atomic),
+            ):
+                demo._persist_starting_record(config, state, "viewer", record, ["viewer", "--port", "29010"])
+
+        self.assertEqual(observed[0]["status"], demo.STATE_STARTING)
+        stored = observed[0]["services"]["viewer"]
+        self.assertEqual(stored["process_start_identity"]["pid"], 777)
+        self.assertIn("command_fingerprint", stored)
+        self.assertIn("spawned_at", stored)
+
+    def test_failed_health_retains_starting_ownership_and_archives_rollback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(DemoLifecycleConfigTests().make_mock_config(Path(temporary)))
+            demo.ensure_runtime_layout(config)
+            spec = demo.ServiceSpec(
+                "viewer", ROOT, "mock_viewer_server.py", (config.viewer_http_port,),
+                config.runtime_root / "logs" / "trace" / "viewer.log",
+            )
+            record = {
+                "name": "viewer",
+                "ownership": "owned",
+                "leader": {"pid": 778, "start_ticks": 2},
+                "members": [],
+                "ports": [config.viewer_http_port],
+                "log_path": str(spec.log_path),
+            }
+            snapshots: list[dict[str, object]] = []
+            original_atomic = demo._atomic_json
+
+            def record_atomic(path: Path, payload: object) -> None:
+                snapshots.append(deepcopy(payload))
+                original_atomic(path, payload)
+
+            with (
+                mock.patch.object(demo, "_validate_source", return_value={"branch": "", "head": "test", "tree": []}),
+                mock.patch.object(demo, "_specs", return_value={"viewer": spec}),
+                mock.patch.object(demo, "_validate_resource_manifest", return_value={}),
+                mock.patch.object(demo, "_reconcile_archived_callback_socket"),
+                mock.patch.object(demo, "_assert_start_ports_clear"),
+                mock.patch.object(demo, "_external_dependency_ready"),
+                mock.patch.object(demo, "_base_env", return_value={}),
+                mock.patch.object(demo, "_start_process", return_value=record),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_wait_for", return_value=False),
+                mock.patch.object(demo, "_stop_record", return_value="stopped_term") as stop_record,
+                mock.patch.object(demo, "_atomic_json", side_effect=record_atomic),
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "viewer did not pass"):
+                    demo.start(config)
+            current = demo._read_json(config.state_path)
+            archived = demo._read_json(config.last_run_path)
+
+        self.assertEqual(snapshots[0]["status"], demo.STATE_STARTING)
+        self.assertIn("viewer", snapshots[0]["services"])
+        stop_record.assert_called_once_with(record, timeout_seconds=20)
+        self.assertEqual(current["status"], demo.STATE_START_FAILED)
+        self.assertEqual(archived["status"], demo.STATE_START_FAILED)
+        self.assertEqual(current["rollback"][0]["service"], "viewer")
+
+    def test_stop_refuses_success_when_live_managed_like_process_has_no_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(DemoLifecycleConfigTests().make_mock_config(Path(temporary)))
+            with mock.patch.object(demo, "_managed_like_unrecorded_services", return_value=[{"service": "viewer", "ports": [config.viewer_http_port]}]):
+                result = demo.stop(config)
+
+        self.assertEqual(result["state"], "STOP_INCOMPLETE_OWNERSHIP")
+        self.assertFalse(result["already_stopped"])
+        self.assertEqual(result["findings"][0]["service"], "viewer")
+
+    def test_atomic_json_fsyncs_file_and_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "state" / "current.json"
+            with mock.patch.object(demo.os, "fsync", wraps=demo.os.fsync) as fsync:
+                demo._atomic_json(destination, {"status": "test"})
+
+        self.assertGreaterEqual(fsync.call_count, 2)
 
 class DemoLifecycleRecordTests(unittest.TestCase):
     def test_pre_restart_evidence_preserves_exact_owned_processes(self) -> None:

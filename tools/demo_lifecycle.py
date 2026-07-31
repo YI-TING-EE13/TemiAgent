@@ -86,6 +86,13 @@ NEWCOMER_MOCK_PORTS = {
     "mock_android": 29012,
     "mock_discord": 29013,
 }
+STATE_STARTING = "STARTING"
+STATE_HEALTHY = "HEALTHY"
+STATE_UNHEALTHY = "UNHEALTHY"
+STATE_START_FAILED = "START_FAILED"
+STATE_STOPPED = "STOPPED"
+HEALTHY_STATE_VALUES = {STATE_HEALTHY, "running"}
+RECOVERABLE_STATE_VALUES = {STATE_STARTING, STATE_UNHEALTHY, STATE_START_FAILED}
 
 
 class DemoError(RuntimeError):
@@ -172,6 +179,20 @@ def _config_truthy(values: dict[str, str], name: str, fallback: bool) -> bool:
     return _truthy(values[name]) if name in values else fallback
 
 
+def _validate_discord_credential_file(raw_path: str) -> Path:
+    """Validate the private Bridge credential without exposing its path or content."""
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute() or path.is_symlink() or not path.is_file():
+        raise DemoError("Discord credential file must be an absolute regular file")
+    _outside_worktrees(path, label="Discord credential file")
+    metadata = path.stat()
+    if stat.S_IMODE(metadata.st_mode) != 0o600 or metadata.st_uid != os.geteuid():
+        raise DemoError("Discord credential file must be lifecycle-user-owned with mode 0600")
+    values = _read_env(path)
+    _require(values, "DISCORD_WEBHOOK_URL")
+    return path.resolve()
+
+
 def _ownership(values: dict[str, str], name: str, *, default: str) -> str:
     """Return one explicit ownership mode without guessing from a live PID."""
     value = values.get(name, default).strip().lower()
@@ -238,6 +259,12 @@ class DemoConfig:
     manage_android: bool
     mock_android_health_port: int | None
     mock_discord_port: int | None
+    notification_mode: str
+    discord_env_path: Path | None
+    discord_test_mode: bool
+    demo_notification_mock_enabled: bool
+    demo_notification_mock_receipt_enabled: bool
+    test_force_health_failure_service: str | None
 
     @property
     def is_newcomer_mock(self) -> bool:
@@ -538,6 +565,12 @@ def load_config(raw_path: str | Path) -> DemoConfig:
     notification_mode = values.get("ABNORMAL_NOTIFICATION_MODE", "disabled").strip().lower()
     if notification_mode not in {"disabled", "discord_webhook", "demo_mock"}:
         raise DemoError("ABNORMAL_NOTIFICATION_MODE must be disabled, discord_webhook, or demo_mock")
+    discord_env_path = None
+    if notification_mode == "discord_webhook":
+        discord_env_path = _validate_discord_credential_file(
+            _require(values, "ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH")
+        )
+    discord_test_mode = _truthy(values.get("ABNORMAL_NOTIFICATION_TEST_RECIPIENT_AUTHORIZED", "false"))
     demo_notification_mock_enabled = _truthy(values.get("DEMO_NOTIFICATION_MOCK_ENABLED", "false"))
     demo_notification_receipt_enabled = _truthy(values.get("DEMO_NOTIFICATION_RECEIPT_ENABLED", "false"))
     if notification_mode == "demo_mock" and not (
@@ -569,6 +602,10 @@ def load_config(raw_path: str | Path) -> DemoConfig:
             raise DemoError("newcomer_mock requires DEMO_ACTION_VIEWER_ENABLED=true")
         if notification_mode == "discord_webhook":
             raise DemoError("newcomer_mock does not permit a real Discord credential route")
+    test_force_health_failure_service = values.get("DEMO_TEST_FORCE_HEALTH_FAILURE_SERVICE", "").strip()
+    if test_force_health_failure_service:
+        if profile != PROFILE_NEWCOMER_MOCK or test_force_health_failure_service != "viewer":
+            raise DemoError("DEMO_TEST_FORCE_HEALTH_FAILURE_SERVICE is limited to newcomer_mock viewer")
     manage_android = _truthy(values.get("MANAGE_ANDROID", "false"))
     if manage_android:
         raise DemoError("MANAGE_ANDROID=true is not supported by the canonical software-only lifecycle")
@@ -622,6 +659,12 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         manage_android=manage_android,
         mock_android_health_port=mock_android_health_port,
         mock_discord_port=mock_discord_port,
+        notification_mode=notification_mode,
+        discord_env_path=discord_env_path,
+        discord_test_mode=discord_test_mode,
+        demo_notification_mock_enabled=demo_notification_mock_enabled,
+        demo_notification_mock_receipt_enabled=demo_notification_receipt_enabled,
+        test_force_health_failure_service=test_force_health_failure_service or None,
     )
 
 
@@ -703,6 +746,12 @@ def _atomic_json(path: Path, payload: object) -> None:
             os.fsync(handle.fileno())
         os.replace(temporary, path)
         os.chmod(path, 0o600)
+        directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        directory_descriptor = os.open(path.parent, directory_flags)
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
     finally:
         if temporary.exists():
             temporary.unlink()
@@ -1102,11 +1151,22 @@ def _resident_ready(config: DemoConfig) -> bool:
     return True
 
 
+def _viewer_health_contract(health: dict[str, Any] | None) -> bool:
+    """Require the viewer health partition without exposing notification secrets."""
+    if not health or health.get("ok") is not True:
+        return False
+    components = health.get("components")
+    if not isinstance(components, dict):
+        return False
+    return all(isinstance(components.get(name), dict) for name in (
+        "viewer_core", "event_ingestion", "frame_state", "real_discord", "demo_notification_mock",
+    ))
+
+
 def _viewer_ready(config: DemoConfig) -> bool:
     health = _http_json(config.viewer_health_url)
     return bool(
-        health
-        and health.get("ok") is True
+        _viewer_health_contract(health)
         and health.get("source_connected") is True
         and health.get("llama_server_ready") is True
     )
@@ -1204,6 +1264,32 @@ def _start_process(spec: ServiceSpec, argv: list[str], env: dict[str, str]) -> d
         "ports": list(spec.ports),
         "log_path": str(spec.log_path),
     }
+
+
+def _command_fingerprint(argv: list[str]) -> str:
+    """Return a stable fingerprint for the exact argv supplied to Popen."""
+    return hashlib.sha256("\0".join(argv).encode("utf-8")).hexdigest()
+
+
+def _persist_starting_record(
+    config: DemoConfig,
+    state: dict[str, Any],
+    name: str,
+    record: dict[str, Any],
+    argv: list[str],
+) -> None:
+    """Persist verified process ownership before the service health wait begins."""
+    leader = record.get("leader")
+    if not isinstance(leader, dict) or not _identity_matches(leader):
+        raise DemoError(f"{name} failed exact-PID identity verification during startup")
+    record["process_start_identity"] = dict(leader)
+    record["command_fingerprint"] = _command_fingerprint(argv)
+    record["supervisor"] = dict(leader) if name in {"lmstudio", "mqtt"} else None
+    record["spawned_at"] = _utc_now()
+    state["services"][name] = record
+    state["status"] = STATE_STARTING
+    state["updated_at"] = _utc_now()
+    _atomic_json(config.state_path, state)
 
 
 def _attach_listeners(record: dict[str, Any]) -> None:
@@ -1312,6 +1398,21 @@ def _remove_owned_callback_sockets(config: DemoConfig, record: dict[str, Any]) -
         _remove_owned_callback_path(path, record)
 
 
+def _viewer_notification_argv(config: DemoConfig) -> list[str]:
+    """Pass the complete resolved route metadata without making viewer a sender."""
+    argv = [
+        "--notification-mode", config.notification_mode,
+        "--discord-test-mode", "enabled" if config.discord_test_mode else "disabled",
+        "--demo-notification-mock-enabled",
+        "enabled" if config.demo_notification_mock_enabled else "disabled",
+        "--demo-notification-mock-receipt-enabled",
+        "enabled" if config.demo_notification_mock_receipt_enabled else "disabled",
+    ]
+    if config.discord_env_path is not None:
+        argv.extend(["--discord-env-path", str(config.discord_env_path)])
+    return argv
+
+
 def _service_argv(config: DemoConfig, name: str) -> list[str]:
     skills = ROOT / "hermes-agent" / "skills"
     if name == "lmstudio":
@@ -1393,6 +1494,8 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
                 "--host", "127.0.0.1",
                 "--port", str(config.viewer_http_port),
                 "--aux-port", str(config.viewer_aux_port),
+                *_viewer_notification_argv(config),
+                *(["--health-status", "500"] if config.test_force_health_failure_service == "viewer" else []),
             ]
         return [
             str(ROOT / "anomaly_detection" / ".venv" / "bin" / "python"),
@@ -1416,6 +1519,7 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
             "--abnormal-publish", config.values.get("DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH", "disabled"),
             "--abnormal-cooldown-seconds", config.values.get("DEMO_ACTION_VIEWER_ABNORMAL_COOLDOWN_SECONDS", "180"),
             "--pre-alert-speak", config.values.get("DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK", "disabled"),
+            *_viewer_notification_argv(config),
         ]
     if name == "mock_android":
         assert config.mock_android_health_port is not None
@@ -1514,6 +1618,24 @@ def _state_records(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {name: record for name, record in raw.items() if isinstance(record, dict)}
 
 
+def _managed_like_unrecorded_services(
+    specs: dict[str, ServiceSpec],
+    records: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Find only current processes that match a managed entrypoint but lack state."""
+    findings: list[dict[str, Any]] = []
+    for name, spec in specs.items():
+        if name in records:
+            continue
+        try:
+            record = _record_from_existing(spec)
+        except DemoError:
+            continue
+        if record is not None:
+            findings.append({"service": name, "ports": list(spec.ports)})
+    return findings
+
+
 def _reconcile_archived_callback_socket(config: DemoConfig) -> None:
     """Recover only sockets linked to an archived, fully stopped Bridge record."""
     if not any(path.exists() for path in config.callback_sockets):
@@ -1572,11 +1694,19 @@ def start(config: DemoConfig) -> dict[str, Any]:
     source = _validate_source(config)
     ensure_runtime_layout(config)
     existing = _read_json(config.state_path)
-    if existing and existing.get("status") == "running":
-        health = runtime_health(config, existing)
-        if health["backend_ready"]:
-            return {"state": health["readiness"], "reused": True, "run_id": existing.get("run_id"), "health": health}
-        raise DemoError("an owned Demo run exists but is unhealthy; use restart after inspecting status")
+    if existing:
+        existing_status = str(existing.get("status", ""))
+        if existing_status in HEALTHY_STATE_VALUES:
+            health = runtime_health(config, existing)
+            if health["backend_ready"]:
+                return {"state": health["readiness"], "reused": True, "run_id": existing.get("run_id"), "health": health}
+            raise DemoError("an owned Demo run exists but is unhealthy; use restart after inspecting status")
+        if existing_status in RECOVERABLE_STATE_VALUES:
+            recovery = stop(config)
+            if recovery["state"] != "DEMO_STOPPED":
+                raise DemoError("incomplete ownership recovery did not stop recorded processes")
+        else:
+            raise DemoError(f"lifecycle state {existing_status or 'UNKNOWN'} requires exact-owner recovery")
     specs = _specs(config)
     _validate_resource_manifest()
     _reconcile_archived_callback_socket(config)
@@ -1584,8 +1714,8 @@ def start(config: DemoConfig) -> dict[str, Any]:
     _external_dependency_ready(config)
     run_id = f"demo-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
     state: dict[str, Any] = {
-        "schema_version": "temiagent.demo_lifecycle.v1",
-        "status": "starting",
+        "schema_version": "temiagent.demo_lifecycle.v2",
+        "status": STATE_STARTING,
         "run_id": run_id,
         "started_at": _utc_now(),
         "source": source,
@@ -1607,12 +1737,13 @@ def start(config: DemoConfig) -> dict[str, Any]:
             spec = specs.get(name)
             if spec is None:
                 continue
-            record = _start_process(spec, _service_argv(config, name), env)
+            argv = _service_argv(config, name)
+            record = _start_process(spec, argv, env)
             record["config_sha256"] = _sha256(config.config_path)
             record["started_at"] = _utc_now()
             record["lifecycle_run_id"] = run_id
             started.append(record)
-            state["services"][name] = record
+            _persist_starting_record(config, state, name, record, argv)
             if name == "lmstudio":
                 ok = _wait_for(
                     lambda: _lmstudio_ready(config) and _lmstudio_context_ready(config),
@@ -1651,28 +1782,45 @@ def start(config: DemoConfig) -> dict[str, Any]:
                 raise DemoError(f"{name} did not pass its health gate; inspect {spec.log_path}")
             _attach_listeners(record)
             _attach_descendants(record)
-        state["status"] = "running"
+            state["updated_at"] = _utc_now()
+            _atomic_json(config.state_path, state)
+        state["status"] = STATE_HEALTHY
         state["ready_state"] = runtime_health(config, state)["readiness"]
         state["updated_at"] = _utc_now()
         _atomic_json(config.state_path, state)
         return {"state": state["ready_state"], "reused": False, "run_id": run_id, "health": runtime_health(config, state)}
-    except Exception:
+    except Exception as exc:
+        state["status"] = STATE_UNHEALTHY
+        state["failure"] = {
+            "code": _failure_code(str(exc)),
+            "service_count": len(started),
+            "recorded_at": _utc_now(),
+        }
+        state["updated_at"] = _utc_now()
+        _atomic_json(config.state_path, state)
+        rollback: list[dict[str, str]] = []
         for record in reversed(started):
             try:
-                _stop_record(record, timeout_seconds=20)
+                outcome = _stop_record(record, timeout_seconds=20)
                 if record.get("name") == "bridge":
                     _remove_owned_callback_sockets(config, record)
-            except DemoError:
-                pass
-        state["status"] = "failed_rolled_back"
+                    outcome += "+callback_sockets_removed"
+                rollback.append({"service": str(record.get("name", "unknown")), "outcome": outcome})
+            except DemoError as rollback_error:
+                rollback.append({
+                    "service": str(record.get("name", "unknown")),
+                    "outcome": "rollback_failed",
+                    "detail": str(rollback_error),
+                })
+        state["rollback"] = rollback
+        state["status"] = (
+            STATE_UNHEALTHY
+            if any(item["outcome"] == "rollback_failed" for item in rollback)
+            else STATE_START_FAILED
+        )
         state["updated_at"] = _utc_now()
-        if started:
-            _atomic_json(config.last_run_path, state)
-        else:
-            _atomic_json(
-                config.runtime_root / "state" / "last-run" / f"start-failure-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json",
-                state,
-            )
+        _atomic_json(config.state_path, state)
+        _atomic_json(config.last_run_path, state)
         raise
 
 
@@ -1694,8 +1842,26 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
             "source": _source_record(),
         }
     if state is None:
+        findings = _managed_like_unrecorded_services(specs, {})
+        if findings:
+            return {
+                "state": "STOP_INCOMPLETE_OWNERSHIP",
+                "already_stopped": False,
+                "warning": "managed-like process exists without lifecycle ownership state; no PID was signalled",
+                "findings": findings,
+                "results": [],
+            }
         return {"state": "DEMO_STOPPED", "already_stopped": True, "results": []}
     records = _state_records(state)
+    findings = _managed_like_unrecorded_services(specs, records)
+    if findings:
+        return {
+            "state": "STOP_INCOMPLETE_OWNERSHIP",
+            "already_stopped": False,
+            "warning": "managed-like process is absent from lifecycle ownership state; no PID was signalled",
+            "findings": findings,
+            "results": [],
+        }
     results: list[dict[str, str]] = []
     for name in ("viewer", "gateway", "mock_discord", "mock_android", "bridge", "resident", "adapter", "mqtt", "lmstudio"):
         record = records.get(name)
@@ -1713,7 +1879,7 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
         results.append({"service": name, "outcome": outcome})
     if dry_run:
         return {"state": "DRY_RUN", "already_stopped": False, "results": results}
-    state["status"] = "stopped"
+    state["status"] = STATE_STOPPED
     state["stopped_at"] = _utc_now()
     state["stop_results"] = results
     _atomic_json(config.last_run_path, state)
@@ -1752,6 +1918,7 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
 
     state = state or _read_json(config.state_path) or {}
     records = _state_records(state) if state else {}
+    lifecycle_state = str(state.get("status", "NO_OWNERSHIP")) if state else "NO_OWNERSHIP"
     service_identity = {name: _identity_matches(record.get("leader", {})) for name, record in records.items()}
     resident = _resident_health(config)
     viewer = _http_json(config.viewer_health_url) if config.viewer_enabled else None
@@ -1771,8 +1938,7 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
     resident_ok = _resident_ready(config) and service_identity.get("resident", False)
     bridge_ok = service_identity.get("bridge", False) and _socket_ready(config) and mqtt_ok
     viewer_ok = (not config.viewer_enabled) or bool(
-        viewer
-        and viewer.get("ok")
+        _viewer_health_contract(viewer)
         and viewer.get("source_connected")
         and viewer.get("llama_server_ready")
         and service_identity.get("viewer", False)
@@ -1793,6 +1959,7 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
         and viewer_ok
         and mock_android_ok
         and mock_discord_ok
+        and lifecycle_state in HEALTHY_STATE_VALUES
     )
     android_observed = broker["remote_sessions"] > 0
     if config.is_newcomer_mock:
@@ -1802,13 +1969,14 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
     return {
         "readiness": readiness,
         "profile": config.profile,
+        "lifecycle_state": lifecycle_state,
         "backend_ready": backend_ready,
         "android_connection_observed": android_observed if not config.is_newcomer_mock else False,
         "mock_android_ready": mock_android_ok if config.is_newcomer_mock else None,
         "mock_discord_ready": mock_discord_ok if config.is_newcomer_mock else None,
         "source": state.get("source") if state else _source_record(),
         "runtime_root": str(config.runtime_root),
-        "private_env": str(config.config_path),
+        "private_config": {"configured": True},
         "context": {
             "context_length": config.context_length,
             "lmstudio_context_length": config.lmstudio_context_length,
@@ -1868,6 +2036,13 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
         except Exception as exc:
             add(name, "FAIL", "CHECK_FAILED", f"{type(exc).__name__}: {exc}", required=required)
 
+    if state and str(state.get("status", "")) in RECOVERABLE_STATE_VALUES:
+        add("lifecycle_state", "FAIL", "LIFECYCLE_RECOVERY_REQUIRED", "recorded run is incomplete; exact-owner stop/recovery is required", required=True)
+    elif state and str(state.get("status", "")) not in HEALTHY_STATE_VALUES:
+        add("lifecycle_state", "WARNING", "LIFECYCLE_NOT_HEALTHY", "recorded lifecycle state is not healthy", required=False)
+    else:
+        add("lifecycle_state", "PASS", "LIFECYCLE_STATE_CLEAR", "no incomplete lifecycle ownership state", required=True)
+
     guarded(
         "repository",
         lambda: (
@@ -1892,13 +2067,16 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
     runtime_paths = (
         config.bridge_log_dir / "x",
         config.memory_dir / "x",
+        config.runtime_root / "state" / "pid" / "probe",
         *config.callback_sockets,
         *((config.identity_state_dir / "x",) if config.identity_state_dir is not None else ()),
     )
     if all(_has_writable_existing_parent(path) for path in runtime_paths):
         add("runtime_paths", "PASS", "RUNTIME_PATHS_WRITABLE", "all runtime paths resolve below writable external parents", required=True)
+        add("state_pid_root", "PASS", "STATE_PID_ROOT_WRITABLE", "state PID root is writable or will be created privately", required=True)
     else:
         add("runtime_paths", "FAIL", "RUNTIME_PATH_UNWRITABLE", "a required runtime parent is not writable", required=True)
+        add("state_pid_root", "FAIL", "STATE_PID_ROOT_UNWRITABLE", "state PID root parent is not writable", required=True)
 
     entrypoints = [ROOT / "tools" / "temi_overview_adapter.py", ROOT / "hermes_temi_bridge" / "pyproject.toml"]
     if config.is_newcomer_mock:
@@ -1921,6 +2099,13 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
         add("entrypoints", "FAIL", "ENTRYPOINT_MISSING", "missing: " + ", ".join(missing), required=True)
     else:
         add("entrypoints", "PASS", "ENTRYPOINTS_READY", "all profile entrypoints are present", required=True)
+    add(
+        "viewer_notification_config",
+        "PASS",
+        "VIEWER_NOTIFICATION_CONFIG_VALID",
+        f"mode={config.notification_mode}; credential_path_redacted=true",
+        required=True,
+    )
     guarded("resource_manifest", lambda: json.dumps(_validate_resource_manifest(), sort_keys=True))
 
     def endpoint(name: str, url: str, validator: Callable[[dict[str, Any]], bool], *, ownership: str, managed_name: str | None = None) -> None:
@@ -1964,7 +2149,7 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
         endpoint(
             "viewer",
             config.viewer_health_url,
-            lambda payload: payload.get("ok") is True and payload.get("source_connected") is True and payload.get("llama_server_ready") is True,
+            lambda payload: _viewer_health_contract(payload) and payload.get("source_connected") is True and payload.get("llama_server_ready") is True,
             ownership="managed",
             managed_name="viewer",
         )
@@ -2118,6 +2303,8 @@ def _print(payload: dict[str, Any], json_output: bool) -> None:
 
 def _failure_code(message: str) -> str:
     normalized = message.upper()
+    if "STOP_INCOMPLETE_OWNERSHIP" in normalized:
+        return "STOP_INCOMPLETE_OWNERSHIP"
     if "LOCK_BUSY" in normalized:
         return "LOCK_BUSY"
     if "CONTEXT" in normalized:
@@ -2181,6 +2368,9 @@ def main(argv: list[str] | None = None) -> int:
                 payload = restart(config)
             elif args.command in {"stop", "down"}:
                 payload = stop(config, dry_run=bool(getattr(args, "dry_run", False)))
+                if payload["state"] == "STOP_INCOMPLETE_OWNERSHIP":
+                    _print(payload, args.json)
+                    return 2
             elif args.command == "status":
                 payload = runtime_health(config)
                 payload["state"] = payload.pop("readiness")
