@@ -51,7 +51,7 @@ The detailed module map and payload narrative are in [project_overview.md](docs/
 | Module | Responsibility | Entry point | README | Verification |
 |---|---|---|---|---|
 | `hermes_temi_bridge/` | Canonical safety boundary and command dispatcher | `hermes-temi-bridge` | [README](hermes_temi_bridge/README.md) | `uv run python -m unittest discover -s tests` |
-| `hermes-agent/` | Hermes runtime and upstream code | `tools/hermes_resident_server.py` for Temi Demo | [TemiAgent README](hermes-agent/README.TemiAgent.md) | Bridge/resident integration checks |
+| `hermes-agent/` | Hermes runtime and upstream code | `tools/hermes_resident_server.py` for Temi Demo | [Bootstrap overlay](third_party/hermes/README.md) | Bridge/resident integration checks |
 | `hermes-skills/` | Reviewable mirror of Temi-specific Hermes skills | `SKILL.md` files | [README](hermes-skills/README.md) | Mirror diff and skill validators |
 | `temi_backend/` | Verified legacy ASR, video and VLM route | `uv run temi-backend` | [README](temi_backend/README.md) | `uv run pytest` |
 | `anomaly_detection/` | Experimental stream viewer and abnormal-event producer | `temi_action_viewer.py` | [README](anomaly_detection/README.md) | Module tests or documented manual QA |
