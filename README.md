@@ -106,10 +106,27 @@ Hardware, GPU, Discord and live-stream acceptance require their documented exter
 
 ## Operations
 
-The canonical Demo entry point is `./scripts/demo`. Create an owner-only
-private env from [config/demo.env.example](config/demo.env.example), keep it
-outside every Git worktree, and run the same lifecycle for start, health, and
-stop:
+The canonical Demo entry point is `./scripts/demo`. Its one default private
+configuration is Git-ignored at `/TemiAgent/.runtime/demo/demo.env` (the host
+bind-mount path is `/home/yiting/TemiAgent/.runtime/demo/demo.env`) and its
+runtime root is `/TemiAgent/.runtime/demo`. The initializer creates both with
+owner-only permissions and never asks for a Discord credential.
+
+```bash
+cd /TemiAgent
+./scripts/bootstrap --sources
+./scripts/demo init-config
+./scripts/demo doctor
+./scripts/demo start
+./scripts/demo status
+./scripts/demo stop
+```
+
+The default `init-config` selects the safe `newcomer_mock` profile. Use
+`./scripts/demo init-config --profile production --force` only for the reviewed
+production profile. An explicit absolute `--config` remains available for a
+separately owned custom deployment, but the lifecycle never searches or adopts
+legacy `/tmp` configs.
 
 ```bash
 cd /TemiAgent

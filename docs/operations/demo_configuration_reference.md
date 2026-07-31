@@ -3,10 +3,10 @@
 Status: maintained, Demo-only. Last reviewed: 2026-07-31.
 
 This is the non-secret reference for the complete key set in
-[`config/demo.env.example`](../../config/demo.env.example). The private file is
-an operator-owned `0600` regular file outside every Git worktree. It is loaded
-by `tools/demo_lifecycle.py`; that implementation and Bridge `BridgeConfig`
-remain authoritative if this guide disagrees with source.
+[`config/demo.env.example`](../../config/demo.env.example). The default private
+file is the exact ignored owner-only `/TemiAgent/.runtime/demo/demo.env`, made
+by `scripts/demo init-config`; explicit custom configs remain outside every
+worktree. `tools/demo_lifecycle.py` and Bridge `BridgeConfig` are authoritative.
 
 Never copy a private env, Discord env, token, webhook, account name, real
 endpoint, user-specific host path, care record, or runtime export into Git.
@@ -18,14 +18,14 @@ values.
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
 cd /TemiAgent
-cp config/demo.env.example <private-demo-env>
-chmod 600 <private-demo-env>
-./scripts/demo --config <private-demo-env> doctor
+./scripts/bootstrap --sources
+./scripts/demo init-config
+./scripts/demo doctor
 ```
 
-Replace only placeholders in the private copy. The normal command path is in
-the [Demo operator guide](DEMO_OPERATOR_GUIDE.md); this reference does not
-authorize a start, restart, notification test, raw MQTT publish, or hardware
+The initializer is idempotent and will not overwrite the canonical config
+without `--force`. The normal command path is in the [Demo operator guide](DEMO_OPERATOR_GUIDE.md);
+this reference does not authorize a start, restart, notification test, raw MQTT publish, or hardware
 action.
 
 ## Rules that apply to every group
@@ -33,7 +33,7 @@ action.
 | Rule | Meaning |
 |---|---|
 | Private-file ownership | The private env and its parent are owned only by the lifecycle user; the env mode is exactly `0600`. |
-| External runtime root | Mutable paths must be below `TEMIAGENT_RUNTIME_ROOT`, which is outside every Git worktree and owner-only. |
+| Canonical runtime root | Default mutable paths are below ignored `/TemiAgent/.runtime/demo`; explicit custom roots remain outside every Git worktree and owner-only. |
 | Ownership vocabulary | `managed` means `scripts/demo` owns start, exact-PID recording and stop; `external` is health-checked only; `disabled` applies only to optional services. |
 | No implicit adoption | A listener or PID that is not an expected recorded identity fails closed; the lifecycle does not kill by process name. |
 | Defaults are not proof | A configured endpoint, gateway connection or webhook presence does not prove Android execution or notification delivery. |
@@ -42,7 +42,7 @@ action.
 
 | Key | Required form / purpose | Constraint |
 |---|---|---|
-| `TEMIAGENT_RUNTIME_ROOT` | Owner-only external root for all lifecycle state. | Must be outside every Git worktree. |
+| `TEMIAGENT_RUNTIME_ROOT` | Owner-only canonical root for all lifecycle state. | Default is exact ignored `/TemiAgent/.runtime/demo`; custom roots must be outside every Git worktree. |
 | `LOG_DIR` | Bridge trace root. | Must be below runtime root. |
 | `MEMORY_DIR` | Bridge memory root. | Must be below runtime root; Demo data only. |
 | `DEMO_CARE_MEMORY_ROOT` | Private synthetic care-memory partition root. | Required only by enabled care scenarios; below runtime root. |
@@ -86,7 +86,7 @@ ad-hoc shell commands.
 | Git policy | `DEMO_GIT_BRANCH_POLICY=required` and `EXPECTED_GIT_BRANCH=main` by default. A different branch or detached HEAD fails source validation. | The sample sets `DEMO_GIT_BRANCH_POLICY=disabled` deliberately, so a disposable clone may be detached. This disables only the branch-name gate, not clean-source, resource, Bridge, or exact-PID checks. |
 | Model and broker | LM Studio `1234`; MQTT `1883`. | Local test doubles at `29134` and `29183`; neither contacts a GPU model or a real broker outside the profile. |
 | Adapter, resident, viewer | Adapter `8080/8081`, resident `8765`, viewer `8010/8011`. | Adapter `29080/29081`, resident `29765`, viewer `29010/29011`; Android and Discord test doubles use `29012` and `29013`. |
-| Runtime data | Operator-owned external runtime root. | `/tmp/temiagent_newcomer_acceptance_<RUN_ID>/`, with a unique `<RUN_ID>` for every run. |
+| Runtime data | Ignored canonical root after `init-config --profile production --force`. | Ignored canonical root after the default `init-config`; no temporary config discovery occurs. |
 
 All mock ports are loopback high ports. `DemoConfig` rejects a production-port
 drift, a low or duplicate mock port, a mock URL not derived from the resolved

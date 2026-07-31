@@ -78,14 +78,13 @@ infer this from a production caregiver webhook.
 ## Formal Demo injection
 
 Only run this after `scripts/demo doctor` and `scripts/demo start` report the
-documented lifecycle readiness. The private config must be an owner-only `0600`
-file outside every worktree and must explicitly select the Demo mock route.
+documented lifecycle readiness. The default initialized config is owner-only,
+ignored, and explicitly selects the Demo mock route.
 
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
 cd /TemiAgent
 ./scripts/inject_demo_event \
-  --config <PRIVATE_CONFIG> \
   --event falls_down \
   --resident-id <TEST_RESIDENT> \
   --run-id <RUN_ID> \
@@ -108,6 +107,6 @@ uv run python -m unittest tests.test_care_episode tests.test_abnormal_notificati
 The isolated lifecycle E2E verifier covers canonical event ingress, Resident
 Hermes, Bridge validation, mock Android command/result, restart-safe dedup,
 and local loopback Discord HTTP classifications. It never contacts a real
-recipient. Stop only through `./scripts/demo --config <PRIVATE_CONFIG> stop`;
+recipient. Stop only through `./scripts/demo stop`;
 that command targets recorded lifecycle PIDs and preserves externally owned
 services.

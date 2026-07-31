@@ -37,7 +37,10 @@ retains its own health endpoint and runtime behavior. The lifecycle uses one
 owner-only state record and exact process identity; it does not infer ownership
 from a port or process name. After a verified managed spawn, it atomically
 persists `STARTING` with start identity and command fingerprint before waiting
-for health. The final successful state is `HEALTHY`.
+for health. When no `--config` is supplied, it resolves only the ignored
+owner-only `/TemiAgent/.runtime/demo/demo.env` and its paired runtime root;
+`init-config` creates that layout and never discovers a legacy temporary config.
+The final successful state is `HEALTHY`.
 
 On a health-gate failure, the lifecycle records `UNHEALTHY`, stops only the
 recorded services in reverse start order, records rollback outcomes, and leaves

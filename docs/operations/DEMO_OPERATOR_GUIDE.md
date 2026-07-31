@@ -27,21 +27,23 @@ inventories are reference material, not substitute lifecycle contracts.
 
 ## 唯一操作指令
 
-`<private-demo-env>` 必須是 Git worktree 外、owner-only（mode `0600`）的 private env。它不
-能是 `hermes_temi_bridge/.env.example` 或其他 tracked env。從
-[`config/demo.env.example`](../../config/demo.env.example) 建立檔案，並在第一次操作前執行：
+Canonical config is the ignored, owner-only `/TemiAgent/.runtime/demo/demo.env`;
+`./scripts/demo init-config` creates it and the paired runtime root without a
+credential. It defaults to the safe `newcomer_mock` profile. Use an explicit
+absolute `--config` only for a separately owned custom deployment.
 
 ```bash
-./scripts/bootstrap --check
+./scripts/bootstrap --sources
 ```
 
 ```bash
-./scripts/demo --config <private-demo-env> doctor
-./scripts/demo --config <private-demo-env> start
-./scripts/demo --config <private-demo-env> restart
-./scripts/demo --config <private-demo-env> status
-./scripts/demo --config <private-demo-env> stop
-./scripts/demo --config <private-demo-env> trace-export
+./scripts/demo init-config
+./scripts/demo doctor
+./scripts/demo start
+./scripts/demo restart
+./scripts/demo status
+./scripts/demo stop
+./scripts/demo trace-export
 ```
 
 相容 alias `up`、`down` 與 `deploy --backend-only` 存在，但操作文件只使用上述六個指令。
@@ -50,14 +52,15 @@ restart 中以 cwd、command line、PID start identity 與 listener 驗證過的
 
 ## Private runtime layout
 
-private env 必須設定 `TEMIAGENT_RUNTIME_ROOT` 到 Git worktree 外的 owner-only directory。
-Lifecycle 只在這個 root 寫入：
+The default config fixes `TEMIAGENT_RUNTIME_ROOT` at the ignored owner-only
+`/TemiAgent/.runtime/demo` root. Explicit custom config roots remain outside
+every Git worktree. Lifecycle writes only below the selected root:
 
 ```text
 <runtime-root>/
   config/                 private config copy or reference parent
-  state/{pid,ownership,last-run,android-evidence}/
-  data/{care-memory,shared}/
+  state/{pid,ownership,last-run,android-evidence,viewer,notifications,media}/
+  data/{care-memory,test-memory,shared}/
   logs/{bridge,hermes,asr,trace}/
   tmp/sockets/
 ```

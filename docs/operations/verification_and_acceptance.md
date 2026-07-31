@@ -90,24 +90,14 @@ cd hermes_temi_bridge && uv sync --frozen --extra mqtt
 cd ../anomaly_detection && uv sync --frozen
 cd ..
 
-run_id="$(date -u +%Y%m%dT%H%M%SZ)"
-acceptance_root="/tmp/temiagent_newcomer_acceptance_${run_id}"
-umask 077
-mkdir -p "$acceptance_root"
-chmod 700 "$acceptance_root"
-mkdir -p "$acceptance_root/config"
-chmod 700 "$acceptance_root/config"
-sed "s#<RUN_ID>#${run_id}#g" config/demo.mock.env.example > "$acceptance_root/config/demo.mock.env"
-chmod 600 "$acceptance_root/config/demo.mock.env"
-config="$acceptance_root/config/demo.mock.env"
-
-./scripts/demo --config "$config" --json doctor
-./scripts/demo --config "$config" --json start
-./scripts/demo --config "$config" --json start
-./scripts/demo --config "$config" --json status
-./scripts/verify_newcomer_mock --config "$config"
-./scripts/demo --config "$config" --json restart
-./scripts/demo --config "$config" --json stop
+./scripts/demo init-config
+./scripts/demo --json doctor
+./scripts/demo --json start
+./scripts/demo --json start
+./scripts/demo --json status
+./scripts/verify_newcomer_mock
+./scripts/demo --json restart
+./scripts/demo --json stop
 ```
 
 `verify_newcomer_mock` is a verifier, not an orchestrator: it requires the

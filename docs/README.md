@@ -29,7 +29,7 @@ authoritative when any prose conflicts with them.
 | Data flow, module boundary and capability classification | [project overview](architecture/project_overview.md) | Architecture; sections 6–13 are historical planning material. |
 | Cross-module topic, schema and update-together rule | [contract traceability](architecture/contract_traceability.md) | Bridge and contract owners; runtime schemas are authoritative. |
 | Demo lifecycle and operator workflow | [Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md) | Demo operator; `scripts/demo` is the only current lifecycle. |
-| Private Demo configuration and ownership | [Demo configuration reference](operations/demo_configuration_reference.md) | Operator-supplied owner-only env, including the isolated `newcomer_mock` profile; never commit values or credentials. |
+| Private Demo configuration and ownership | [Demo configuration reference](operations/demo_configuration_reference.md) | Canonical ignored owner-only `.runtime/demo/demo.env`, initializer, production and isolated `newcomer_mock` profiles; never commit values or credentials. |
 | Incident diagnosis and recovery boundary | [Demo troubleshooting](operations/demo_troubleshooting.md) | Exact-PID investigation; no broad process control. |
 | Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes the Bridge-backed software-only newcomer acceptance. Hardware, Android, GPU and Discord remain external gates. |
 | Bridge-owned abnormal alert, follow-up, and Demo injection | [Immediate abnormal-care flow](operations/immediate_abnormal_care_flow.md) | Bridge owner; formal injector is synthetic-only and real Discord remains an authorization-gated external path. |

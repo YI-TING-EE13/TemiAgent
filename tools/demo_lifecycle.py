@@ -33,6 +33,10 @@ import uuid
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CANONICAL_RUNTIME_ROOT = ROOT / ".runtime" / "demo"
+CANONICAL_CONFIG_PATH = CANONICAL_RUNTIME_ROOT / "demo.env"
+PRODUCTION_TEMPLATE_PATH = ROOT / "config" / "demo.env.example"
+NEWCOMER_MOCK_TEMPLATE_PATH = ROOT / "config" / "demo.mock.env.example"
 BRIDGE_SRC = ROOT / "hermes_temi_bridge" / "src"
 if BRIDGE_SRC.as_posix() not in sys.path:
     sys.path.insert(0, BRIDGE_SRC.as_posix())
@@ -97,6 +101,127 @@ RECOVERABLE_STATE_VALUES = {STATE_STARTING, STATE_UNHEALTHY, STATE_START_FAILED}
 
 class DemoError(RuntimeError):
     """Raised for a lifecycle precondition or ownership failure."""
+
+
+def canonical_runtime_root() -> Path:
+    """Return the only repository-local runtime hierarchy used by default."""
+
+    return CANONICAL_RUNTIME_ROOT
+
+
+def canonical_config_path() -> Path:
+    """Return the only config path considered when --config is omitted."""
+
+    return CANONICAL_CONFIG_PATH
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    """Compare lexical absolute paths without following an untrusted symlink."""
+
+    return os.path.abspath(os.fspath(left)) == os.path.abspath(os.fspath(right))
+
+
+def _is_canonical_config_path(path: Path) -> bool:
+    return _same_path(path, canonical_config_path())
+
+
+def _is_canonical_runtime_root(path: Path) -> bool:
+    return _same_path(path, canonical_runtime_root())
+
+
+def _validate_canonical_runtime_hierarchy() -> None:
+    """Reject symlink redirection before trusting the ignored local hierarchy."""
+
+    runtime_root = canonical_runtime_root()
+    runtime_parent = runtime_root.parent
+    for candidate in (runtime_parent, runtime_root):
+        if candidate.exists() or candidate.is_symlink():
+            if candidate.is_symlink():
+                raise DemoError(f"canonical runtime hierarchy must not contain symlinks: {candidate}")
+
+
+def _validate_private_location(path: Path, *, label: str, canonical: bool) -> None:
+    """Allow the exact canonical ignored path or preserve external-config safety."""
+
+    if canonical:
+        _validate_canonical_runtime_hierarchy()
+        return
+    _outside_worktrees(path, label=label)
+
+
+def resolve_config_path(raw_path: str | None) -> Path:
+    """Resolve an explicit config or the single documented local default."""
+
+    if raw_path:
+        return Path(raw_path).expanduser()
+    path = canonical_config_path()
+    if not path.is_file() or path.is_symlink():
+        raise DemoError(
+            "Canonical Demo config not initialized. "
+            f"Run: ./scripts/demo init-config. Expected path: {path}"
+        )
+    return path
+
+
+def _template_path(profile: str) -> Path:
+    if profile == PROFILE_PRODUCTION:
+        return PRODUCTION_TEMPLATE_PATH
+    if profile == PROFILE_NEWCOMER_MOCK:
+        return NEWCOMER_MOCK_TEMPLATE_PATH
+    raise DemoError("DEMO_PROFILE must be production or newcomer_mock")
+
+
+def _write_private_config(path: Path, content: str, *, force: bool) -> None:
+    """Write one owner-only env file without following a destination symlink."""
+
+    if path.exists() or path.is_symlink():
+        if path.is_symlink() or not path.is_file():
+            raise DemoError("canonical config path must be a regular file")
+        if not force:
+            return
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".demo.env.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        os.chmod(path, 0o600)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def initialize_canonical_config(*, profile: str, force: bool = False) -> dict[str, Any]:
+    """Create or validate the documented ignored config and private runtime layout."""
+
+    _validate_canonical_runtime_hierarchy()
+    _mkdir_private(canonical_runtime_root().parent)
+    _mkdir_private(canonical_runtime_root())
+    config_path = canonical_config_path()
+    existed = config_path.exists()
+    if not existed or force:
+        template = _template_path(profile)
+        if not template.is_file():
+            raise DemoError(f"canonical Demo config template is missing: {template.name}")
+        content = template.read_text(encoding="utf-8").replace(
+            "<CANONICAL_RUNTIME_ROOT>", str(canonical_runtime_root())
+        )
+        if "<CANONICAL_RUNTIME_ROOT>" in content:
+            raise DemoError("canonical Demo config template has unresolved runtime placeholders")
+        _write_private_config(config_path, content, force=force)
+    config = load_config(config_path)
+    ensure_runtime_layout(config)
+    return {
+        "state": "DEMO_CONFIG_INITIALIZED" if not existed or force else "DEMO_CONFIG_READY",
+        "config_path": str(config.config_path),
+        "runtime_root": str(config.runtime_root),
+        "profile": config.profile,
+        "created": not existed,
+        "manual_secret_keys": [],
+    }
 
 
 def _utc_now() -> str:
@@ -378,7 +503,8 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         raise DemoError("--config must be an absolute private env path")
     if path.is_symlink() or not path.is_file():
         raise DemoError("--config must be a regular private env file")
-    _outside_worktrees(path, label="private env")
+    is_canonical_config = _is_canonical_config_path(path)
+    _validate_private_location(path, label="private env", canonical=is_canonical_config)
     mode = stat.S_IMODE(path.stat().st_mode)
     if mode != 0o600:
         raise DemoError(f"private env mode must be 0600, got {mode:03o}")
@@ -399,7 +525,12 @@ def load_config(raw_path: str | Path) -> DemoConfig:
     runtime_root = Path(_require(values, "TEMIAGENT_RUNTIME_ROOT"))
     if not runtime_root.is_absolute():
         raise DemoError("TEMIAGENT_RUNTIME_ROOT must be absolute")
-    _outside_worktrees(runtime_root, label="runtime root")
+    is_canonical_runtime = _is_canonical_runtime_root(runtime_root)
+    if is_canonical_config and not is_canonical_runtime:
+        raise DemoError("canonical Demo config must use the canonical runtime root")
+    _validate_private_location(
+        runtime_root, label="runtime root", canonical=is_canonical_runtime
+    )
     port_defaults = PRODUCTION_PORTS if profile == PROFILE_PRODUCTION else NEWCOMER_MOCK_PORTS
     lmstudio_server_port = _port(values, "LMSTUDIO_SERVER_PORT", default=port_defaults["lmstudio"])
     mqtt_port = _port(values, "MQTT_BROKER_PORT", default=port_defaults["mqtt"])
@@ -669,7 +800,14 @@ def load_config(raw_path: str | Path) -> DemoConfig:
 
 
 def _mkdir_private(path: Path) -> None:
+    if path.is_symlink():
+        raise DemoError(f"owner-only runtime path must not be a symlink: {path}")
+    if path.exists() and not path.is_dir():
+        raise DemoError(f"owner-only runtime path must be a directory: {path}")
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    metadata = path.stat()
+    if metadata.st_uid != os.geteuid():
+        raise DemoError(f"owner-only runtime path must be lifecycle-user-owned: {path}")
     os.chmod(path, 0o700)
 
 
@@ -691,7 +829,11 @@ def ensure_runtime_layout(config: DemoConfig) -> None:
         config.runtime_root / "state" / "ownership",
         config.runtime_root / "state" / "last-run",
         config.runtime_root / "state" / "android-evidence",
+        config.runtime_root / "state" / "viewer",
+        config.runtime_root / "state" / "notifications",
+        config.runtime_root / "state" / "media",
         config.runtime_root / "data" / "care-memory",
+        config.runtime_root / "data" / "test-memory",
         config.runtime_root / "data" / "shared",
         config.runtime_root / "logs" / "bridge",
         config.runtime_root / "logs" / "hermes",
@@ -704,7 +846,10 @@ def ensure_runtime_layout(config: DemoConfig) -> None:
         *( (config.identity_state_dir,) if config.identity_state_dir is not None else () ),
     ):
         _mkdir_private(path)
-    if stat.S_IMODE(config.config_path.parent.stat().st_mode) & (stat.S_IRWXG | stat.S_IRWXO):
+    config_parent_metadata = config.config_path.parent.stat()
+    if config_parent_metadata.st_uid != os.geteuid() or (
+        stat.S_IMODE(config_parent_metadata.st_mode) & (stat.S_IRWXG | stat.S_IRWXO)
+    ):
         raise DemoError("private config parent directory must be owner-only")
     if config.is_newcomer_mock:
         _write_mock_mosquitto_config(config)
@@ -2052,11 +2197,40 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
     )
     guarded(
         "private_env",
-        lambda: f"mode={stat.S_IMODE(config.config_path.stat().st_mode):03o} outside_worktree=true",
+        lambda: f"mode={stat.S_IMODE(config.config_path.stat().st_mode):03o} canonical_ignored_path={_is_canonical_config_path(config.config_path)}",
     )
+    if _is_canonical_config_path(config.config_path):
+        canonical_layout = (
+            config.runtime_root,
+            config.runtime_root / "config",
+            config.runtime_root / "state" / "pid",
+            config.runtime_root / "state" / "ownership",
+            config.runtime_root / "state" / "last-run",
+            config.runtime_root / "state" / "android-evidence",
+            config.runtime_root / "state" / "viewer",
+            config.runtime_root / "state" / "notifications",
+            config.runtime_root / "state" / "media",
+            config.runtime_root / "data" / "care-memory",
+            config.runtime_root / "data" / "test-memory",
+            config.runtime_root / "data" / "shared",
+            config.runtime_root / "logs" / "bridge",
+            config.runtime_root / "tmp" / "sockets",
+        )
+        invalid_layout = [
+            path for path in canonical_layout
+            if not path.is_dir() or path.is_symlink() or path.stat().st_uid != os.geteuid()
+            or stat.S_IMODE(path.stat().st_mode) != 0o700
+        ]
+        add(
+            "canonical_runtime_layout",
+            "FAIL" if invalid_layout else "PASS",
+            "CANONICAL_RUNTIME_LAYOUT_INVALID" if invalid_layout else "CANONICAL_RUNTIME_LAYOUT_READY",
+            "canonical owner-only runtime directories are initialized" if not invalid_layout else "canonical runtime layout is missing or has unsafe ownership or mode",
+            required=True,
+        )
     if config.runtime_root.is_dir():
         mode = stat.S_IMODE(config.runtime_root.stat().st_mode)
-        if mode == 0o700:
+        if mode == 0o700 and config.runtime_root.stat().st_uid == os.geteuid():
             add("runtime_root", "PASS", "RUNTIME_ROOT_READY", "owner-only runtime root exists", required=True)
         else:
             add("runtime_root", "FAIL", "RUNTIME_ROOT_MODE_INVALID", f"runtime root mode is {mode:03o}, expected 700", required=True)
@@ -2176,6 +2350,9 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
         for port in spec.ports:
             listeners = _listener_count(port)
             if listeners == 0:
+                add(
+                    f"port_{port}", "PASS", "PORT_CLEAR", f"{name} listener port is clear", required=True
+                )
                 continue
             record = records.get(name)
             if listeners == 1 and record is not None and _identity_matches(record.get("leader", {})):
@@ -2301,6 +2478,19 @@ def _print(payload: dict[str, Any], json_output: bool) -> None:
         print(f"sha256={payload['archive_sha256']}")
 
 
+    if "config_path" in payload:
+        print("config_path=" + str(payload["config_path"]))
+    if "runtime_root" in payload:
+        print("runtime_root=" + str(payload["runtime_root"]))
+    if "profile" in payload:
+        print("profile=" + str(payload["profile"]))
+    for check in payload.get("checks", ()):
+        print(
+            "{}[{}]: {} — {}".format(
+                check["status"], check["code"], check["name"], check["message"]
+            )
+        )
+
 def _failure_code(message: str) -> str:
     normalized = message.upper()
     if "STOP_INCOMPLETE_OWNERSHIP" in normalized:
@@ -2332,9 +2522,12 @@ def main(argv: list[str] | None = None) -> int:
     """Parse the lifecycle command and map expected failures to stable results."""
 
     parser = argparse.ArgumentParser(description="Operate the current TemiAgent Demo backend by exact process ownership.")
-    parser.add_argument("--config", required=True, help="absolute owner-only private Demo env file")
+    parser.add_argument("--config", help="optional absolute owner-only private Demo env file")
     parser.add_argument("--json", action="store_true", help="emit full machine-readable status")
     commands = parser.add_subparsers(dest="command", required=True)
+    init_parser = commands.add_parser("init-config")
+    init_parser.add_argument("--force", action="store_true", help="replace the canonical config")
+    init_parser.add_argument("--profile", choices=(PROFILE_NEWCOMER_MOCK, PROFILE_PRODUCTION), default=PROFILE_NEWCOMER_MOCK)
     commands.add_parser("doctor")
     commands.add_parser("start")
     commands.add_parser("restart")
@@ -2354,7 +2547,13 @@ def main(argv: list[str] | None = None) -> int:
     verify_parser.add_argument("scenario", choices=("repeated-discomfort",))
     args = parser.parse_args(argv)
     try:
-        config = load_config(args.config)
+        if args.command == "init-config":
+            if args.config:
+                raise DemoError("init-config always writes the canonical Demo config; do not pass --config")
+            payload = initialize_canonical_config(profile=args.profile, force=args.force)
+            _print(payload, args.json)
+            return 0
+        config = load_config(resolve_config_path(args.config))
         mutating = args.command in {"start", "up", "deploy", "restart", "stop", "down", "identity", "seed"}
         if mutating:
             ensure_runtime_layout(config)

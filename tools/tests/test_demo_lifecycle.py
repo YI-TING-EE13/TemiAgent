@@ -74,12 +74,29 @@ class DemoLifecycleConfigTests(unittest.TestCase):
         config = root / "demo.mock.env"
         config.write_text(
             (ROOT / "config" / "demo.mock.env.example").read_text(encoding="utf-8").replace(
-                "/tmp/temiagent_newcomer_acceptance_<RUN_ID>", str(runtime)
+                "<CANONICAL_RUNTIME_ROOT>", str(runtime)
             ),
             encoding="utf-8",
         )
         config.chmod(0o600)
         return config
+
+    def test_default_discovery_never_selects_a_legacy_temporary_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime = root / ".runtime" / "demo"
+            config = runtime / "demo.env"
+            legacy = root / "temiagent_fast_media_demo.env"
+            legacy.write_text("TEMIAGENT_RUNTIME_ROOT=/tmp/legacy\n", encoding="utf-8")
+            legacy.chmod(0o600)
+            with (
+                mock.patch.object(demo, "CANONICAL_RUNTIME_ROOT", runtime),
+                mock.patch.object(demo, "CANONICAL_CONFIG_PATH", config),
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "Canonical Demo config not initialized"):
+                    demo.resolve_config_path(None)
+                self.assertEqual(demo.resolve_config_path(str(legacy)), legacy)
+
 
     def test_external_owner_only_config_loads(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -94,6 +111,27 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             demo.ensure_runtime_layout(loaded)
             self.assertEqual(stat.S_IMODE(loaded.runtime_root.stat().st_mode), 0o700)
             self.assertTrue((loaded.runtime_root / "state" / "ownership").is_dir())
+
+    def test_initializer_creates_an_idempotent_owner_only_canonical_mock_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime = root / ".runtime" / "demo"
+            config = runtime / "demo.env"
+            with (
+                mock.patch.object(demo, "CANONICAL_RUNTIME_ROOT", runtime),
+                mock.patch.object(demo, "CANONICAL_CONFIG_PATH", config),
+            ):
+                initial = demo.initialize_canonical_config(profile=demo.PROFILE_NEWCOMER_MOCK)
+                repeated = demo.initialize_canonical_config(profile=demo.PROFILE_NEWCOMER_MOCK)
+            self.assertEqual(initial["state"], "DEMO_CONFIG_INITIALIZED")
+            self.assertTrue(config.is_file())
+            self.assertEqual(stat.S_IMODE(config.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(runtime.stat().st_mode), 0o700)
+            self.assertTrue((runtime / "state" / "notifications").is_dir())
+            self.assertTrue((runtime / "data" / "test-memory").is_dir())
+            self.assertEqual(repeated["state"], "DEMO_CONFIG_READY")
+            self.assertEqual(repeated["manual_secret_keys"], [])
+
 
     def test_private_config_requires_0600(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

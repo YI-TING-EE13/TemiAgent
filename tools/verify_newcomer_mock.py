@@ -424,10 +424,10 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", required=True)
+    parser.add_argument("--config", help="optional absolute owner-only Demo config path")
     parser.add_argument("--artifacts", type=Path)
     args = parser.parse_args()
-    config = demo.load_config(args.config)
+    config = demo.load_config(demo.resolve_config_path(args.config))
     artifacts = args.artifacts or config.runtime_root / "state" / "newcomer-acceptance"
     try:
         print(json.dumps(run(config, artifacts), ensure_ascii=False, indent=2))

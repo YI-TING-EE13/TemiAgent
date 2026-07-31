@@ -22,7 +22,7 @@ TOOLS_ROOT = Path(__file__).resolve().parent
 if TOOLS_ROOT.as_posix() not in sys.path:
     sys.path.insert(0, TOOLS_ROOT.as_posix())
 
-from demo_lifecycle import DemoError, load_config
+from demo_lifecycle import DemoError, load_config, resolve_config_path
 
 
 EVENT_LABELS = {
@@ -83,7 +83,7 @@ def build_event(args: argparse.Namespace, shared_root: Path) -> tuple[str, dict[
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Inject one canonical Demo-only abnormal event.")
-    parser.add_argument("--config", required=True, help="Absolute owner-only Demo config path.")
+    parser.add_argument("--config", help="Optional absolute owner-only Demo config path.")
     parser.add_argument("--event", required=True, choices=sorted(EVENT_LABELS))
     parser.add_argument("--resident-id", required=True)
     parser.add_argument("--run-id", required=True)
@@ -91,7 +91,7 @@ def main() -> int:
     parser.add_argument("--timestamp-ms", type=int)
     args = parser.parse_args()
     try:
-        config = load_config(args.config)
+        config = load_config(resolve_config_path(args.config))
         if not config.values.get("DEMO_TEST_EVENT_INGRESS_ENABLED", "false").lower() in {"1", "true", "yes", "on"}:
             raise DemoError("DEMO_TEST_EVENT_INGRESS_ENABLED=true is required")
         if config.values.get("ABNORMAL_NOTIFICATION_MODE", "disabled").strip().lower() != "demo_mock":

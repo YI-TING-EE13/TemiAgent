@@ -39,11 +39,11 @@ manifests and the Hermes patch series, not by an unmapped gitlink.
 
 ## Private configuration and runtime data
 
-Copy `config/demo.env.example` to `<PRIVATE_CONFIG_PATH>` outside every Git
-worktree, set mode `0600`, and keep its parent directory owner-only. The
-private config names a separate owner-only Discord env file. That file contains
-only `DISCORD_WEBHOOK_URL=<private value>` and is never printed, committed, or
-copied into a handover bundle.
+Run `./scripts/demo init-config` to create the ignored owner-only canonical
+config `/TemiAgent/.runtime/demo/demo.env` and its runtime root. The default
+is the local `newcomer_mock` profile; it requires no Discord credential and its
+notification test double never contacts a real endpoint. Production is an
+explicit `init-config --profile production --force` choice.
 
 All mutable state must live below `TEMIAGENT_RUNTIME_ROOT`, outside the source
 tree or in an explicitly ignored runtime root. The lifecycle creates these
@@ -128,12 +128,11 @@ The lifecycle emits JSON service results. It uses stable failure codes including
 
 ## Newcomer software-only profile
 
-`config/demo.mock.env.example` is a tracked, non-secret sample for the formal
-`DEMO_PROFILE=newcomer_mock` acceptance. Copy it to
-`/tmp/temiagent_newcomer_acceptance_<RUN_ID>/config/demo.mock.env`, replace
-`<RUN_ID>`, and set mode `0600`; never put an acceptance env in the source
-tree. The profile uses one resolved `DemoConfig` and the canonical lifecycle,
-not a test-specific service manager.
+`config/demo.mock.env.example` is the tracked non-secret template for the
+formal `DEMO_PROFILE=newcomer_mock` acceptance. The default `init-config`
+materializes it as ignored mode `0600` `/TemiAgent/.runtime/demo/demo.env` and
+creates its paired owner-only runtime root. The profile uses one resolved
+`DemoConfig` and the canonical lifecycle, not a test-specific service manager.
 
 | Service role | Production default | Newcomer mock replacement |
 |---|---|---|

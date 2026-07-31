@@ -57,9 +57,10 @@ directory。腳本不啟動 MQTT broker、Hermes、Android 或 robot，也不保
 
 ### Canonical Demo lifecycle
 
-`scripts/demo` 是 current branch 的唯一 lifecycle。它要求 Git worktree 外、mode `0600`
-private env；`TEMIAGENT_RUNTIME_ROOT`、Bridge `LOG_DIR`、memory、shared ASR artifact、PID,
-socket、logs 和 trace 都必須在該 external root。每項服務使用 `managed`、`external` 或
+`scripts/demo` 是 current branch 的唯一 lifecycle。預設 private env 是 Git-ignore、mode
+`0600` 的 `/TemiAgent/.runtime/demo/demo.env`，由 `init-config` 建立；只有這個 exact
+worktree-local path 可作為預設。`TEMIAGENT_RUNTIME_ROOT`、Bridge `LOG_DIR`、memory、shared
+ASR artifact、PID、socket、logs 和 trace 都必須在該 owner-only root。每項服務使用 `managed`、`external` 或
 `disabled` ownership；managed profile 可管理 LM Studio、MQTT、adapter、resident、Bridge、
 gateway 和 viewer，而 external service 只會 health-check。stop 僅接受 recorded exact PID
 identity，並以 viewer → gateway → Bridge → resident → adapter → MQTT → LM Studio 順序執行。
@@ -77,12 +78,13 @@ PID evidence; do not delete the state file or use a broad kill.
 
 ```bash
 cd /TemiAgent
-./scripts/demo --config <private-demo-env> doctor
-./scripts/demo --config <private-demo-env> start
-./scripts/demo --config <private-demo-env> restart
-./scripts/demo --config <private-demo-env> status
-./scripts/demo --config <private-demo-env> trace-export
-./scripts/demo --config <private-demo-env> stop
+./scripts/demo init-config
+./scripts/demo doctor
+./scripts/demo start
+./scripts/demo restart
+./scripts/demo status
+./scripts/demo trace-export
+./scripts/demo stop
 ```
 
 When the private Demo flags explicitly enable identity and repeated discomfort, these commands
@@ -103,13 +105,13 @@ evidence、Media phrase 和故障定位在 `docs/operations/demo_warm_start_runb
 
 ### Software-only newcomer profile
 
-The tracked `config/demo.mock.env.example` is the isolated acceptance profile.
-Materialize it below a unique owner-only
-`/tmp/temiagent_newcomer_acceptance_<RUN_ID>/` root, start it through
-`scripts/demo`, and then run the verifier:
+The tracked `config/demo.mock.env.example` is the isolated acceptance profile
+used by the default initializer. Materialize the canonical ignored config,
+start it through `scripts/demo`, and then run the verifier without a path:
 
 ```bash
-./scripts/verify_newcomer_mock --config <owner-only-mock-env>
+./scripts/demo init-config
+./scripts/verify_newcomer_mock
 ```
 
 The verifier is not a mock orchestrator. It drives the existing Bridge with

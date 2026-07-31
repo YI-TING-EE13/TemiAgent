@@ -16,6 +16,7 @@ venv/
 .env
 .env.*
 !.env.example
+.runtime/
 *.pem
 *.ppk
 *.key

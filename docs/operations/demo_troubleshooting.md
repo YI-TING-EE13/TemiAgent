@@ -16,8 +16,9 @@ Run inside the designated container and project root:
 
 ```bash
 cd /TemiAgent
-./scripts/demo --config <private-demo-env> doctor
-./scripts/demo --config <private-demo-env> status
+./scripts/demo init-config
+./scripts/demo doctor
+./scripts/demo status
 python3 tools/show_temi_trace.py --log-dir <bridge-log-dir> --latest --json
 ```
 
