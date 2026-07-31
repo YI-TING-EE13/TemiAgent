@@ -1,0 +1,1126 @@
+From 01aeb55a0a03ecdd09bd828e96a8542008e0e2af Mon Sep 17 00:00:00 2001
+From: YI-TING <yiting.ee13@nycu.edu.tw>
+Date: Tue, 19 May 2026 09:05:33 +0000
+Subject: [PATCH 1/9] Add Temi care assistant skills
+
+---
+ skills/temi-care-memory/SKILL.md              |  68 ++++++
+ .../references/structured_memory_contract.md  |  63 ++++++
+ skills/temi-home-esi/SKILL.md                 |  44 ++++
+ .../temi-home-esi/references/home_esi_lite.md |  78 +++++++
+ skills/temi-robot-control/SKILL.md            | 145 +++++++++++++
+ .../references/action_schema.json             | 186 ++++++++++++++++
+ .../temi-robot-control/references/examples.md | 168 +++++++++++++++
+ .../references/mqtt_topics.md                 |  25 +++
+ .../references/safety_rules.md                |  35 +++
+ skills/temi-robot-control/scripts/README.md   |  15 ++
+ .../scripts/validate_temi_action.py           | 203 ++++++++++++++++++
+ 11 files changed, 1030 insertions(+)
+ create mode 100644 skills/temi-care-memory/SKILL.md
+ create mode 100644 skills/temi-care-memory/references/structured_memory_contract.md
+ create mode 100644 skills/temi-home-esi/SKILL.md
+ create mode 100644 skills/temi-home-esi/references/home_esi_lite.md
+ create mode 100644 skills/temi-robot-control/SKILL.md
+ create mode 100644 skills/temi-robot-control/references/action_schema.json
+ create mode 100644 skills/temi-robot-control/references/examples.md
+ create mode 100644 skills/temi-robot-control/references/mqtt_topics.md
+ create mode 100644 skills/temi-robot-control/references/safety_rules.md
+ create mode 100644 skills/temi-robot-control/scripts/README.md
+ create mode 100644 skills/temi-robot-control/scripts/validate_temi_action.py
+
+diff --git a/skills/temi-care-memory/SKILL.md b/skills/temi-care-memory/SKILL.md
+new file mode 100644
+index 000000000..e2a867798
+--- /dev/null
++++ b/skills/temi-care-memory/SKILL.md
+@@ -0,0 +1,68 @@
++---
++name: temi-care-memory
++description: Guide Hermes in using Bridge-managed structured care memory for Temi home-care events, reminders, daily state, event logs, summaries, and synchronization with Hermes memory providers. Use with temi-robot-control and temi-home-esi. This skill defines planning and JSON action intent only; it must not directly write files, publish MQTT, or control Temi hardware.
++---
++
++# Temi Care Memory Skill
++
++## Purpose
++
++Use this skill when Hermes handles a Temi home-care interaction that may need resident profile context, reminders, event logging, daily state updates, abnormal event records, or daily summaries.
++
++This skill defines how Hermes should reason about care memory and what JSON actions it may request. Hermes must not directly edit memory files, call the Temi SDK, publish MQTT, or bypass HermesTemiBridge. The Bridge or an approved tool layer performs all actual writes.
++
++## Memory Layers
++
++Use three memory layers with clear responsibility:
++
++1. Hermes builtin memory stores stable, compact background facts such as resident preferences and communication style.
++2. Hermes Holographic provider stores searchable local facts and care summaries.
++3. Structured JSON / JSONL files are the authority for reminders, daily state, event logs, abnormal events, and generated summaries.
++
++Structured care memory is expected at:
++
++```text
++memory/
++  profile.json
++  daily_state.json
++  reminders.json
++  event_log.jsonl
++  summaries/
++  abnormal_events/
++```
++
++## Planning Rules
++
++1. Treat structured memory supplied by HermesTemiBridge as authoritative for current reminders and daily state.
++2. Use Hermes memory/provider recall as background context, not as the source of truth for reminder completion or event audit.
++3. For meaningful care interactions, request `log_event`.
++4. For completed reminders, request `mark_reminder_done` and `log_event`.
++5. For changes to stable profile facts, request `update_memory` and include a short reason.
++6. For end-of-demo or explicit summary requests, request `generate_summary`.
++7. For high-risk events, request `notify_caregiver_mock` only as a mock/demo action and also request `log_event`.
++8. Never claim a real caregiver, clinic, emergency service, or 119 has been contacted unless the Bridge result explicitly says so.
++
++## Recommended Action Intent
++
++Hermes output should remain JSON-only and should be compatible with the active Bridge schema. Memory-related actions are intent for Bridge-managed execution:
++
++- `log_event`
++- `update_memory`
++- `set_reminder`
++- `mark_reminder_done`
++- `generate_summary`
++- `notify_caregiver_mock`
++
++Robot-facing actions such as `speak` and `ask_clarification` are still governed by `temi-robot-control`.
++
++## Data Hygiene
++
++Keep care-memory action payloads concise:
++
++- Include `event_type`, `home_esi_level`, `risk_reason`, and `outcome` when relevant.
++- Do not include private chain-of-thought.
++- Do not store raw image data in memory actions.
++- Prefer image paths or event IDs over duplicating large payloads.
++- Store only the minimum information needed for demo audit and later care summary.
++
++Read `references/structured_memory_contract.md` for the structured memory contract.
+diff --git a/skills/temi-care-memory/references/structured_memory_contract.md b/skills/temi-care-memory/references/structured_memory_contract.md
+new file mode 100644
+index 000000000..9cd5ac845
+--- /dev/null
++++ b/skills/temi-care-memory/references/structured_memory_contract.md
+@@ -0,0 +1,63 @@
++# Structured Care Memory Contract
++
++Hermes may reason over structured memory, but HermesTemiBridge or an approved memory tool is responsible for actual persistence.
++
++## Authoritative Files
++
++```text
++memory/profile.json
++memory/daily_state.json
++memory/reminders.json
++memory/event_log.jsonl
++memory/summaries/<YYYY-MM-DD>.md
++memory/abnormal_events/<event_id>.json
++```
++
++## File Responsibilities
++
++- `profile.json`: resident identity, preferred name, language, communication preferences, reminder defaults, mock caregiver contacts.
++- `daily_state.json`: current date, risk state, last seen location, last interaction, active reminder IDs, recent event IDs.
++- `reminders.json`: scheduled and active reminders; reminder completion state is authoritative here.
++- `event_log.jsonl`: append-only audit log for important interactions, reminders, risk decisions, and outcomes.
++- `summaries/`: generated daily care summaries.
++- `abnormal_events/`: expanded records for L1 or notable L2 events.
++
++## Hermes Action Expectations
++
++When Hermes needs memory persistence, it should output JSON actions rather than writing files directly.
++
++Use `log_event` for:
++
++- completed reminders
++- user discomfort or help requests
++- possible fall or no-response events
++- mock notification attempts
++- generated summaries
++
++Use `mark_reminder_done` only when the resident has clearly confirmed completion by voice, gesture, or Bridge-provided context.
++
++Use `update_memory` for stable resident facts, not for every event. Examples:
++
++- resident prefers shorter prompts
++- resident prefers a particular reminder wording
++- caregiver mock contact changed
++
++Use `generate_summary` at demo end or when asked what happened today.
++
++Use `notify_caregiver_mock` only for demo notification intent. It must be logged as mock.
++
++## Holographic Provider Sync
++
++The Holographic memory provider may receive compact facts derived from structured events. Recommended tags:
++
++```text
++resident:elder_001
++care_profile
++reminder
++event_summary
++abnormal_event
++home_esi:L1
++home_esi:L2
++```
++
++Do not sync full raw event payloads or image bytes to Holographic memory. Sync short summaries that improve later recall.
+diff --git a/skills/temi-home-esi/SKILL.md b/skills/temi-home-esi/SKILL.md
+new file mode 100644
+index 000000000..d42845954
+--- /dev/null
++++ b/skills/temi-home-esi/SKILL.md
+@@ -0,0 +1,44 @@
++---
++name: temi-home-esi
++description: Apply Home-ESI Lite risk classification for Temi home-care assistant events. Use to classify Normal, L3, L2, and L1 care risk from ASR text, visual context, robot state, reminders, and recent events. This skill provides decision policy only and must be used with Bridge-validated JSON actions.
++---
++
++# Temi Home-ESI Lite Skill
++
++## Purpose
++
++Use this skill when Hermes needs to classify home-care risk for a Temi interaction. The goal is not medical diagnosis. The goal is a conservative first-year demo policy for deciding whether the robot should respond normally, ask a care clarification, log an event, or request mock caregiver notification.
++
++## Output Expectations
++
++Hermes should include risk cognition in `cognitive_state` when the active schema allows it:
++
++```json
++{
++  "home_esi_level": "L2",
++  "risk_reason": "使用者表示不舒服，需要先追問症狀與安全狀態。",
++  "next_step": "ask_clarification"
++}
++```
++
++Do not expose private chain-of-thought. Use a short `risk_reason` and `reasoning_summary`.
++
++## Level Summary
++
++| Level | Meaning | Default next step |
++|---|---|---|
++| `L1` | 高風險，可能需要立即處置 | 安全確認、停止危險動作、mock 通知、記錄異常 |
++| `L2` | 中風險，需要主動關懷 | 追問、建議休息或量測、記錄事件 |
++| `L3` | 輕度事件或一般照護提醒 | 一般提醒、紀錄、必要時安排提醒 |
++| `Normal` | 無明顯照護風險 | 正常對話或安全 action |
++
++## Safety Policy
++
++1. Do not make a medical diagnosis.
++2. Do not claim real emergency services were contacted.
++3. Prefer clarification for ambiguous discomfort.
++4. Do not upgrade to L1 only because the resident says "不舒服"; use L2 unless there is stronger evidence.
++5. Upgrade to L1 for fall, no response, explicit emergency request, severe symptoms, or Bridge-provided high-risk context.
++6. For L1, include `notify_caregiver_mock` only as demo notification intent and always log the event.
++
++Read `references/home_esi_lite.md` for the level rules and scenario examples.
+diff --git a/skills/temi-home-esi/references/home_esi_lite.md b/skills/temi-home-esi/references/home_esi_lite.md
+new file mode 100644
+index 000000000..f412e5867
+--- /dev/null
++++ b/skills/temi-home-esi/references/home_esi_lite.md
+@@ -0,0 +1,78 @@
++# Home-ESI Lite Rules
++
++Home-ESI Lite is a demo risk policy for home-care robot interactions. It is not clinical triage and must not be presented as a medical diagnosis.
++
++## Normal
++
++Use `Normal` when:
++
++- the user is chatting normally
++- the user asks a general question
++- the user requests safe navigation or speech
++- no care risk is visible or stated
++
++Typical actions:
++
++- `speak`
++- safe `navigate` / `turn` / `stop`
++- `noop`
++
++## L3
++
++Use `L3` for low-risk care events:
++
++- routine reminder
++- medication reminder without distress
++- hydration or schedule reminder
++- mild missed-response where the resident quickly confirms
++
++Typical actions:
++
++- `speak`
++- `ask_clarification` if confirmation is needed
++- `log_event`
++- `mark_reminder_done` after clear confirmation
++
++## L2
++
++Use `L2` for moderate risk requiring active care follow-up:
++
++- "我有點不舒服"
++- dizziness, pain, nausea, fatigue, or weakness without clear emergency signs
++- repeated missed reminder plus concern
++- visual context suggests discomfort but not fall or no-response
++
++Typical actions:
++
++- `ask_clarification`
++- `log_event`
++- optional suggestion to sit, rest, or measure condition if appropriate
++- optional mock caregiver notification only after resident asks or if repeated concern is present
++
++Do not jump from vague discomfort directly to L1 unless additional high-risk evidence exists.
++
++## L1
++
++Use `L1` for high-risk events:
++
++- explicit fall or visible possible fall
++- no response after safety check
++- user says they cannot get up
++- explicit request for urgent help
++- severe symptoms such as chest pain, breathing difficulty, loss of consciousness, severe bleeding, or sudden neurological symptoms
++- Bridge-provided mock event marks high-risk context
++
++Typical actions:
++
++- `speak` or `ask_clarification` for immediate safety check
++- `stop` if robot motion may be unsafe
++- `notify_caregiver_mock`
++- `log_event`
++- abnormal event record
++
++## Example Decisions
++
++- ASR: "我有點不舒服" -> `L2`, ask where uncomfortable and whether they need help.
++- ASR: "我跌倒了，站不起來" -> `L1`, safety confirmation and mock notification.
++- ASR: "好，我吃完藥了" during an active medication reminder -> `L3`, mark reminder done and log.
++- ASR: "你聽得到我說話嗎" -> `Normal`, speak response.
+diff --git a/skills/temi-robot-control/SKILL.md b/skills/temi-robot-control/SKILL.md
+new file mode 100644
+index 000000000..5b0594cff
+--- /dev/null
++++ b/skills/temi-robot-control/SKILL.md
+@@ -0,0 +1,145 @@
++---
++name: temi-robot-control
++description: Generate safe JSON-only Temi robot action plans for Hermes from Temi ASR text, robot_id, event_id, conversation context, and synchronized visual frame paths. Use for Temi visual question answering, clarification, speech replies, safe turn/navigation/stop/noop planning, and bridge-validated robot command output. Do not use to directly control hardware, publish MQTT, run shell commands, or execute Temi SDK calls.
++---
++
++# Temi Robot Control Skill
++
++## Purpose
++
++Use this skill when Hermes receives a single Temi robot interaction event from `HermesTemiBridge`.
++
++This skill is an operation manual for decision making only. It must output one JSON object that the bridge can validate and dispatch. It must never directly control Temi hardware, publish MQTT messages, run scripts, or call the Temi SDK.
++
++## Expected Input
++
++The bridge should provide:
++
++- `schema_version`
++- `event_id`
++- `robot_id`
++- `conversation_id`
++- `language`, usually `zh-TW`
++- ASR final text from the user
++- three synchronized image paths visible to the Hermes runtime:
++  - `t_minus_1000`
++  - `t_minus_500`
++  - `t`
++
++Example:
++
++```json
++{
++  "schema_version": "1.0",
++  "event_id": "evt_001",
++  "robot_id": "temi-01",
++  "conversation_id": "conv_001",
++  "language": "zh-TW",
++  "asr_text": "幫我看看桌上的東西是什麼",
++  "frames": [
++    {
++      "name": "t_minus_1000",
++      "path": "/shared/temi/events/temi-01/evt_001/frame_t_minus_1000.jpg"
++    },
++    {
++      "name": "t_minus_500",
++      "path": "/shared/temi/events/temi-01/evt_001/frame_t_minus_500.jpg"
++    },
++    {
++      "name": "t",
++      "path": "/shared/temi/events/temi-01/evt_001/frame_t.jpg"
++    }
++  ]
++}
++```
++
++## Core Rules
++
++1. Output exactly one JSON object.
++2. Do not output Markdown, fenced code blocks, comments, or prose outside JSON.
++3. Do not execute shell commands or call scripts.
++4. Do not publish or subscribe MQTT.
++5. Do not directly control Temi hardware or the Temi SDK.
++6. Do not invent robot capabilities.
++7. Do not include private chain-of-thought. Use only a brief `reasoning_summary`.
++8. Use `ask_clarification` when user intent, visual referent, destination, or safety is unclear.
++9. Prefer `speak` when the task only requires answering.
++10. Use `noop` when no safe or useful robot action is needed.
++
++Read `references/safety_rules.md` when safety, ambiguity, motion, or unsupported requests matter.
++
++## Visual Reasoning
++
++Use the three frames as short temporal context:
++
++- `t_minus_1000` shows context about one second before speech ended.
++- `t_minus_500` may capture gestures, pointing, gaze, or object movement.
++- `t` is closest to the end of the utterance.
++
++For vague references such as "這個", "那個", "那邊", "你看到那個嗎", or pointing-related requests, compare all three frames. If the referent is not clear, do not guess; ask a clarification question.
++
++## Allowed Actions
++
++Output only these action types:
++
++- `speak`
++- `ask_clarification`
++- `turn`
++- `navigate`
++- `stop`
++- `noop`
++
++Use `references/action_schema.json` as the source of truth for fields, required properties, allowlists, and limits.
++
++## Output Contract
++
++Return JSON only:
++
++```json
++{
++  "schema_version": "1.0",
++  "event_id": "evt_001",
++  "robot_id": "temi-01",
++  "confidence": 0.85,
++  "reasoning_summary": "The user asks for visible object identification, so a spoken answer is sufficient.",
++  "actions": [
++    {
++      "action_id": "act_001",
++      "type": "speak",
++      "text": "我看到桌上有幾個物品，可能包含杯子和筆電。",
++      "language": "zh-TW"
++    }
++  ]
++}
++```
++
++No text may appear before or after the JSON object.
++
++## Decision Policy
++
++1. If the user asks a question about what is visible, inspect the images and answer with `speak`.
++2. If the user refers to "this", "that", "there", or points, use the three frames to infer the referent. If unclear, use `ask_clarification`.
++3. If the user asks Temi to move to a known allowlisted location, use `navigate`.
++4. If the user asks Temi to turn, use `turn` with the smallest useful allowed degree.
++5. If the user asks Temi to stop, use `stop`.
++6. If the request is unsupported, use `speak` to explain the limitation.
++7. If there is any safety uncertainty, use `ask_clarification` or `noop` instead of movement.
++
++## Validation Checklist
++
++Before final output, verify:
++
++1. The output is valid JSON and nothing else.
++2. `schema_version` is `"1.0"`.
++3. `event_id` exactly matches the input.
++4. `robot_id` exactly matches the input.
++5. `confidence` is between 0 and 1.
++6. `reasoning_summary` is brief and does not expose chain-of-thought.
++7. `actions` is a non-empty array with at most 5 items.
++8. Every action has a unique `action_id`.
++9. Every action type is allowed by `references/action_schema.json`.
++10. Navigation target is in the allowlist.
++11. Turn direction is `left` or `right`, and degrees is one of `15`, `30`, `45`, `60`, or `90`.
++12. If uncertain, clarification is used instead of movement.
++
++Read `references/examples.md` for output examples. Read `references/mqtt_topics.md` only when checking the surrounding bridge/MQTT contract; the skill itself must not publish MQTT.
+diff --git a/skills/temi-robot-control/references/action_schema.json b/skills/temi-robot-control/references/action_schema.json
+new file mode 100644
+index 000000000..362b6cf13
+--- /dev/null
++++ b/skills/temi-robot-control/references/action_schema.json
+@@ -0,0 +1,186 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "title": "TemiRobotActionOutput",
++  "type": "object",
++  "required": [
++    "schema_version",
++    "event_id",
++    "robot_id",
++    "confidence",
++    "reasoning_summary",
++    "actions"
++  ],
++  "properties": {
++    "schema_version": {
++      "type": "string",
++      "const": "1.0"
++    },
++    "event_id": {
++      "type": "string",
++      "minLength": 1
++    },
++    "robot_id": {
++      "type": "string",
++      "minLength": 1
++    },
++    "confidence": {
++      "type": "number",
++      "minimum": 0,
++      "maximum": 1
++    },
++    "reasoning_summary": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 500
++    },
++    "actions": {
++      "type": "array",
++      "minItems": 1,
++      "maxItems": 5,
++      "items": {
++        "oneOf": [
++          {
++            "$ref": "#/$defs/speakAction"
++          },
++          {
++            "$ref": "#/$defs/askClarificationAction"
++          },
++          {
++            "$ref": "#/$defs/turnAction"
++          },
++          {
++            "$ref": "#/$defs/navigateAction"
++          },
++          {
++            "$ref": "#/$defs/stopAction"
++          },
++          {
++            "$ref": "#/$defs/noopAction"
++          }
++        ]
++      }
++    }
++  },
++  "$defs": {
++    "speakAction": {
++      "type": "object",
++      "required": ["action_id", "type", "text"],
++      "properties": {
++        "action_id": {
++          "type": "string",
++          "minLength": 1
++        },
++        "type": {
++          "const": "speak"
++        },
++        "text": {
++          "type": "string",
++          "minLength": 1,
++          "maxLength": 500
++        },
++        "language": {
++          "type": "string",
++          "default": "zh-TW"
++        }
++      },
++      "additionalProperties": false
++    },
++    "askClarificationAction": {
++      "type": "object",
++      "required": ["action_id", "type", "text"],
++      "properties": {
++        "action_id": {
++          "type": "string",
++          "minLength": 1
++        },
++        "type": {
++          "const": "ask_clarification"
++        },
++        "text": {
++          "type": "string",
++          "minLength": 1,
++          "maxLength": 500
++        },
++        "language": {
++          "type": "string",
++          "default": "zh-TW"
++        }
++      },
++      "additionalProperties": false
++    },
++    "turnAction": {
++      "type": "object",
++      "required": ["action_id", "type", "direction", "degrees"],
++      "properties": {
++        "action_id": {
++          "type": "string",
++          "minLength": 1
++        },
++        "type": {
++          "const": "turn"
++        },
++        "direction": {
++          "type": "string",
++          "enum": ["left", "right"]
++        },
++        "degrees": {
++          "type": "integer",
++          "enum": [15, 30, 45, 60, 90]
++        }
++      },
++      "additionalProperties": false
++    },
++    "navigateAction": {
++      "type": "object",
++      "required": ["action_id", "type", "target"],
++      "properties": {
++        "action_id": {
++          "type": "string",
++          "minLength": 1
++        },
++        "type": {
++          "const": "navigate"
++        },
++        "target": {
++          "type": "string",
++          "enum": ["home_base", "kitchen", "living_room", "meeting_room"]
++        }
++      },
++      "additionalProperties": false
++    },
++    "stopAction": {
++      "type": "object",
++      "required": ["action_id", "type"],
++      "properties": {
++        "action_id": {
++          "type": "string",
++          "minLength": 1
++        },
++        "type": {
++          "const": "stop"
++        }
++      },
++      "additionalProperties": false
++    },
++    "noopAction": {
++      "type": "object",
++      "required": ["action_id", "type", "reason"],
++      "properties": {
++        "action_id": {
++          "type": "string",
++          "minLength": 1
++        },
++        "type": {
++          "const": "noop"
++        },
++        "reason": {
++          "type": "string",
++          "minLength": 1,
++          "maxLength": 300
++        }
++      },
++      "additionalProperties": false
++    }
++  },
++  "additionalProperties": false
++}
+diff --git a/skills/temi-robot-control/references/examples.md b/skills/temi-robot-control/references/examples.md
+new file mode 100644
+index 000000000..fa8179d93
+--- /dev/null
++++ b/skills/temi-robot-control/references/examples.md
+@@ -0,0 +1,168 @@
++# Temi Action Examples
++
++These examples show valid Hermes output for common Temi events. Preserve the input `event_id` and `robot_id` exactly.
++
++## Visual Question
++
++Input ASR:
++
++```text
++幫我看看桌上的東西是什麼
++```
++
++Output:
++
++```json
++{
++  "schema_version": "1.0",
++  "event_id": "evt_001",
++  "robot_id": "temi-01",
++  "confidence": 0.82,
++  "reasoning_summary": "The user asks for visible object description. A verbal response is sufficient.",
++  "actions": [
++    {
++      "action_id": "act_001",
++      "type": "speak",
++      "text": "我看到桌上有幾個物品，可能包含杯子和筆電。",
++      "language": "zh-TW"
++    }
++  ]
++}
++```
++
++## Ambiguous Pointing
++
++Input ASR:
++
++```text
++幫我拿那個
++```
++
++Output:
++
++```json
++{
++  "schema_version": "1.0",
++  "event_id": "evt_002",
++  "robot_id": "temi-01",
++  "confidence": 0.45,
++  "reasoning_summary": "The referenced object is ambiguous, and Temi cannot safely manipulate objects.",
++  "actions": [
++    {
++      "action_id": "act_001",
++      "type": "ask_clarification",
++      "text": "我還不確定你指的是哪個物品，可以請你再說明一下嗎？",
++      "language": "zh-TW"
++    }
++  ]
++}
++```
++
++## Navigation
++
++Input ASR:
++
++```text
++去會議室
++```
++
++Output:
++
++```json
++{
++  "schema_version": "1.0",
++  "event_id": "evt_003",
++  "robot_id": "temi-01",
++  "confidence": 0.9,
++  "reasoning_summary": "The user clearly requested navigation to a known destination.",
++  "actions": [
++    {
++      "action_id": "act_001",
++      "type": "navigate",
++      "target": "meeting_room"
++    }
++  ]
++}
++```
++
++## Unknown Destination
++
++Input ASR:
++
++```text
++去小房間
++```
++
++Output:
++
++```json
++{
++  "schema_version": "1.0",
++  "event_id": "evt_004",
++  "robot_id": "temi-01",
++  "confidence": 0.62,
++  "reasoning_summary": "The requested destination is not in the known navigation target list.",
++  "actions": [
++    {
++      "action_id": "act_001",
++      "type": "ask_clarification",
++      "text": "我目前不知道小房間的位置。你可以指定會議室、客廳、廚房或充電座嗎？",
++      "language": "zh-TW"
++    }
++  ]
++}
++```
++
++## Turn
++
++Input ASR:
++
++```text
++往左轉一點
++```
++
++Output:
++
++```json
++{
++  "schema_version": "1.0",
++  "event_id": "evt_005",
++  "robot_id": "temi-01",
++  "confidence": 0.88,
++  "reasoning_summary": "The user requested a small left turn.",
++  "actions": [
++    {
++      "action_id": "act_001",
++      "type": "turn",
++      "direction": "left",
++      "degrees": 15
++    }
++  ]
++}
++```
++
++## Stop
++
++Input ASR:
++
++```text
++停下來
++```
++
++Output:
++
++```json
++{
++  "schema_version": "1.0",
++  "event_id": "evt_006",
++  "robot_id": "temi-01",
++  "confidence": 0.95,
++  "reasoning_summary": "The user clearly requested the robot to stop.",
++  "actions": [
++    {
++      "action_id": "act_001",
++      "type": "stop"
++    }
++  ]
++}
++```
+diff --git a/skills/temi-robot-control/references/mqtt_topics.md b/skills/temi-robot-control/references/mqtt_topics.md
+new file mode 100644
+index 000000000..3ba4c8fdd
+--- /dev/null
++++ b/skills/temi-robot-control/references/mqtt_topics.md
+@@ -0,0 +1,25 @@
++# MQTT Topics
++
++This file describes the surrounding bridge contract. The skill must not publish or subscribe MQTT directly.
++
++## Topics
++
++- Temi publishes ASR final events to `temi/{robot_id}/asr/final`.
++- `HermesTemiBridge` subscribes to `temi/+/asr/final`.
++- `HermesTemiBridge` publishes validated command requests to `temi/{robot_id}/cmd/request`.
++- Temi publishes command execution results to `temi/{robot_id}/cmd/result`.
++- Temi may publish robot state to `temi/{robot_id}/state`.
++
++## Boundary
++
++Hermes and this skill only produce the JSON action plan. `HermesTemiBridge` is responsible for:
++
++- MQTT connection management
++- event validation
++- image path translation
++- Hermes invocation
++- JSON parsing
++- schema validation
++- command wrapping
++- publishing command requests
++- logging and fallback handling
+diff --git a/skills/temi-robot-control/references/safety_rules.md b/skills/temi-robot-control/references/safety_rules.md
+new file mode 100644
+index 000000000..d1dc6157c
+--- /dev/null
++++ b/skills/temi-robot-control/references/safety_rules.md
+@@ -0,0 +1,35 @@
++# Temi Safety Rules
++
++Always follow these rules:
++
++1. Output JSON only.
++2. Never output Markdown.
++3. Never execute shell commands directly.
++4. Never publish MQTT or subscribe MQTT directly.
++5. Never call the Temi SDK or robot hardware directly.
++6. Never invent robot capabilities.
++7. Never navigate to unknown locations.
++8. Never generate unsafe movement commands.
++9. Never move if the user intent, destination, visual referent, or physical safety condition is ambiguous.
++10. Prefer `ask_clarification` when unsure.
++11. Prefer `speak` when the task only requires answering.
++12. Use `noop` when no robot action is needed.
++13. Do not include private chain-of-thought. Only include a brief `reasoning_summary`.
++
++Prohibited behavior:
++
++- Arbitrary shell commands to control the robot.
++- Direct MQTT publish/subscribe instructions.
++- Direct Temi SDK calls.
++- Undefined action types.
++- Navigation to a destination outside the allowlist.
++- High-speed movement.
++- Dangerous approaching, pushing, collision, or manipulation behavior.
++- Pretending certainty when the visual or language context is ambiguous.
++
++Initial navigation target allowlist:
++
++- `home_base`
++- `kitchen`
++- `living_room`
++- `meeting_room`
+diff --git a/skills/temi-robot-control/scripts/README.md b/skills/temi-robot-control/scripts/README.md
+new file mode 100644
+index 000000000..0b189d1fb
+--- /dev/null
++++ b/skills/temi-robot-control/scripts/README.md
+@@ -0,0 +1,15 @@
++# Scripts
++
++`validate_temi_action.py` validates a Hermes JSON action output against the skill action contract.
++
++Usage:
++
++```bash
++python validate_temi_action.py output.json
++```
++
++The legacy two-argument form is also accepted:
++
++```bash
++python validate_temi_action.py references/action_schema.json output.json
++```
+diff --git a/skills/temi-robot-control/scripts/validate_temi_action.py b/skills/temi-robot-control/scripts/validate_temi_action.py
+new file mode 100644
+index 000000000..53b6655a7
+--- /dev/null
++++ b/skills/temi-robot-control/scripts/validate_temi_action.py
+@@ -0,0 +1,203 @@
++from __future__ import annotations
++
++import json
++import sys
++from pathlib import Path
++from typing import Any
++
++
++ALLOWED_ACTION_TYPES = {"speak", "ask_clarification", "turn", "navigate", "stop", "noop"}
++ALLOWED_TARGETS = {"home_base", "kitchen", "living_room", "meeting_room"}
++ALLOWED_TURN_DIRECTIONS = {"left", "right"}
++ALLOWED_TURN_DEGREES = {15, 30, 45, 60, 90}
++TOP_LEVEL_KEYS = {
++    "schema_version",
++    "event_id",
++    "robot_id",
++    "confidence",
++    "reasoning_summary",
++    "actions",
++}
++
++ACTION_KEYS = {
++    "speak": {"action_id", "type", "text", "language"},
++    "ask_clarification": {"action_id", "type", "text", "language"},
++    "turn": {"action_id", "type", "direction", "degrees"},
++    "navigate": {"action_id", "type", "target"},
++    "stop": {"action_id", "type"},
++    "noop": {"action_id", "type", "reason"},
++}
++
++REQUIRED_ACTION_KEYS = {
++    "speak": {"action_id", "type", "text"},
++    "ask_clarification": {"action_id", "type", "text"},
++    "turn": {"action_id", "type", "direction", "degrees"},
++    "navigate": {"action_id", "type", "target"},
++    "stop": {"action_id", "type"},
++    "noop": {"action_id", "type", "reason"},
++}
++
++
++def main(argv: list[str] | None = None) -> int:
++    args = argv or sys.argv[1:]
++    if len(args) not in {1, 2}:
++        print(
++            "usage: validate_temi_action.py <payload.json> or validate_temi_action.py <schema.json> <payload.json>",
++            file=sys.stderr,
++        )
++        return 2
++
++    payload_path = Path(args[-1])
++    try:
++        payload = json.loads(payload_path.read_text(encoding="utf-8"))
++    except json.JSONDecodeError as exc:
++        print(f"invalid JSON: {exc}", file=sys.stderr)
++        return 1
++
++    errors = validate(payload)
++    if errors:
++        for error in errors:
++            print(error, file=sys.stderr)
++        return 1
++
++    print("ok")
++    return 0
++
++
++def validate(payload: Any) -> list[str]:
++    errors: list[str] = []
++
++    if not isinstance(payload, dict):
++        return ["payload must be a JSON object"]
++
++    errors.extend(validate_top_level(payload))
++
++    actions = payload.get("actions")
++    if not isinstance(actions, list):
++        errors.append("actions must be an array")
++        return errors
++    if not 1 <= len(actions) <= 5:
++        errors.append("actions must contain 1 to 5 items")
++        return errors
++
++    seen_action_ids: set[str] = set()
++    for index, action in enumerate(actions):
++        errors.extend(validate_action(index, action, seen_action_ids))
++
++    return errors
++
++
++def validate_top_level(payload: dict[str, Any]) -> list[str]:
++    errors: list[str] = []
++    required = TOP_LEVEL_KEYS
++    missing = sorted(required - payload.keys())
++    extra = sorted(payload.keys() - TOP_LEVEL_KEYS)
++
++    for key in missing:
++        errors.append(f"missing required field: {key}")
++    for key in extra:
++        errors.append(f"unexpected top-level field: {key}")
++
++    if payload.get("schema_version") != "1.0":
++        errors.append("schema_version must be 1.0")
++
++    for key in ("event_id", "robot_id", "reasoning_summary"):
++        value = payload.get(key)
++        if not isinstance(value, str) or not value.strip():
++            errors.append(f"{key} must be a non-empty string")
++
++    summary = payload.get("reasoning_summary")
++    if isinstance(summary, str) and len(summary) > 500:
++        errors.append("reasoning_summary must be at most 500 characters")
++
++    confidence = payload.get("confidence")
++    if not isinstance(confidence, (int, float)) or isinstance(confidence, bool):
++        errors.append("confidence must be a number between 0 and 1")
++    elif not 0 <= confidence <= 1:
++        errors.append("confidence must be between 0 and 1")
++
++    return errors
++
++
++def validate_action(index: int, action: Any, seen_action_ids: set[str]) -> list[str]:
++    errors: list[str] = []
++    prefix = f"actions[{index}]"
++
++    if not isinstance(action, dict):
++        return [f"{prefix} must be an object"]
++
++    action_type = action.get("type")
++    if action_type not in ALLOWED_ACTION_TYPES:
++        errors.append(f"{prefix}.type is not allowed: {action_type}")
++        return errors
++
++    allowed_keys = ACTION_KEYS[action_type]
++    required_keys = REQUIRED_ACTION_KEYS[action_type]
++
++    for key in sorted(required_keys - action.keys()):
++        errors.append(f"{prefix}.{key} is required")
++    for key in sorted(action.keys() - allowed_keys):
++        errors.append(f"{prefix}.{key} is not allowed for {action_type}")
++
++    action_id = action.get("action_id")
++    if not isinstance(action_id, str) or not action_id.strip():
++        errors.append(f"{prefix}.action_id must be a non-empty string")
++    elif action_id in seen_action_ids:
++        errors.append(f"{prefix}.action_id is duplicated: {action_id}")
++    else:
++        seen_action_ids.add(action_id)
++
++    if action_type in {"speak", "ask_clarification"}:
++        errors.extend(validate_text_action(prefix, action))
++    elif action_type == "turn":
++        errors.extend(validate_turn_action(prefix, action))
++    elif action_type == "navigate":
++        errors.extend(validate_navigate_action(prefix, action))
++    elif action_type == "noop":
++        errors.extend(validate_noop_action(prefix, action))
++
++    return errors
++
++
++def validate_text_action(prefix: str, action: dict[str, Any]) -> list[str]:
++    errors: list[str] = []
++    text = action.get("text")
++    if not isinstance(text, str) or not text.strip():
++        errors.append(f"{prefix}.text must be a non-empty string")
++    elif len(text) > 500:
++        errors.append(f"{prefix}.text must be at most 500 characters")
++
++    language = action.get("language")
++    if language is not None and (not isinstance(language, str) or not language.strip()):
++        errors.append(f"{prefix}.language must be a non-empty string when present")
++
++    return errors
++
++
++def validate_turn_action(prefix: str, action: dict[str, Any]) -> list[str]:
++    errors: list[str] = []
++    if action.get("direction") not in ALLOWED_TURN_DIRECTIONS:
++        errors.append(f"{prefix}.direction must be one of: left, right")
++    if action.get("degrees") not in ALLOWED_TURN_DEGREES:
++        errors.append(f"{prefix}.degrees must be one of: 15, 30, 45, 60, 90")
++    return errors
++
++
++def validate_navigate_action(prefix: str, action: dict[str, Any]) -> list[str]:
++    target = action.get("target")
++    if target not in ALLOWED_TARGETS:
++        return [f"{prefix}.target is not allowed: {target}"]
++    return []
++
++
++def validate_noop_action(prefix: str, action: dict[str, Any]) -> list[str]:
++    reason = action.get("reason")
++    if not isinstance(reason, str) or not reason.strip():
++        return [f"{prefix}.reason must be a non-empty string"]
++    if len(reason) > 300:
++        return [f"{prefix}.reason must be at most 300 characters"]
++    return []
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())

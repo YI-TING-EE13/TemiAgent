@@ -4,18 +4,31 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:---check}"
 
+if [[ "$MODE" == "--hermes" ]]; then
+  exec "$ROOT/scripts/bootstrap_hermes.sh"
+fi
+
 if [[ "$MODE" != "--check" && "$MODE" != "--sync" ]]; then
-  echo "usage: ./scripts/bootstrap [--check|--sync]" >&2
+  echo "usage: ./scripts/bootstrap [--check|--sync|--hermes]" >&2
   exit 2
 fi
 
 cd "$ROOT"
 test "$(git rev-parse --show-toplevel)" = "$ROOT"
 test -d hermes-agent/.git
-PIN="$(git ls-tree HEAD hermes-agent | awk '{print $3}')"
-CURRENT="$(git -C hermes-agent rev-parse HEAD)"
-if [[ "$PIN" != "$CURRENT" ]]; then
-  echo "nested Hermes HEAD does not match the root gitlink" >&2
+MANIFEST="$ROOT/third_party/hermes/manifest.json"
+test -f "$MANIFEST"
+EXPECTED_TREE="$(python3 - "$MANIFEST" <<'PY'
+import json
+import sys
+
+manifest = json.load(open(sys.argv[1], encoding="utf-8"))
+print(manifest["target_tree_sha"])
+PY
+)"
+CURRENT_TREE="$(git -C hermes-agent rev-parse HEAD^{tree})"
+if [[ "$EXPECTED_TREE" != "$CURRENT_TREE" ]]; then
+  echo "nested Hermes tree does not match third_party/hermes/manifest.json; run ./scripts/bootstrap --hermes" >&2
   exit 1
 fi
 

@@ -7,22 +7,29 @@ Discord notification tests.
 ## Canonical source and bootstrap
 
 Run every project operation in the designated container, from `/TemiAgent`.
-The source bind mount must resolve to the approved canonical workspace. The
-root repository records `hermes-agent` as a gitlink; `scripts/bootstrap` checks
-that the nested checkout matches that pin before any Demo service starts.
+The source bind mount must resolve to the approved canonical workspace.
+`hermes-agent` remains an upstream checkout; the reviewed Temi overlay is
+reconstructed from its public base plus tracked patches before any Demo service
+starts.
 
 ```bash
 cd /TemiAgent
+./scripts/bootstrap --hermes
 ./scripts/bootstrap --check
 # Only when dependency environments need repair:
 ./scripts/bootstrap --sync
 ```
 
-`--check` makes no credentials, starts no service, and changes no runtime
-state. `--sync` uses each existing project's `uv sync --frozen`; it does not
-update lockfiles. The nested Hermes pin is locally reproducible from the
-gitlink, but publishing it from a clean clone remains blocked until a
-maintainer provides a team-accessible remote containing that pinned commit.
+`--hermes` is the clean-clone reconstruction step: it clones the public
+upstream, verifies the tracked patch SHA-256 values, creates the local-only
+`temiagent/integration` branch and verifies the expected tree hash. It starts
+no service and installs no dependency. `--check` makes no credentials, starts
+no service, and changes no runtime state. `--sync` uses each existing project's
+`uv sync --frozen`; it does not update lockfiles. The gitlink remains a local
+historical reference; reproducibility is defined by
+[`third_party/hermes/manifest.json`](../../third_party/hermes/manifest.json)
+and its patch series, so no unavailable private Hermes commit or remote push is
+required.
 
 ## Private configuration and runtime data
 

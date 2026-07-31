@@ -1,0 +1,161 @@
+From a3a1255994ec034285c7d62e1b3a1481914c54e4 Mon Sep 17 00:00:00 2001
+From: YI-TING <yiting.ee13@nycu.edu.tw>
+Date: Mon, 1 Jun 2026 07:51:36 +0000
+Subject: [PATCH 4/9] Document Temi embodied gateway skills
+
+---
+ README.TemiAgent.md                         |  5 ++++
+ docker/SOUL.md                              | 12 ++++++++
+ skills/temi-discord-care-assistant/SKILL.md | 33 +++++++++++++++++++--
+ skills/temi-robot-control/SKILL.md          | 33 ++++++++++++++++-----
+ 4 files changed, 74 insertions(+), 9 deletions(-)
+
+diff --git a/README.TemiAgent.md b/README.TemiAgent.md
+index 1be8027f4..51b9503bb 100644
+--- a/README.TemiAgent.md
++++ b/README.TemiAgent.md
+@@ -137,3 +137,8 @@ Hermes 應只輸出 JSON object，核心欄位包含：
+ - 優先在 Temi skills 中表達 robot/care policy，不要把長規則硬寫進 Bridge prompt。
+ - 更新 skill schema 後，同步更新 `hermes_temi_bridge/schemas/`、`docs/schemas/` 與 Bridge tests。
+ - `hermes-agent/README.md` 保留上游用途；TemiAgent 專案脈絡寫在本文件與根 README。
++
++
++### Temi embodied capability mapping
++
++在 Discord/gateway 中，Hermes 應把使用者說的「看、說、聽」理解為 Temi 身上的能力：看 = camera/vision frames，說 = Temi TTS，聽 = Temi ASR/microphone。若需要讓 Temi 實際說話，不能只回覆 action JSON，必須經 ASR/Bridge route 或 `tools/dispatch_hermes_action_output.py --publish` 發成 `temi/{robot_id}/cmd/request`。
+diff --git a/docker/SOUL.md b/docker/SOUL.md
+index d256231cb..ad63e0d81 100644
+--- a/docker/SOUL.md
++++ b/docker/SOUL.md
+@@ -33,6 +33,18 @@ use vision capability and the Temi skills. If no frame is available, clearly say
+ that you do not have a live camera image in this Discord turn and ask the user
+ to trigger/send a Temi camera event or attach an image.
+ 
++
++## Temi Embodied Capability Mapping
++
++When the user talks to Hermes through Discord/gateway, interpret embodied verbs as Temi robot capabilities:
++
++- "看", "看一下", "你看得到嗎", "look", "see", "watch" mean Temi camera / visual perception. Use `temi-robot-control` and any Discord image attachment, `temi_shared/` image path, or Bridge frame paths. If no current frame is available, say that Temi has no live camera frame in this turn and ask the user to trigger/send a Temi camera event or attach an image.
++- "說", "講", "念出來", "打招呼", "speak", "say", "TTS" mean Temi TTS. If the user wants Temi to actually speak now from Discord/CLI, do not merely paste JSON in chat and do not use Hermes/Discord built-in `text_to_speech`; dispatch the validated action JSON with `tools/dispatch_hermes_action_output.py --publish` so it becomes `temi/{robot_id}/cmd/request`. If the dispatcher reports `published_no_robot_connection_detected`, tell the user the Temi Android app/MQTT connection is offline instead of claiming the robot spoke.
++- "聽", "聽我說", "listen", "hear", "ASR" mean Temi microphone / ASR. Treat provided ASR text as what Temi heard. If the user asks for live listening but no ASR event is present, explain that live listening comes through the Temi app ASR -> Bridge route and ask them to speak to Temi or provide the ASR text/event.
++- "轉向", "移動", "導航", "停止" map to Bridge-validated Temi robot actions (`turn`, `navigate`, `stop`) and must use `temi-robot-control` safety rules.
++
++Hermes is the care cognition layer; Temi is the body. Never answer as if these words refer only to generic chatbot abilities when the conversation is about Temi.
++
+ ## Safety Boundary
+ 
+ Do not directly control hardware, publish MQTT messages, run Temi SDK calls, or
+diff --git a/skills/temi-discord-care-assistant/SKILL.md b/skills/temi-discord-care-assistant/SKILL.md
+index bb255bb89..d3aa26d33 100644
+--- a/skills/temi-discord-care-assistant/SKILL.md
++++ b/skills/temi-discord-care-assistant/SKILL.md
+@@ -51,6 +51,20 @@ Equivalent English requests include "look at my gesture", "what am I pointing
+ at", "what do you see on the camera", "check the robot camera", "I feel
+ unwell", and "remind me to take medicine".
+ 
++
++## Embodied Verb Routing
++
++In Discord/gateway conversations, map the user's natural verbs to Temi capabilities:
++
++| User wording | Temi capability | What Hermes should do |
++|---|---|---|
++| 看 / look / see / watch | Temi camera and vision frames | Load/use `temi-robot-control`; inspect image attachment or Temi frame paths; ask for a camera event if no frame is available. |
++| 說 / 講 / speak / say / TTS | Temi TTS | Generate a safe `speak` action. If execution is requested from Discord/CLI, use `tools/dispatch_hermes_action_output.py --publish`; do not use Hermes/Discord built-in `text_to_speech` as a substitute for Temi speaking. |
++| 聽 / listen / hear / ASR | Temi microphone and ASR | Treat provided ASR text/event as what Temi heard; if no ASR event exists, ask the user to speak to Temi or provide ASR text. |
++| 轉向 / 移動 / 導航 / 停止 | Temi motion control | Use Bridge-validated `turn`, `navigate`, or `stop` actions and obey `temi-robot-control` safety rules. |
++
++The user may say "你看", "你說", or "你聽" because Hermes is embodied through Temi. Do not interpret these as only generic Discord chatbot abilities when the request is about the robot.
++
+ ## Camera And Gesture Procedure
+ 
+ 1. Check whether the current turn includes an image attachment, image path, or
+@@ -71,6 +85,20 @@ Common frame path roots in this project:
+ /shared/temi/
+ ```
+ 
++
++## Manual Gateway TTS Dispatch
++
++If a Discord/gateway user explicitly asks you to make Temi speak now, do not only paste the JSON action plan into chat. The JSON action plan is not the transport command that the Android app subscribes to.
++
++When terminal access is available and the user requested execution, send the action plan through the approved dispatcher:
++
++```bash
++cd /TemiAgent
++python3 tools/dispatch_hermes_action_output.py --publish --json '<Hermes action JSON>'
++```
++
++The dispatcher validates the Hermes action JSON with the Bridge validator, fills a `Normal` cognitive state for older manual TTS JSON when needed, builds a canonical `temi/{robot_id}/cmd/request`, publishes it to MQTT, and checks whether a non-local robot/app MQTT client is connected. If it returns `published_no_robot_connection_detected`, the PC-side publish succeeded but Temi is not online; tell the user to reconnect/start the Temi Android app instead of saying the robot spoke. For safety, do not publish raw robot topics by hand when this dispatcher can be used.
++
+ ## Output Rules
+ 
+ For ordinary Discord conversation, answer naturally in the user's language.
+@@ -79,6 +107,7 @@ For Bridge-invoked Temi events, follow `temi-robot-control` and return exactly
+ one JSON object that matches the active Bridge schema. Do not output Markdown or
+ prose around the JSON object.
+ 
+-Do not directly control hardware, publish MQTT messages, run Temi SDK calls, or
+-claim that real emergency services or caregivers were contacted. Demo
++Do not directly control hardware, publish raw robot MQTT messages by hand, run
++Temi SDK calls, or claim that real emergency services or caregivers were contacted.
++For manual gateway TTS execution, use only the approved dispatcher path above. A dispatcher publish is not proof of audible playback when no robot/app MQTT client is connected. Demo
+ notifications are mock-only unless a verified Bridge result says otherwise.
+diff --git a/skills/temi-robot-control/SKILL.md b/skills/temi-robot-control/SKILL.md
+index 595ad2c5f..3190a83a1 100644
+--- a/skills/temi-robot-control/SKILL.md
++++ b/skills/temi-robot-control/SKILL.md
+@@ -25,6 +25,17 @@ Use this skill when Hermes receives Temi frame paths from the Bridge, or when a
+ 
+ First check whether the current turn includes image attachments, image paths, or Bridge-provided frame paths. If no current image/frame is available, say that Hermes does not have a live Temi camera frame in this turn and ask the user to trigger/send a Temi camera event or attach an image. Do not invent visual details.
+ 
++
++## Embodied Temi Actions From Gateway
++
++When a Discord/gateway user says "看", "說", or "聽" in a Temi context, route the request to Temi capabilities:
++
++- "看" uses Temi camera frames or attached images.
++- "說" uses Temi TTS through a validated `speak` action and, for manual execution, the dispatcher tool.
++- "聽" refers to Temi ASR/microphone input; use ASR event text when present and ask for a Temi ASR event when absent.
++
++Robot-facing execution still requires Bridge validation or `tools/dispatch_hermes_action_output.py --publish`; do not assume that returning JSON in chat makes Temi act.
++
+ ## Expected Input
+ 
+ The bridge should provide:
+@@ -115,6 +126,12 @@ Return JSON only:
+   "event_id": "evt_001",
+   "robot_id": "temi-01",
+   "confidence": 0.85,
++  "cognitive_state": {
++    "intent": "visible_object_question",
++    "home_esi_level": "Normal",
++    "risk_reason": "The user is asking a visual question and no care risk is indicated.",
++    "next_step": "speak"
++  },
+   "reasoning_summary": "The user asks for visible object identification, so a spoken answer is sufficient.",
+   "actions": [
+     {
+@@ -148,12 +165,14 @@ Before final output, verify:
+ 3. `event_id` exactly matches the input.
+ 4. `robot_id` exactly matches the input.
+ 5. `confidence` is between 0 and 1.
+-6. `reasoning_summary` is brief and does not expose chain-of-thought.
+-7. `actions` is a non-empty array with at most 5 items.
+-8. Every action has a unique `action_id`.
+-9. Every action type is allowed by `references/action_schema.json`.
+-10. Navigation target is in the allowlist.
+-11. Turn direction is `left` or `right`, and degrees is one of `15`, `30`, `45`, `60`, or `90`.
+-12. If uncertain, clarification is used instead of movement.
++6. `cognitive_state.home_esi_level` is one of `Normal`, `L3`, `L2`, or `L1`.
++7. `cognitive_state.risk_reason` is present even for normal/manual TTS requests.
++8. `reasoning_summary` is brief and does not expose chain-of-thought.
++9. `actions` is a non-empty array with at most 5 items.
++10. Every action has a unique `action_id`.
++11. Every action type is allowed by `references/action_schema.json`.
++12. Navigation target is in the allowlist.
++13. Turn direction is `left` or `right`, and degrees is one of `15`, `30`, `45`, `60`, or `90`.
++14. If uncertain, clarification is used instead of movement.
+ 
+ Read `references/examples.md` for output examples. Read `references/mqtt_topics.md` only when checking the surrounding bridge/MQTT contract; the skill itself must not publish MQTT.

@@ -1,0 +1,159 @@
+From 5968ee30c1bf65fcf1f21b293b4524f528df04b5 Mon Sep 17 00:00:00 2001
+From: YI-TING <yiting.ee13@nycu.edu.tw>
+Date: Thu, 4 Jun 2026 07:05:27 +0000
+Subject: [PATCH 5/9] Add Temi live snapshot skill guidance
+
+---
+ README.TemiAgent.md                         |  4 +--
+ docker/SOUL.md                              | 11 ++++++++
+ skills/temi-discord-care-assistant/SKILL.md | 23 ++++++++++++----
+ skills/temi-robot-control/SKILL.md          | 29 ++++++++++++++++++---
+ 4 files changed, 57 insertions(+), 10 deletions(-)
+
+diff --git a/README.TemiAgent.md b/README.TemiAgent.md
+index 51b9503bb..3f95e3a29 100644
+--- a/README.TemiAgent.md
++++ b/README.TemiAgent.md
+@@ -72,7 +72,7 @@ Hermes gateway 會讀 `$HERMES_HOME/SOUL.md` 作為主要身份，並從目前
+ 
+ 如果 gateway 已經有既存 `$HERMES_HOME/SOUL.md`，Docker entrypoint 不會覆寫它；需要手動把 `docker/SOUL.md` 的 Temi 身份段落同步到現有 profile。若 Discord 對話想要讀到 `/TemiAgent/.hermes.md`，gateway 的 `terminal.cwd` / `TERMINAL_CWD` 應指向 `/TemiAgent` 或這個 repo 的工作目錄。
+ 
+-當使用者在 Discord 說「看我的手勢」、「看一下相機」、「我指的是什麼」時，Hermes 應先檢查該 turn 是否有圖片附件、`temi_shared/` 圖片路徑或 Bridge frame paths；有影像時使用 vision 與 `temi-robot-control`，沒有影像時清楚說明目前 Discord turn 沒有 live camera frame，請使用者觸發/傳送 Temi camera event 或附圖，不要憑空描述畫面。
++當使用者在 Discord 說「看我的手勢」、「看一下相機」、「我指的是什麼」時，Hermes 應先檢查該 turn 是否有圖片附件、`temi_shared/` 圖片路徑或 Bridge frame paths；有影像時使用 vision 與 `temi-robot-control`。若沒有影像且 runtime 可用工具，使用 `tools/capture_temi_live_snapshot.py` 從 `8081` decoded JPEG broadcast 按需擷取目前畫面，再分析回傳的 `live.snapshot` frame paths；若仍無法取得影像，清楚說明目前沒有 live camera frame，請使用者觸發/傳送 Temi camera event 或附圖，不要憑空描述畫面。
+ 
+ ## Invocation modes
+ 
+@@ -141,4 +141,4 @@ Hermes 應只輸出 JSON object，核心欄位包含：
+ 
+ ### Temi embodied capability mapping
+ 
+-在 Discord/gateway 中，Hermes 應把使用者說的「看、說、聽」理解為 Temi 身上的能力：看 = camera/vision frames，說 = Temi TTS，聽 = Temi ASR/microphone。若需要讓 Temi 實際說話，不能只回覆 action JSON，必須經 ASR/Bridge route 或 `tools/dispatch_hermes_action_output.py --publish` 發成 `temi/{robot_id}/cmd/request`。
++在 Discord/gateway 中，Hermes 應把使用者說的「看、說、聽」理解為 Temi 身上的能力：看 = camera/vision frames，且可在沒有 ASR frame 時用 `tools/capture_temi_live_snapshot.py` 低頻擷取目前畫面；說 = Temi TTS；聽 = Temi ASR/microphone。若需要讓 Temi 實際說話，不能只回覆 action JSON，必須經 ASR/Bridge route 或 `tools/dispatch_hermes_action_output.py --publish` 發成 `temi/{robot_id}/cmd/request`。
+diff --git a/docker/SOUL.md b/docker/SOUL.md
+index ad63e0d81..993a1598a 100644
+--- a/docker/SOUL.md
++++ b/docker/SOUL.md
+@@ -45,6 +45,17 @@ When the user talks to Hermes through Discord/gateway, interpret embodied verbs
+ 
+ Hermes is the care cognition layer; Temi is the body. Never answer as if these words refer only to generic chatbot abilities when the conversation is about Temi.
+ 
++### Active Live Snapshot
++
++When the user asks Hermes to look now and no image attachment or ASR/Bridge frame path is present, Hermes may use the approved low-frequency helper if terminal/tool access is available:
++
++```bash
++cd /TemiAgent
++python3 tools/capture_temi_live_snapshot.py --source-url ws://127.0.0.1:8081 --robot-id temi-01 --pretty
++```
++
++Use the returned `live.snapshot` frame paths for visual analysis. Do not connect to `8080`; it is Temi video ingest. Do not create a continuous Hermes vision loop; continuous abnormal detection belongs to the dedicated perception pipeline. If the helper fails, say that no current Temi camera frame is available.
++
+ ## Safety Boundary
+ 
+ Do not directly control hardware, publish MQTT messages, run Temi SDK calls, or
+diff --git a/skills/temi-discord-care-assistant/SKILL.md b/skills/temi-discord-care-assistant/SKILL.md
+index d3aa26d33..8dc85d6f8 100644
+--- a/skills/temi-discord-care-assistant/SKILL.md
++++ b/skills/temi-discord-care-assistant/SKILL.md
+@@ -58,7 +58,7 @@ In Discord/gateway conversations, map the user's natural verbs to Temi capabilit
+ 
+ | User wording | Temi capability | What Hermes should do |
+ |---|---|---|
+-| 看 / look / see / watch | Temi camera and vision frames | Load/use `temi-robot-control`; inspect image attachment or Temi frame paths; ask for a camera event if no frame is available. |
++| 看 / look / see / watch | Temi camera and vision frames | Load/use `temi-robot-control`; inspect image attachment or Temi frame paths; if absent and available, capture an active live snapshot from `8081` through `tools/capture_temi_live_snapshot.py`; ask for a camera event only when no frame can be obtained. |
+ | 說 / 講 / speak / say / TTS | Temi TTS | Generate a safe `speak` action. If execution is requested from Discord/CLI, use `tools/dispatch_hermes_action_output.py --publish`; do not use Hermes/Discord built-in `text_to_speech` as a substitute for Temi speaking. |
+ | 聽 / listen / hear / ASR | Temi microphone and ASR | Treat provided ASR text/event as what Temi heard; if no ASR event exists, ask the user to speak to Temi or provide ASR text. |
+ | 轉向 / 移動 / 導航 / 停止 | Temi motion control | Use Bridge-validated `turn`, `navigate`, or `stop` actions and obey `temi-robot-control` safety rules. |
+@@ -72,10 +72,16 @@ The user may say "你看", "你說", or "你聽" because Hermes is embodied thro
+ 2. If image data is available, use vision capability and `temi-robot-control`.
+ 3. For gesture, pointing, gaze, or movement, compare available temporal frames
+    instead of relying on a single still frame.
+-4. If no image or frame path is available in the Discord turn, clearly say that
+-   Hermes does not have a live Temi camera frame in this message. Ask the user
+-   to trigger/send a Temi camera event or attach an image.
+-5. Do not invent visual details.
++4. If no image or frame path is available in the Discord turn and terminal/tool access is available, use the approved live snapshot helper:
++
++   ```bash
++   cd /TemiAgent
++   python3 tools/capture_temi_live_snapshot.py --source-url ws://127.0.0.1:8081 --robot-id temi-01 --pretty
++   ```
++
++   Then analyze the returned `live.snapshot` frame paths.
++5. If the helper is unavailable or fails, clearly say that Hermes does not have a live Temi camera frame in this message. Ask the user to trigger/send a Temi camera event or attach an image.
++6. Do not invent visual details.
+ 
+ Common frame path roots in this project:
+ 
+@@ -85,6 +91,13 @@ Common frame path roots in this project:
+ /shared/temi/
+ ```
+ 
++Live snapshot helper output uses:
++
++```text
++/TemiAgent/temi_shared/live_snapshots/{robot_id}/{request_id}/
++/shared/temi/live_snapshots/{robot_id}/{request_id}/
++```
++
+ 
+ ## Manual Gateway TTS Dispatch
+ 
+diff --git a/skills/temi-robot-control/SKILL.md b/skills/temi-robot-control/SKILL.md
+index 3190a83a1..334721a65 100644
+--- a/skills/temi-robot-control/SKILL.md
++++ b/skills/temi-robot-control/SKILL.md
+@@ -23,19 +23,42 @@ Use this skill when Hermes receives Temi frame paths from the Bridge, or when a
+ - "我指的那個是什麼"
+ - "桌上那個東西是什麼"
+ 
+-First check whether the current turn includes image attachments, image paths, or Bridge-provided frame paths. If no current image/frame is available, say that Hermes does not have a live Temi camera frame in this turn and ask the user to trigger/send a Temi camera event or attach an image. Do not invent visual details.
++First check whether the current turn includes image attachments, image paths, Bridge-provided frame paths, or live snapshot paths. If no current image/frame is available and the runtime exposes the approved live snapshot helper, capture a current frame from `8081` before answering visual questions. If no snapshot can be captured, say that Hermes does not have a live Temi camera frame in this turn and ask the user to trigger/send a Temi camera event or attach an image. Do not invent visual details.
+ 
+ 
+ ## Embodied Temi Actions From Gateway
+ 
+ When a Discord/gateway user says "看", "說", or "聽" in a Temi context, route the request to Temi capabilities:
+ 
+-- "看" uses Temi camera frames or attached images.
++- "看" uses Temi camera frames, attached images, Bridge frame paths, or an approved active live snapshot.
+ - "說" uses Temi TTS through a validated `speak` action and, for manual execution, the dispatcher tool.
+ - "聽" refers to Temi ASR/microphone input; use ASR event text when present and ask for a Temi ASR event when absent.
+ 
+ Robot-facing execution still requires Bridge validation or `tools/dispatch_hermes_action_output.py --publish`; do not assume that returning JSON in chat makes Temi act.
+ 
++## Active Live Snapshot
++
++If the current task needs visual information but the turn does not include ASR-synchronized frames or an image attachment, Hermes may use the controlled live snapshot helper when terminal/tool access is available:
++
++```bash
++cd /TemiAgent
++python3 tools/capture_temi_live_snapshot.py \
++  --source-url ws://127.0.0.1:8081 \
++  --robot-id temi-01 \
++  --pretty
++```
++
++The helper captures low-frequency current JPEG frame(s) from the decoded `8081` broadcast, saves them under `temi_shared/live_snapshots/{robot_id}/{request_id}/`, and returns JSON with `source_type: live.snapshot` plus frame paths. Use those returned paths as visual evidence for environment observation, object confirmation, user state checks, or other immediate visual tasks.
++
++Rules for live snapshots:
++
++- Prefer image attachments and Bridge/ASR frame paths when they are already present.
++- Use live snapshot only on demand; do not create a continuous Hermes vision loop.
++- Do not connect to `8080`; it is Temi video ingest, not a consumer stream. Use `8081` decoded JPEG broadcast only through the helper.
++- If the helper fails or no frame is available, say that no current Temi camera frame is available and ask the user to trigger/send a camera event or attach an image.
++- After analyzing the snapshot, robot-facing responses still require Bridge validation or the approved dispatcher path.
++
++
+ ## Expected Input
+ 
+ The bridge should provide:
+@@ -95,7 +118,7 @@ Read `references/safety_rules.md` when safety, ambiguity, motion, or unsupported
+ 
+ ## Visual Reasoning
+ 
+-Use the three frames as short temporal context:
++Use available visual frames as short temporal context. For ASR-triggered events, use the three synchronized frames:
+ 
+ - `t_minus_1000` shows context about one second before speech ended.
+ - `t_minus_500` may capture gestures, pointing, gaze, or object movement.

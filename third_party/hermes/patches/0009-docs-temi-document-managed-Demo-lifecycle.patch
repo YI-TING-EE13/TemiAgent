@@ -1,0 +1,32 @@
+From 10b257212d9ac0b3cfec4920104abb72d081b215 Mon Sep 17 00:00:00 2001
+From: YI-TING <yiting.ee13@nycu.edu.tw>
+Date: Thu, 30 Jul 2026 17:56:05 +0000
+Subject: [PATCH 9/9] docs(temi): document managed Demo lifecycle
+
+---
+ README.TemiAgent.md | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/README.TemiAgent.md b/README.TemiAgent.md
+index 6b33ac310..385024598 100644
+--- a/README.TemiAgent.md
++++ b/README.TemiAgent.md
+@@ -167,6 +167,18 @@ health=http://127.0.0.1:8765/health
+ invoke=http://127.0.0.1:8765/invoke
+ ```
+ 
++The canonical Demo lifecycle starts the resident from `/TemiAgent`, preloads
++the four Temi skills, and sets `HERMES_ACCEPT_HOOKS=1` only for that managed
++process. When the private Demo profile declares the Hermes gateway `managed`,
++the same lifecycle runs `hermes --accept-hooks gateway run`, records its exact
++PID identity, and stops it before Bridge shutdown. Gateway connectivity is not
++Discord delivery evidence and the lifecycle never sends a test message.
++
++The pinned Hermes context-compressor implementation derives its compression
++threshold from the active context. With the canonical 64K Demo configuration
++and the reviewed `0.50` threshold, the threshold is 32K. Resident startup
++rejects context drift before accepting requests.
++
+ 驗證順序：
+ 
+ 1. `curl -fsS http://127.0.0.1:8765/health`

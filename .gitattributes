@@ -1,0 +1,2 @@
+# Patch payloads preserve reviewed upstream whitespace; do not treat it as root source whitespace.
+third_party/hermes/patches/*.patch whitespace=-trailing-space

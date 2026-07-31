@@ -1,0 +1,27 @@
+{
+  "format_version": "temiagent.hermes.reconstruction.v1",
+  "upstream_url": "https://github.com/NousResearch/hermes-agent.git",
+  "base_commit": "a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2",
+  "runtime_path": "hermes-agent",
+  "integration_branch": "temiagent/integration",
+  "target_tree_sha": "968f1668a05fafd09461c17a835198421f14a48f",
+  "required_paths": [
+    "agent/context_compressor.py",
+    "skills/temi-robot-control/SKILL.md",
+    "skills/temi-care-memory/SKILL.md",
+    "skills/temi-home-esi/SKILL.md",
+    "skills/temi-discord-care-assistant/SKILL.md",
+    "README.TemiAgent.md"
+  ],
+  "patches": [
+    {"file": "0001-Add-Temi-care-assistant-skills.patch", "sha256": "e3eaaa9c5079e291cbd2588e475bfe84d07fa243abd26a56ecbce03c1be420ce", "purpose": "Temi care, robot, Home-ESI, and action contract skills"},
+    {"file": "0002-docs-add-TemiAgent-integration-notes.patch", "sha256": "c2e580c373dcb9213515aed4d1581bab1e623e28496139e3629a70a5ef2df86a", "purpose": "TemiAgent integration README"},
+    {"file": "0003-Document-Temi-Discord-gateway-skills.patch", "sha256": "8821717e7be72ee32ac780ba756de58f1a2efb9846d26bbd6eef878d4a9e9548", "purpose": "Discord gateway skill routing with portable container path"},
+    {"file": "0004-Document-Temi-embodied-gateway-skills.patch", "sha256": "2c6bc8cd26b2ab8f87aa517c4cce40a900faa7e425fd601984b85f364938b87c", "purpose": "Embodied gateway context"},
+    {"file": "0005-Add-Temi-live-snapshot-skill-guidance.patch", "sha256": "84c11f5fe5890d87f1e176690d3f106eac89c32c1c10507d831bbed4d214f2d8", "purpose": "Live snapshot skill guidance"},
+    {"file": "0006-Update-Temi-Home-ESI-v2-skill.patch", "sha256": "97fca10b73c50aa64c9d27a0c18f8c7fe0968dba99f1f7a56168a3edc20f1bfe", "purpose": "Home-ESI v2 policy update"},
+    {"file": "0007-docs-clarify-TemiAgent-integration-boundaries.patch", "sha256": "2c6b7beb4c11133b8da198339d3f6fabacfa074f98b7424dd4d21417d4684eba", "purpose": "Temi integration boundary clarification"},
+    {"file": "0008-fix-context-scale-compression-threshold-to-active-wi.patch", "sha256": "7030fb3a41bf18fb0d83d3084fe6700aa143cd5c586b57c98648d9f3aa4f20d0", "purpose": "Active-context compression threshold"},
+    {"file": "0009-docs-temi-document-managed-Demo-lifecycle.patch", "sha256": "ccc6abccd35428419ac9fa0777e02fe6ac1f901901091487206c50f88088669d", "purpose": "Managed Demo lifecycle documentation"}
+  ]
+}

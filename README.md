@@ -120,8 +120,10 @@ cd /TemiAgent
 `start` and `stop` manage only services whose private config sets
 `<SERVICE>_OWNERSHIP=managed`; external ownership is health-checked but never
 stopped. The checked-in [resource manifest](config/demo_resources.json) lists
-the logical media and skill assets. `./scripts/bootstrap --check` verifies the
-local checkout and nested Hermes pin without starting services or creating
+the logical media and skill assets. From a clean clone, run
+`./scripts/bootstrap --hermes` once to reconstruct the reviewed local Hermes
+overlay from public upstream and tracked patches, then run
+`./scripts/bootstrap --check`. Neither command starts services or creates
 credentials.
 
 - Cross-module startup, health checks and debugging: [Temi integration runbook](docs/operations/temi_integration_runbook.md)

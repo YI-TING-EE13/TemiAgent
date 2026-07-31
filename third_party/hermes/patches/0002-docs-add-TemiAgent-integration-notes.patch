@@ -1,0 +1,131 @@
+From 74da5f83e41ed8be05eb70b6d5ba263da268a723 Mon Sep 17 00:00:00 2001
+From: YI-TING <yiting.ee13@nycu.edu.tw>
+Date: Sun, 31 May 2026 14:08:04 +0000
+Subject: [PATCH 2/9] docs: add TemiAgent integration notes
+
+---
+ README.TemiAgent.md | 115 ++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 115 insertions(+)
+ create mode 100644 README.TemiAgent.md
+
+diff --git a/README.TemiAgent.md b/README.TemiAgent.md
+new file mode 100644
+index 000000000..c0f7bd05a
+--- /dev/null
++++ b/README.TemiAgent.md
+@@ -0,0 +1,115 @@
++# Hermes Agent in TemiAgent 模組 README
++
++最後更新日期：2026-05-30
++
++## 本文件維護規則
++
++這份文件補充 `hermes-agent/` 在 TemiAgent 專案中的角色；不取代 `hermes-agent/README.md` 這份上游 Hermes Agent README。只要本專案對 Hermes 的啟動方式、model/provider、resident mode、Temi skills 或照護助理 profile 有變更，都要同步更新本文件。
++
++## 模組定位
++
++`hermes-agent/` 是本專案的認知核心 runtime。TemiAgent 不讓 Hermes 直接控制硬體；Hermes 只負責理解 ASR、影像路徑、照護記憶與風險規則，並輸出 JSON action plan，由 `hermes_temi_bridge/` 驗證後執行。
++
++```text
++Hermes Agent
++  = situation perception
++  + care memory reasoning
++  + Home-ESI risk cognition
++  + action planning
++  -> JSON-only action object
++```
++
++## 目前狀態
++
++2026-05-30 盤點：
++
++- Temi 專用三個 skills 已建立並可由 resident server preload。
++- Resident HTTP mode 已可由 `tools/hermes_resident_server.py` 啟動，並支援 `--hermes-home`、`--enable-memory` 與 `--toolsets memory`。
++- Bridge 已能呼叫 mock/CLI/HTTP Hermes 並驗證 robot-facing JSON actions。
++- 照護 Demo 的 structured memory 寫入、Home-ESI 強制欄位驗證與 memory/demo actions 尚待下一階段實作。
++
++## 對外關係
++
++| 關聯模組 | 關係 |
++|---|---|
++| `hermes_temi_bridge/` | Bridge 呼叫 Hermes，並驗證 Hermes output。 |
++| `tools/hermes_resident_server.py` | 本專案 Demo 優先使用的低延遲 Hermes invocation wrapper。 |
++| `hermes-agent/skills/temi-*` | Hermes resident mode 預載的 Temi 專用 skills。 |
++| `hermes-skills/` | repo root 的 skill mirror，方便審查與同步。 |
++| `docs/project/hermes_care_assistant_task_readme.md` | 定義照護助理 scope、skill 分工與驗收標準。 |
++
++## Temi 專用 skills
++
++```text
++hermes-agent/skills/temi-robot-control/
++hermes-agent/skills/temi-care-memory/
++hermes-agent/skills/temi-home-esi/
++```
++
++分工：
++
++- `temi-robot-control`：JSON-only robot action contract 與安全規則。
++- `temi-care-memory`：profile、daily state、reminders、event log、summary 的照護記憶規則。
++- `temi-home-esi`：Home-ESI Lite 風險分級。
++
++## Invocation modes
++
++| Mode | 用途 |
++|---|---|
++| CLI `hermes -z {prompt}` | 最直接，但每次啟動冷啟成本高。 |
++| Resident HTTP | Demo 優先路線，Hermes 常駐並預載 Temi skills。 |
++| Mock Bridge | 不使用 Hermes，只驗證 MQTT/Bridge/Temi action 閉環。 |
++
++## Resident startup
++
++```bash
++cd /TemiAgent
++python3 tools/hermes_resident_server.py \
++  --host 127.0.0.1 \
++  --port 8765 \
++  --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
++  --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
++  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md
++```
++
++Care assistant profile/memory path：
++
++```bash
++python3 tools/hermes_resident_server.py \
++  --host 127.0.0.1 \
++  --port 8765 \
++  --hermes-home /root/.hermes/profiles/care-assistant \
++  --enable-memory \
++  --toolsets memory \
++  --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
++  --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
++  --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md
++```
++
++## Output contract
++
++Hermes 應只輸出 JSON object，核心欄位包含：
++
++```json
++{
++  "schema_version": "1.0",
++  "event_id": "evt_001",
++  "robot_id": "temi-01",
++  "confidence": 0.86,
++  "cognitive_state": {
++    "intent": "possible_help_request",
++    "home_esi_level": "L2",
++    "risk_reason": "User reports discomfort without immediate emergency evidence.",
++    "next_step": "ask_clarification"
++  },
++  "actions": []
++}
++```
++
++`actions` 必須由 Bridge schema 驗證；Hermes 不應直接 publish MQTT、操作硬體或宣稱已完成真實緊急通報。
++
++## 維護注意
++
++- 優先在 Temi skills 中表達 robot/care policy，不要把長規則硬寫進 Bridge prompt。
++- 更新 skill schema 後，同步更新 `hermes_temi_bridge/schemas/`、`docs/schemas/` 與 Bridge tests。
++- `hermes-agent/README.md` 保留上游用途；TemiAgent 專案脈絡寫在本文件與根 README。

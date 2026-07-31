@@ -20,6 +20,9 @@ venv/
 *.ppk
 *.key
 
+# Local-only integration archives, private migration records and acceptance evidence
+.local/
+
 # Runtime logs and process files
 logs/*
 !logs/README.md

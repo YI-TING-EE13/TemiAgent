@@ -1,0 +1,70 @@
+From 97f5c75d9c524a99b844f2a748b19699a7966336 Mon Sep 17 00:00:00 2001
+From: YI-TING <yiting.ee13@nycu.edu.tw>
+Date: Sun, 26 Jul 2026 04:14:54 +0000
+Subject: [PATCH 7/9] docs: clarify TemiAgent integration boundaries
+
+---
+ README.TemiAgent.md | 39 +++++++++++++++++++++++++++++++++++++++
+ docker/SOUL.md      |  2 +-
+ 2 files changed, 40 insertions(+), 1 deletion(-)
+
+diff --git a/README.TemiAgent.md b/README.TemiAgent.md
+index e9535c720..6b33ac310 100644
+--- a/README.TemiAgent.md
++++ b/README.TemiAgent.md
+@@ -142,3 +142,42 @@ Hermes 應只輸出 JSON object，核心欄位包含：
+ ### Temi embodied capability mapping
+ 
+ 在 Discord/gateway 中，Hermes 應把使用者說的「看、說、聽」理解為 Temi 身上的能力：看 = camera/vision frames，且可在沒有 ASR frame 時用 `tools/capture_temi_live_snapshot.py` 低頻擷取目前畫面；說 = Temi TTS；聽 = Temi ASR/microphone。若需要讓 Temi 實際說話，不能只回覆 action JSON，必須經 ASR/Bridge route 或 `tools/dispatch_hermes_action_output.py --publish` 發成 `temi/{robot_id}/cmd/request`。
++
++## Non-responsibilities
++
++- Hermes 不發布 MQTT、不直接操作 Temi SDK，也不略過 Bridge validator。
++- Hermes 不把推理結果描述為醫療診斷、保證性異常偵測或真實緊急通報。
++- Upstream `hermes-agent/` 不擁有 Temi MQTT topic、shared path 或 command schema。
++
++`tools/dispatch_hermes_action_output.py --publish` 是人工／Demo dispatch 工具；它重用
++Bridge validator 與 command builder，但不等同完整 ASR → Bridge service route。新功能
++不得以這個工具作為繞過 Bridge 的理由。
++
++## Configuration, Health and Verification
++
++Hermes provider、model、context length 與 profile 設定的預設路徑是 container 內的
++`/root/.hermes/config.yaml`；指定 profile 或 override 時則使用
++`$HERMES_HOME/config.yaml`。設定值可能含本機資訊，不應提交 secret 或完整 private
++configuration。
++
++Current resident integration default：
++
++```text
++health=http://127.0.0.1:8765/health
++invoke=http://127.0.0.1:8765/invoke
++```
++
++驗證順序：
++
++1. `curl -fsS http://127.0.0.1:8765/health`
++2. Bridge HTTP client/unit tests
++3. Hardware-free mock E2E
++4. 只有任務提供模型、GPU 與真實服務時才執行 live Hermes acceptance
++
++## Change Checklist and Limitations
++
++修改 model identifier、context、output contract、skill preload、memory 或 gateway context
++時，同步檢查 Bridge config/client/tests、resident wrapper、兩份 Temi skill copy、root
++README 與 runbook。上游 Hermes 修改必須另讀 `hermes-agent/AGENTS.md` 並保持 upstream
++變更與 Temi-specific integration 可區分。Resident health 成功只證明 wrapper 可回應，
++不證明模型、硬體 command 或 Discord delivery 已完成端到端驗證。
+diff --git a/docker/SOUL.md b/docker/SOUL.md
+index 993a1598a..19cc36f04 100644
+--- a/docker/SOUL.md
++++ b/docker/SOUL.md
+@@ -38,7 +38,7 @@ to trigger/send a Temi camera event or attach an image.
+ 
+ When the user talks to Hermes through Discord/gateway, interpret embodied verbs as Temi robot capabilities:
+ 
+-- "看", "看一下", "你看得到嗎", "look", "see", "watch" mean Temi camera / visual perception. Use `temi-robot-control` and any Discord image attachment, `temi_shared/` image path, or Bridge frame paths. If no current frame is available, say that Temi has no live camera frame in this turn and ask the user to trigger/send a Temi camera event or attach an image.
++- "看", "看一下", "你看得到嗎", "look", "see", "watch" mean Temi camera / visual perception. Use `temi-robot-control` and any Discord image attachment, `temi_shared/` image path, or Bridge frame paths. If no current frame is available, first try the approved active live snapshot helper when terminal/tool access is available; only if that fails, say that Temi has no live camera frame in this turn and ask the user to trigger/send a Temi camera event or attach an image.
+ - "說", "講", "念出來", "打招呼", "speak", "say", "TTS" mean Temi TTS. If the user wants Temi to actually speak now from Discord/CLI, do not merely paste JSON in chat and do not use Hermes/Discord built-in `text_to_speech`; dispatch the validated action JSON with `tools/dispatch_hermes_action_output.py --publish` so it becomes `temi/{robot_id}/cmd/request`. If the dispatcher reports `published_no_robot_connection_detected`, tell the user the Temi Android app/MQTT connection is offline instead of claiming the robot spoke.
+ - "聽", "聽我說", "listen", "hear", "ASR" mean Temi microphone / ASR. Treat provided ASR text as what Temi heard. If the user asks for live listening but no ASR event is present, explain that live listening comes through the Temi app ASR -> Bridge route and ask them to speak to Temi or provide the ASR text/event.
+ - "轉向", "移動", "導航", "停止" map to Bridge-validated Temi robot actions (`turn`, `navigate`, `stop`) and must use `temi-robot-control` safety rules.
