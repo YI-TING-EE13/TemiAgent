@@ -17,8 +17,9 @@ To reconstruct only this optional action-viewer source dependency, run:
 ./scripts/bootstrap --llama-cpp
 ```
 
-The bootstrap verifies the remote URL and exact commit/tree, refuses a dirty or
-unknown local checkout, and never starts a service, installs dependencies,
+The bootstrap verifies the remote URL and exact commit/tree, fetches only the
+pinned source history required for that verification, and refuses a dirty or
+unknown local checkout. It never starts a service, installs dependencies,
 downloads models, or builds `llama-server`. Build outputs and model assets stay
 outside source delivery. `./scripts/bootstrap --check` verifies the source pin
 as well as the separately provisioned runtime readiness prerequisites.

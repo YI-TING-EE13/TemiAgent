@@ -70,7 +70,7 @@ if [[ ! -e "$RUNTIME_PATH/.git" ]]; then
   mkdir -p "$RUNTIME_PATH"
   git -C "$RUNTIME_PATH" init --quiet
   git -C "$RUNTIME_PATH" remote add origin "$UPSTREAM_URL"
-  git -C "$RUNTIME_PATH" fetch --no-tags origin "$PINNED_COMMIT"
+  git -C "$RUNTIME_PATH" fetch --no-tags --depth=1 origin "$PINNED_COMMIT"
 fi
 
 git -C "$RUNTIME_PATH" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
@@ -91,7 +91,7 @@ if ! git -C "$RUNTIME_PATH" cat-file -e "$PINNED_COMMIT^{commit}" 2>/dev/null; t
     echo "pinned llama.cpp commit is absent; run ./scripts/bootstrap --llama-cpp or --sources" >&2
     exit 1
   }
-  git -C "$RUNTIME_PATH" fetch --no-tags origin "$PINNED_COMMIT"
+  git -C "$RUNTIME_PATH" fetch --no-tags --depth=1 origin "$PINNED_COMMIT"
 fi
 git -C "$RUNTIME_PATH" cat-file -e "$PINNED_COMMIT^{commit}"
 
