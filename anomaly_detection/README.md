@@ -173,6 +173,20 @@ The viewer has no Discord delivery route. `--discord-delivery-test` returns
 receipts never contact a recipient; real delivery is accepted only after HTTP
 204. See [the immediate abnormal-care flow](../docs/operations/immediate_abnormal_care_flow.md).
 
+When started by `scripts/demo`, the viewer receives complete, typed,
+Bridge-owned notification metadata. `/health` reports redacted components for
+`viewer_core`, `event_ingestion`, `frame_state`, `real_discord`, and
+`demo_notification_mock`; it never returns a webhook or a credential path.
+Disabled mode reports both notification components as disabled. Demo mock mode
+reports the local receipt route only when both mock flags are enabled. A real
+Discord configuration reports `real_discord=skipped_by_viewer`: credential
+validation and delivery remain lifecycle/Bridge responsibilities. An internal
+health-snapshot error returns HTTP 503 with `VIEWER_HEALTH_INTERNAL_ERROR`.
+
+The viewer health endpoint is an availability contract, not proof of a model
+result, MQTT publication, Bridge acceptance, Discord delivery, or Android
+execution.
+
 ## 影片動作測試工具
 
 `temi_video_action_tester.py` 會在本機影片檔上執行同一套八幀推論策略：
@@ -288,7 +302,7 @@ inference、prediction overlay 與 abnormal perception event production。
 ## Known Safety Exception
 
 異常 care TTS policy 與 command dispatch 由 Bridge 擁有。viewer 只產生 perception
-event 與 best-effort Discord receipt，不能直接控制 Temi、宣稱 Discord target 是照護者，
+event，不能直接控制 Temi、讀取或送出 Discord credential、宣稱 Discord target 是照護者，
 或將 notification action 放進 robot command。
 
 ## Configuration and Artifacts

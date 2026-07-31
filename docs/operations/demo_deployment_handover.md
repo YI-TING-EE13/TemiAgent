@@ -74,7 +74,7 @@ Each service has an explicit ownership mode in the private config:
 | Resident Hermes | managed | lifecycle | `GET /health` |
 | HermesTemiBridge | managed | lifecycle | process identity and callback sockets |
 | Hermes gateway | managed | lifecycle | `hermes gateway status` |
-| Action viewer | managed when enabled | lifecycle | viewer `/health` booleans |
+| Action viewer | managed when enabled | lifecycle | viewer `/health` source/llama readiness plus five redacted component objects |
 | Temi Android App | external | Android owner | configured device/contract evidence |
 
 `external` means lifecycle only verifies health and never stops the service.
@@ -105,10 +105,26 @@ managed process's PID, start ticks, cwd, executable, command digest, config
 digest, log path, timestamp, and run ID. A stop operation targets only a
 recorded identity; it never uses `pkill` or `killall`.
 
+The lifecycle creates and atomically persists the run as `STARTING` before it
+waits for a service health gate. Every persisted service record contains the
+verified start identity, command fingerprint, timestamp, and supervisor
+identity where applicable. A successful run becomes `HEALTHY`. On a health or
+start failure, the lifecycle persists `UNHEALTHY`, stops only the recorded
+services in reverse order, records each rollback outcome, and leaves
+`START_FAILED` when all recorded stops succeed. If any rollback stop fails, it
+leaves `UNHEALTHY` for exact-owner recovery. `status` reports the persisted
+lifecycle state rather than claiming backend readiness from listeners alone.
+
+When no ownership state exists but a managed-like process matches a lifecycle
+service, `stop` returns `STOP_INCOMPLETE_OWNERSHIP` with non-zero exit status
+and sends no signal. An operator must retain the evidence and inspect the
+exact PID before an authorized recovery action.
+
 The lifecycle emits JSON service results. It uses stable failure codes including
 `CONFIG_INVALID`, `LOCK_BUSY`, `PORT_IN_USE_EXTERNAL`, `MODEL_LOAD_FAILED`,
 `MODEL_CONTEXT_MISMATCH`, `GPU_POLICY_MISMATCH`, `BROKER_START_FAILED`,
-`GATEWAY_START_FAILED`, `PID_IDENTITY_MISMATCH`, and `STOP_TIMEOUT`.
+`GATEWAY_START_FAILED`, `SERVICE_HEALTH_FAILED`, `PID_IDENTITY_MISMATCH`,
+`STOP_INCOMPLETE_OWNERSHIP`, and `STOP_TIMEOUT`.
 
 ## Newcomer software-only profile
 
@@ -210,6 +226,11 @@ executable, command line, parent, and listener before any manual signal. Use
 the service-specific manager first, signal only the verified PID, then verify
 dependent services and ports. Do not delete stale runtime roots or reset the
 Git tree to recover a Demo.
+
+`START_FAILED` and `UNHEALTHY` are retained recovery states, not stale files.
+`STOP_INCOMPLETE_OWNERSHIP` means no signal was sent. Both conditions require
+the exact lifecycle-state and PID evidence before a separately authorized
+recovery operation.
 
 The acceptance bundle is runtime evidence, not source. It should contain
 masked configuration inventories, process/port snapshots, memory hashes,

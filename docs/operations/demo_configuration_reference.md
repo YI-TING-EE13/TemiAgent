@@ -157,6 +157,32 @@ runtime route.
 The viewer health surface does not prove notification delivery. Use Bridge trace
 and the abnormal-care episode receipt to classify an observed result.
 
+### Viewer health and normalized notification route
+
+`tools/demo_lifecycle.py` normalizes the notification route and passes complete
+typed metadata to `temi_action_viewer.py`. The viewer records only
+redacted route state; it does not open the credential file or send Discord.
+The typed fields are `discord_notify_enabled`, `discord_env_path`,
+`discord_test_mode`, `demo_notification_mock_enabled`, and
+`demo_notification_mock_receipt_enabled`. `discord_env_path` is not included
+in `/health` output.
+
+The viewer `/health` response contains these component objects:
+`viewer_core`, `event_ingestion`, `frame_state`, `real_discord`, and
+`demo_notification_mock`. With `ABNORMAL_NOTIFICATION_MODE=disabled`, health
+returns HTTP 200 with real Discord and the Demo mock marked disabled. With
+`ABNORMAL_NOTIFICATION_MODE=demo_mock` and both mock flags enabled, health
+returns HTTP 200 and marks the mock receipt route available. With
+`ABNORMAL_NOTIFICATION_MODE=discord_webhook`, the lifecycle validates the
+credential file before start; a healthy viewer marks real Discord
+`skipped_by_viewer` because the Bridge alone owns delivery.
+
+An unexpected health-snapshot exception returns HTTP 503 with
+`VIEWER_HEALTH_INTERNAL_ERROR`. That response and lifecycle/doctor output MUST
+not expose a credential value or a full private credential path. The `viewer`
+doctor check requires all five component objects as well as the normal source
+and llama readiness fields.
+
 ## Immediate abnormal-care and notification route
 
 The Bridge requires `ABNORMAL_CARE_EPISODE_ENABLED=true` for the current
@@ -169,7 +195,7 @@ monotonic state-machine deadlines.
 |---|---|---|
 | `ABNORMAL_NOTIFICATION_MODE` | Bridge notification adapter. | `disabled` by default; only `demo_mock` or `discord_webhook` enable an attempt. |
 | `DEMO_NOTIFICATION_MOCK_ENABLED` and `DEMO_NOTIFICATION_RECEIPT_ENABLED` | Demo mock receipt gate. | Both must be `true` with `ABNORMAL_NOTIFICATION_MODE=demo_mock`; this route has no network recipient. |
-| `ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH` | Owner-only Discord credential env. | Required for `discord_webhook`; regular, non-symlink, lifecycle-user-owned, exact mode `0600`. |
+| `ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH` | Owner-only Discord credential env. | Required for `discord_webhook`; an absolute regular non-symlink, lifecycle-user-owned, exact mode `0600`, outside every Git worktree, and containing `DISCORD_WEBHOOK_URL`. |
 | `ABNORMAL_NOTIFICATION_TEST_RECIPIENT_AUTHORIZED` | Explicit test-recipient gate. | A test event cannot use real Discord unless this is `true`; never infer authorization from a caregiver webhook. |
 | `DEMO_TEST_EVENT_INGRESS_ENABLED` | Formal synthetic abnormal injector gate. | Default `false`; set `true` only for a bounded Demo mock run. |
 | `DEMO_TEST_RESIDENT_ALLOWLIST` | Accepted synthetic resident identifiers. | Test event metadata outside this allowlist is rejected before notification/Hermes. |

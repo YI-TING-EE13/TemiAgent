@@ -121,6 +121,39 @@ action defense. A second `start` must report reused ownership. `restart` must
 archive pre-restart evidence and reuse the same exact-PID ownership rules;
 `stop` must leave every configured mock port without a listener.
 
+### Viewer lifecycle failure fixture
+
+Run this fixture only in a disposable `newcomer_mock` acceptance root after the
+normal successful start/stop sequence. It deliberately makes the mock viewer
+return `/health` HTTP 500; it does not start a real viewer, model, broker,
+Android App, or Discord route. The expected result is a non-zero `start`, a
+persisted `START_FAILED` lifecycle state with rollback evidence, and no
+listener on any configured mock port after the rollback and after `stop`.
+
+```bash
+failure_config="$acceptance_root/config/demo.mock.viewer-health-failure.env"
+cp "$config" "$failure_config"
+printf '%s\n' 'DEMO_TEST_FORCE_HEALTH_FAILURE_SERVICE=viewer' >> "$failure_config"
+chmod 600 "$failure_config"
+
+set +e
+./scripts/demo --config "$failure_config" --json start
+start_rc=$?
+set -e
+test "$start_rc" -ne 0
+./scripts/demo --config "$failure_config" --json status
+./scripts/demo --config "$failure_config" --json stop
+
+for port in 29134 29183 29080 29081 29765 29010 29011 29012 29013; do
+  ! ss -ltn "sport = :${port}" | grep -q LISTEN
+done
+```
+
+`DEMO_TEST_FORCE_HEALTH_FAILURE_SERVICE=viewer` is accepted only for the
+`newcomer_mock` viewer fixture. It is not a production configuration option.
+Do not remove the retained `START_FAILED` state before collecting its redacted
+ownership and rollback evidence.
+
 Bootstrap reconstructs the reviewed Hermes integration branch and the pinned
 llama.cpp checkout from tracked manifests. Both generated checkouts are ignored
 external dependencies, so a successful fresh-clone reconstruction leaves the
@@ -142,8 +175,8 @@ the changed area.
 |---|---|---|
 | Bridge contracts and safety validation | `cd /TemiAgent/hermes_temi_bridge && uv run python -m unittest discover -s tests` | Event/path/action validation, traces, memory/demo boundaries, media contract and mock integrations. |
 | Legacy backend | `cd /TemiAgent/temi_backend && uv run pytest` | Backend, MQTT bridge, overview adapter and frame-buffer behavior. |
-| Demo lifecycle/resident wrapper | `cd /TemiAgent && python3 -m unittest discover -s tools/tests` | Lifecycle config/identity records, resident health and LM Studio helper behavior. |
-| Action viewer parser/unit behavior | `cd /TemiAgent/anomaly_detection && .venv/bin/python -m unittest discover -s tests -p 'test_temi_action_viewer.py'` | Viewer parsing, receipts and local test seams; no model service starts. |
+| Demo lifecycle/resident wrapper | `cd /TemiAgent && python3 -m unittest discover -s tools/tests` | Lifecycle config, atomic `STARTING` ownership records, health-gate rollback, stop ownership refusal, doctor checks, resident health and LM Studio helper behavior. |
+| Action viewer parser/unit behavior | `cd /TemiAgent/anomaly_detection && uv run python -m unittest discover -s tests` | Viewer notification normalization, component health, internal-error safety, receipts and local test seams; no model service starts. |
 | Root mock E2E | `cd /TemiAgent && python3 tools/e2e_test_runner.py` | Local mock canonical event-to-command route. |
 | Media v1.1 fake Android | `cd /TemiAgent && python3 tools/media_v11_fake_e2e.py` | Request/result correlation, lifecycle, replay and trace in-process. |
 | Pinned Hermes compressor | `cd /TemiAgent/hermes-agent && venv/bin/python -m pytest tests/agent/test_context_compressor.py` | Nested overlay compressor behavior, when the pre-existing nested environment is provisioned. |

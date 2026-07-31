@@ -30,6 +30,24 @@ below are retained architecture, planning and validation history. They explain
 how the design evolved, but their commands, deployment examples and milestones
 are not the current operator contract.
 
+## Current Demo lifecycle ownership
+
+`tools/demo_lifecycle.py` owns Demo service orchestration, while each service
+retains its own health endpoint and runtime behavior. The lifecycle uses one
+owner-only state record and exact process identity; it does not infer ownership
+from a port or process name. After a verified managed spawn, it atomically
+persists `STARTING` with start identity and command fingerprint before waiting
+for health. The final successful state is `HEALTHY`.
+
+On a health-gate failure, the lifecycle records `UNHEALTHY`, stops only the
+recorded services in reverse start order, records rollback outcomes, and leaves
+`START_FAILED` if every recorded stop succeeds. A failed rollback remains
+`UNHEALTHY` for recovery. `status` reports the lifecycle state. If no ownership
+state exists for a managed-like process, `stop` returns
+`STOP_INCOMPLETE_OWNERSHIP` and sends no signal. This lifecycle state is an
+operations contract, not a Bridge, MQTT, Android, model, or hardware-control
+contract.
+
 ## Current abnormal-care route
 
 The current abnormal route is `perception.abnormal -> Bridge -> Resident Hermes

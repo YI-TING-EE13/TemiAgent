@@ -63,7 +63,17 @@ socket、logs 和 trace 都必須在該 external root。每項服務使用 `mana
 `disabled` ownership；managed profile 可管理 LM Studio、MQTT、adapter、resident、Bridge、
 gateway 和 viewer，而 external service 只會 health-check。stop 僅接受 recorded exact PID
 identity，並以 viewer → gateway → Bridge → resident → adapter → MQTT → LM Studio 順序執行。
-與 optional viewer。
+
+After each verified managed spawn, the lifecycle immediately persists an
+owner-only `STARTING` record with exact process identity, command fingerprint,
+and timestamp before waiting on the next health gate. A completed run becomes
+`HEALTHY`. A failed health gate first records `UNHEALTHY`, then rolls back only
+the recorded services in reverse order and persists `START_FAILED` when that
+rollback succeeds. A rollback failure remains `UNHEALTHY`. `status` exposes
+the recorded lifecycle state. If `stop` finds a managed-like process that is
+not in the ownership state, it returns `STOP_INCOMPLETE_OWNERSHIP` and exits
+non-zero without signalling any PID. Preserve the state and inspect the exact
+PID evidence; do not delete the state file or use a broad kill.
 
 ```bash
 cd /TemiAgent
