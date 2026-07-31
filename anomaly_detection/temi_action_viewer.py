@@ -22,7 +22,6 @@ from typing import Any
 
 import cv2
 import numpy as np
-import requests
 from aiohttp import ClientSession, WSMsgType, web
 
 
@@ -50,41 +49,12 @@ TARGET_ACTIONS = [
     "walks",
     "watches tv",
 ]
-ALERT_ACTIONS = {"falls down", "fights", "lies on the floor"}
-DEFAULT_DISCORD_ENV_PATH = "/TemiAgent/anomaly_detection/.env"
-DISCORD_WEBHOOK_ENV_VAR = "DISCORD_WEBHOOK_URL"
-DISCORD_USERNAME = "HABD-Agent"
-DISCORD_DELIVERY_TEST_MESSAGE = (
-    "[TEST] TemiAgent abnormal-event Discord delivery verification.\n"
-    "No real care incident occurred."
-)
-
-
-class DiscordDeliveryError(RuntimeError):
-    """A safe, machine-readable Discord delivery failure."""
-
-    def __init__(
-        self,
-        failure_code: str,
-        *,
-        status_code: int | None = None,
-        retry_after_seconds: float | None = None,
-        detail: str | None = None,
-    ) -> None:
-        self.failure_code = failure_code
-        self.status_code = status_code
-        self.retry_after_seconds = retry_after_seconds
-        self.detail = detail
-        parts = [failure_code]
-        if status_code is not None:
-            parts.append(f"HTTP {status_code}")
-        if retry_after_seconds is not None:
-            parts.append(f"retry_after_seconds={retry_after_seconds:g}")
-        if detail:
-            parts.append(detail)
-        super().__init__("; ".join(parts))
-
-
+ABNORMAL_EVENT_TYPE_BY_ACTION = {
+    "falls down": "falls_down",
+    "fights": "fight",
+    "lies on the floor": "lies_on_floor",
+}
+ALERT_ACTIONS = set(ABNORMAL_EVENT_TYPE_BY_ACTION)
 @dataclass(frozen=True)
 class BufferedFrame:
     """One decoded JPEG frame from the 8081 broadcaster."""
@@ -903,6 +873,7 @@ def build_abnormal_event(
         "event_id": event_id or f"evt_abnormal_{now_ms}",
         "robot_id": robot_id,
         "type": "perception.abnormal",
+        "event_type": ABNORMAL_EVENT_TYPE_BY_ACTION[normalize_action_name(action.action_name)],
         "timestamp_ms": timestamp_ms if timestamp_ms is not None else now_ms,
         "observation": {
             "action_name": action.action_name,
@@ -960,160 +931,18 @@ def format_publish_error(exc: Exception) -> str:
     return str(exc)
 
 
-def _discord_failure_code_for_http_status(status_code: int) -> str:
-    """Map a Discord webhook HTTP status to a stable, non-secret failure code."""
-    return {
-        401: "DISCORD_UNAUTHORIZED",
-        403: "DISCORD_FORBIDDEN",
-        404: "DISCORD_WEBHOOK_NOT_FOUND",
-        429: "DISCORD_RATE_LIMITED",
-    }.get(status_code, "DISCORD_BAD_RESPONSE")
-
-
-def _discord_retry_after_seconds(response: requests.Response) -> float | None:
-    """Return a non-negative Retry-After value when Discord provides one."""
-    raw_value = str(getattr(response, "headers", {}).get("Retry-After", "")).strip()
-    if not raw_value:
-        return None
-    try:
-        value = float(raw_value)
-    except ValueError:
-        return None
-    return value if value >= 0 else None
-
-
-def notify_discord_webhook(
-    message: str,
-    file_paths: list[str],
-    env_path: str,
-    max_files: int,
-) -> dict[str, Any]:
-    """Send an abnormal event notification to Discord using a webhook from .env."""
-    webhook_url = load_env_value(env_path, DISCORD_WEBHOOK_ENV_VAR)
-    if not webhook_url:
-        raise DiscordDeliveryError("DISCORD_WEBHOOK_UNSET")
-    if not message.strip():
-        raise DiscordDeliveryError("DISCORD_BAD_RESPONSE", detail="empty message")
-    paths = [Path(path) for path in file_paths[: max(0, max_files)]]
-    for path in paths:
-        if not path.is_file():
-            raise DiscordDeliveryError("DISCORD_BAD_RESPONSE", detail="evidence file unavailable")
-
-    payload = {"username": DISCORD_USERNAME, "content": message.strip()}
-    try:
-        if paths:
-            with contextlib.ExitStack() as stack:
-                files = {
-                    f"files[{index}]": (path.name, stack.enter_context(path.open("rb")))
-                    for index, path in enumerate(paths)
-                }
-                response = requests.post(
-                    webhook_url,
-                    data={"payload_json": json.dumps(payload, ensure_ascii=False)},
-                    files=files,
-                    timeout=60,
-                )
-        else:
-            response = requests.post(
-                webhook_url,
-                headers={"Content-Type": "application/json"},
-                json=payload,
-                timeout=15,
-            )
-    except requests.Timeout as exc:
-        raise DiscordDeliveryError("DISCORD_TIMEOUT") from exc
-    except requests.ConnectionError as exc:
-        raise DiscordDeliveryError("DISCORD_CONNECTION_FAILED") from exc
-    except requests.RequestException as exc:
-        raise DiscordDeliveryError("DISCORD_CONNECTION_FAILED") from exc
-    if not 200 <= response.status_code < 300:
-        raise DiscordDeliveryError(
-            _discord_failure_code_for_http_status(response.status_code),
-            status_code=response.status_code,
-            retry_after_seconds=_discord_retry_after_seconds(response),
-        )
-    return {
-        "failure_code": "DISCORD_DELIVERED",
-        "status_code": response.status_code,
-        "file_count": len(paths),
-    }
-
-
-def load_env_value(env_path: str, key: str) -> str:
-    """Read one KEY=value from the process environment or a simple .env file."""
-    value = os.getenv(key)
-    if value:
-        return value
-    path = Path(env_path)
-    if not path.exists():
-        return ""
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        name, raw_value = line.split("=", 1)
-        if name.strip() == key:
-            return raw_value.strip().strip('"').strip("'")
-    return ""
-
-
 def notification_health(args: argparse.Namespace) -> dict[str, bool]:
-    """Return safe direct-webhook readiness booleans without disclosing the webhook."""
+    """Report viewer publication state without reading notification credentials."""
     return {
         "abnormal_publish_enabled": getattr(args, "abnormal_publish", "disabled") == "enabled",
-        "discord_notify_enabled": getattr(args, "discord_notify", "disabled") == "enabled",
-        "discord_webhook_configured": bool(
-            load_env_value(getattr(args, "discord_env_path", DEFAULT_DISCORD_ENV_PATH), DISCORD_WEBHOOK_ENV_VAR)
-        ),
+        "notification_bridge_owned": True,
     }
 
 
 def run_discord_delivery_test(args: argparse.Namespace) -> dict[str, Any]:
-    """Send one clearly marked test using the production Discord sender only."""
-    if getattr(args, "discord_notify", "disabled") != "enabled":
-        return {"failure_code": "DISCORD_DISABLED", "file_count": 0}
-    return notify_discord_webhook(
-        DISCORD_DELIVERY_TEST_MESSAGE,
-        [],
-        getattr(args, "discord_env_path", DEFAULT_DISCORD_ENV_PATH),
-        0,
-    )
-
-
-def build_discord_abnormal_message(event: dict[str, Any], topic: str) -> str:
-    """Build a compact Discord message for one abnormal perception event."""
-    observation = event.get("observation") if isinstance(event.get("observation"), dict) else {}
-    action_name = str(observation.get("action_name") or "")
-    reason = str(observation.get("reason") or "")
-    return textwrap.dedent(
-        f"""\
-        Temi abnormal event detected
-        robot_id: {event.get("robot_id", "")}
-        event_id: {event.get("event_id", "")}
-        mqtt_topic: {topic}
-        action: {action_name}
-        reason: {reason}
-        """
-    ).strip()
-
-
-def maybe_notify_discord(event: dict[str, Any], topic: str, args: argparse.Namespace) -> dict[str, Any] | None:
-    """Send a best-effort Discord notification for an abnormal event."""
-    if getattr(args, "discord_notify", "disabled") == "disabled":
-        return None
-    frame_paths = []
-    evidence = event.get("evidence")
-    if isinstance(evidence, dict):
-        raw_paths = evidence.get("frame_paths")
-        if isinstance(raw_paths, list):
-            frame_paths = [path for path in raw_paths if isinstance(path, str)]
-    message = build_discord_abnormal_message(event, topic)
-    return notify_discord_webhook(
-        message,
-        frame_paths,
-        getattr(args, "discord_env_path", DEFAULT_DISCORD_ENV_PATH),
-        getattr(args, "discord_max_files", 8),
-    )
+    """Reject the retired viewer-owned Discord probe in favor of the Bridge route."""
+    del args
+    return {"failure_code": "DISCORD_BRIDGE_OWNED", "file_count": 0}
 
 
 def maybe_publish_abnormal_event(
@@ -1146,25 +975,6 @@ def maybe_publish_abnormal_event(
             "failure_code": "ABNORMAL_PRE_ALERT_BRIDGE_OWNED",
         }
 
-    immediate_alert: dict[str, str] = {
-        "transport": "discord_webhook",
-        "status": "disabled",
-        "target_class": "unverified_direct_alert",
-    }
-    try:
-        discord = maybe_notify_discord(event, topic, args)
-        if discord is not None:
-            published_event["discord"] = discord
-            immediate_alert["status"] = "delivered"
-    except DiscordDeliveryError as exc:
-        immediate_alert.update({"status": "failed", "failure_code": exc.failure_code})
-        published_event["discord_error"] = exc.failure_code
-        LOGGER.warning("failed to send abnormal event Discord notification: %s", exc.failure_code)
-    except Exception:
-        immediate_alert.update({"status": "failed", "failure_code": "DISCORD_CONNECTION_FAILED"})
-        published_event["discord_error"] = "DISCORD_CONNECTION_FAILED"
-        LOGGER.exception("failed to send abnormal event Discord notification")
-    event["notification"] = {"immediate_alert": immediate_alert}
     try:
         publish_abnormal_event_mqtt(event, args.mqtt_broker, args.mqtt_port, topic)
         published_event["mqtt"] = {"status": "ok"}
@@ -1522,17 +1332,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--robot-id", default="temi-01")
     parser.add_argument("--mqtt-broker", default="127.0.0.1")
     parser.add_argument("--mqtt-port", type=int, default=1883)
-    parser.add_argument("--abnormal-publish", choices=["enabled", "disabled"], default="enabled")
+    parser.add_argument("--abnormal-publish", choices=["enabled", "disabled"], default="disabled")
     parser.add_argument("--abnormal-cooldown-seconds", type=float, default=30.0)
     parser.add_argument("--abnormal-source", default="temi_action_viewer")
     parser.add_argument("--shared-root", default="/TemiAgent/temi_shared")
-    parser.add_argument("--discord-notify", choices=["enabled", "disabled"], default="enabled")
-    parser.add_argument("--discord-env-path", default=DEFAULT_DISCORD_ENV_PATH)
-    parser.add_argument("--discord-max-files", type=int, default=8)
+    parser.add_argument(
+        "--discord-notify",
+        choices=["enabled", "disabled"],
+        default="disabled",
+        help="Retired compatibility flag. Notifications are owned by hermes_temi_bridge.",
+    )
     parser.add_argument(
         "--discord-delivery-test",
         action="store_true",
-        help="Send one [TEST] Discord webhook message without detector, MQTT, TTS, or care-memory activity.",
+        help="Verify that the retired viewer-owned Discord probe is rejected.",
     )
     parser.add_argument("--pre-alert-speak", choices=["enabled", "disabled"], default="disabled")
     parser.add_argument("--pre-alert-language", default="zh-TW")
@@ -1561,22 +1374,13 @@ def main() -> None:
         raise SystemExit("--inference-jpeg-quality must be in 1-100")
     if args.inference_long_side < 0:
         raise SystemExit("--inference-long-side must be non-negative")
+    if args.discord_notify == "enabled":
+        raise SystemExit("--discord-notify is retired; hermes_temi_bridge owns abnormal notifications")
     if args.discord_delivery_test:
-        try:
-            result = run_discord_delivery_test(args)
-        except DiscordDeliveryError as exc:
-            result: dict[str, Any] = {"test": "discord_delivery", "failure_code": exc.failure_code}
-            if exc.status_code is not None:
-                result["status_code"] = exc.status_code
-            if exc.retry_after_seconds is not None:
-                result["retry_after_seconds"] = exc.retry_after_seconds
-            print(json.dumps(result, ensure_ascii=False, sort_keys=True))
-            raise SystemExit(1) from exc
+        result = run_discord_delivery_test(args)
         result["test"] = "discord_delivery"
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
-        if result["failure_code"] != "DISCORD_DELIVERED":
-            raise SystemExit(1)
-        return
+        raise SystemExit(1)
 
     app = build_app(args)
     LOGGER.info("open http://127.0.0.1:%s/ to view action predictions", args.port)

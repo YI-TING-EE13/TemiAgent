@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd /TemiAgent
+exec python3 /TemiAgent/tools/inject_demo_event.py "$@"

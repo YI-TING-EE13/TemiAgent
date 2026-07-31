@@ -237,8 +237,6 @@ class DemoConfig:
     gateway_ownership: str
     gateway_enabled: bool
     manage_android: bool
-    viewer_discord_env_path: Path | None
-    viewer_discord_enabled: bool
     mock_android_health_port: int | None
     mock_discord_port: int | None
 
@@ -328,6 +326,11 @@ class DemoConfig:
             "CARE_MEMORY_V2_ENABLED",
             "DEMO_REPEATED_DISCOMFORT_ENABLED",
             "CARE_CONTEXT_ENABLED",
+            "ABNORMAL_CARE_EPISODE_ENABLED",
+            "ABNORMAL_NOTIFICATION_MODE",
+            "DEMO_NOTIFICATION_MOCK_ENABLED",
+            "DEMO_NOTIFICATION_RECEIPT_ENABLED",
+            "DEMO_TEST_EVENT_INGRESS_ENABLED",
         )
         return {key: self.values.get(key, "") for key in keys}
 
@@ -531,7 +534,23 @@ def load_config(raw_path: str | Path) -> DemoConfig:
             raise DemoError(f"{flag} must be true for this Media Demo")
     viewer_enabled = _truthy(values.get("DEMO_ACTION_VIEWER_ENABLED", "false"))
     viewer_discord_enabled = values.get("DEMO_ACTION_VIEWER_DISCORD_NOTIFY", "disabled").strip().lower() == "enabled"
-    viewer_discord_env_path = None
+    if viewer_discord_enabled:
+        raise DemoError("DEMO_ACTION_VIEWER_DISCORD_NOTIFY is retired; the Bridge owns abnormal notification delivery")
+    notification_mode = values.get("ABNORMAL_NOTIFICATION_MODE", "disabled").strip().lower()
+    if notification_mode not in {"disabled", "discord_webhook", "demo_mock"}:
+        raise DemoError("ABNORMAL_NOTIFICATION_MODE must be disabled, discord_webhook, or demo_mock")
+    demo_notification_mock_enabled = _truthy(values.get("DEMO_NOTIFICATION_MOCK_ENABLED", "false"))
+    demo_notification_receipt_enabled = _truthy(values.get("DEMO_NOTIFICATION_RECEIPT_ENABLED", "false"))
+    if notification_mode == "demo_mock" and not (
+        demo_notification_mock_enabled and demo_notification_receipt_enabled
+    ):
+        raise DemoError("ABNORMAL_NOTIFICATION_MODE=demo_mock requires both Demo notification mock flags")
+    if demo_notification_mock_enabled and notification_mode != "demo_mock":
+        raise DemoError("DEMO_NOTIFICATION_MOCK_ENABLED=true requires ABNORMAL_NOTIFICATION_MODE=demo_mock")
+    if demo_notification_receipt_enabled and not demo_notification_mock_enabled:
+        raise DemoError("DEMO_NOTIFICATION_RECEIPT_ENABLED=true requires DEMO_NOTIFICATION_MOCK_ENABLED=true")
+    if notification_mode == "discord_webhook" and demo_notification_mock_enabled:
+        raise DemoError("real Discord and Demo mock notification routes cannot be enabled together")
     if viewer_enabled and profile == PROFILE_PRODUCTION:
         for name in (
             "DEMO_ACTION_VIEWER_MODEL",
@@ -540,16 +559,6 @@ def load_config(raw_path: str | Path) -> DemoConfig:
             "DEMO_ACTION_VIEWER_LLAMA_SERVER",
         ):
             _require(values, name)
-        if viewer_discord_enabled:
-            viewer_discord_env_path = Path(_require(values, "DEMO_ACTION_VIEWER_DISCORD_ENV_PATH"))
-            if (
-                not viewer_discord_env_path.is_absolute()
-                or viewer_discord_env_path.is_symlink()
-                or not viewer_discord_env_path.is_file()
-                or stat.S_IMODE(viewer_discord_env_path.stat().st_mode) != 0o600
-            ):
-                raise DemoError("DEMO_ACTION_VIEWER_DISCORD_ENV_PATH must be an owner-only regular file")
-            _outside_worktrees(viewer_discord_env_path, label="Discord credential env")
     if profile == PROFILE_NEWCOMER_MOCK:
         if lmstudio_ownership != "managed" or mqtt_ownership != "managed":
             raise DemoError("newcomer_mock must lifecycle-manage its LM and MQTT test doubles")
@@ -559,7 +568,7 @@ def load_config(raw_path: str | Path) -> DemoConfig:
             raise DemoError("newcomer_mock must explicitly disable the Hermes gateway")
         if not viewer_enabled:
             raise DemoError("newcomer_mock requires DEMO_ACTION_VIEWER_ENABLED=true")
-        if viewer_discord_enabled:
+        if notification_mode == "discord_webhook":
             raise DemoError("newcomer_mock does not permit a real Discord credential route")
     manage_android = _truthy(values.get("MANAGE_ANDROID", "false"))
     if manage_android:
@@ -612,8 +621,6 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         gateway_ownership=gateway_ownership,
         gateway_enabled=gateway_enabled,
         manage_android=manage_android,
-        viewer_discord_env_path=viewer_discord_env_path.resolve() if viewer_discord_env_path is not None else None,
-        viewer_discord_enabled=viewer_discord_enabled,
         mock_android_health_port=mock_android_health_port,
         mock_discord_port=mock_discord_port,
     )
@@ -1433,8 +1440,6 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
             "--shared-root", str(config.shared_root),
             "--abnormal-publish", config.values.get("DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH", "disabled"),
             "--abnormal-cooldown-seconds", config.values.get("DEMO_ACTION_VIEWER_ABNORMAL_COOLDOWN_SECONDS", "180"),
-            "--discord-notify", config.values.get("DEMO_ACTION_VIEWER_DISCORD_NOTIFY", "disabled"),
-            "--discord-env-path", str(config.viewer_discord_env_path) if config.viewer_discord_env_path is not None else "/dev/null",
             "--pre-alert-speak", config.values.get("DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK", "disabled"),
         ]
     if name == "mock_android":
@@ -1796,8 +1801,6 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
         and viewer.get("ok")
         and viewer.get("source_connected")
         and viewer.get("llama_server_ready")
-        and (not config.viewer_discord_enabled or viewer.get("discord_notify_enabled") is True)
-        and (not config.viewer_discord_enabled or viewer.get("discord_webhook_configured") is True)
         and service_identity.get("viewer", False)
     )
     mock_android_ok = (not config.is_newcomer_mock) or (

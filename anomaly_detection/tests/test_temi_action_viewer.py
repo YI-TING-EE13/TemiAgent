@@ -3,7 +3,6 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-import requests
 from unittest import mock
 
 import numpy as np
@@ -11,19 +10,14 @@ import numpy as np
 from temi_action_viewer import (
     ActionState,
     BufferedFrame,
-    DISCORD_DELIVERY_TEST_MESSAGE,
-    DiscordDeliveryError,
     LlamaCppBackend,
     PosePreprocessor,
     abnormal_cooldown_elapsed,
     build_abnormal_event,
-    build_discord_abnormal_message,
     build_inference_jpegs,
     build_llamacpp_payload,
-    load_env_value,
     maybe_publish_abnormal_event,
     notification_health,
-    notify_discord_webhook,
     normalize_action_response,
     parse_action_response,
     run_discord_delivery_test,
@@ -193,6 +187,7 @@ class PromptParserTests(unittest.TestCase):
 
         self.assertTrue(should_publish_abnormal_event(parsed))
         self.assertEqual(event["type"], "perception.abnormal")
+        self.assertEqual(event["event_type"], "fight")
         self.assertEqual(event["schema_version"], "1.0")
         self.assertEqual(event["observation"]["action_name"], "fights")
         self.assertEqual(event["observation"]["reason"], "Two people are striking each other.")
@@ -222,141 +217,27 @@ class PromptParserTests(unittest.TestCase):
             self.assertEqual(Path(paths[0]).read_bytes(), b"original-a")
             self.assertEqual(Path(paths[1]).read_bytes(), b"original-b")
 
-    def test_discord_message_includes_parsed_observation(self) -> None:
-        parsed = parse_action_response("Action: falls down\nEvidence/Reason: The person is on the floor.")
-        event = build_abnormal_event(parsed, ["/shared/frame_000.jpg"], event_id="evt_test")
-
-        message = build_discord_abnormal_message(event, "temi/temi-01/perception/abnormal")
-
-        self.assertIn("evt_test", message)
-        self.assertIn("falls down", message)
-        self.assertIn("The person is on the floor.", message)
-
-    def test_env_reader_loads_discord_webhook(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            env_path = Path(tmp) / ".env"
-            env_path.write_text("DISCORD_WEBHOOK_URL=https://example.invalid/hook\n", encoding="utf-8")
-
-            self.assertEqual(
-                load_env_value(env_path.as_posix(), "DISCORD_WEBHOOK_URL"),
-                "https://example.invalid/hook",
-            )
-
-    def test_discord_webhook_sends_files(self) -> None:
-        class FakeResponse:
-            status_code = 204
-            text = ""
-            headers = {}
-
-        with tempfile.TemporaryDirectory() as tmp:
-            env_path = Path(tmp) / ".env"
-            file_path = Path(tmp) / "frame.jpg"
-            env_path.write_text("DISCORD_WEBHOOK_URL=https://example.invalid/hook\n", encoding="utf-8")
-            file_path.write_bytes(b"jpeg")
-
-            with mock.patch("temi_action_viewer.requests.post", return_value=FakeResponse()) as post:
-                result = notify_discord_webhook(
-                    "Action: falls down",
-                    [file_path.as_posix()],
-                    env_path.as_posix(),
-                    8,
-                )
-
-        self.assertEqual(result["status_code"], 204)
-        self.assertEqual(result["file_count"], 1)
-        self.assertEqual(result["failure_code"], "DISCORD_DELIVERED")
-        self.assertEqual(post.call_count, 1)
-        self.assertIn("files", post.call_args.kwargs)
-
-    def test_discord_http_failures_have_safe_codes(self) -> None:
-        class FakeResponse:
-            def __init__(self, status_code: int, headers: dict[str, str] | None = None) -> None:
-                self.status_code = status_code
-                self.headers = headers or {}
-
-        cases = {
-            401: "DISCORD_UNAUTHORIZED",
-            403: "DISCORD_FORBIDDEN",
-            404: "DISCORD_WEBHOOK_NOT_FOUND",
-            429: "DISCORD_RATE_LIMITED",
-            500: "DISCORD_BAD_RESPONSE",
-        }
-        webhook = "https://example.invalid/private-webhook"
-        with tempfile.TemporaryDirectory() as tmp:
-            env_path = Path(tmp) / ".env"
-            env_path.write_text(f"DISCORD_WEBHOOK_URL={webhook}\n", encoding="utf-8")
-            for status_code, expected_code in cases.items():
-                headers = {"Retry-After": "3"} if status_code == 429 else {}
-                with self.subTest(status_code=status_code):
-                    with mock.patch("temi_action_viewer.requests.post", return_value=FakeResponse(status_code, headers)):
-                        with self.assertRaises(DiscordDeliveryError) as raised:
-                            notify_discord_webhook("[TEST] delivery", [], env_path.as_posix(), 0)
-                    self.assertEqual(raised.exception.failure_code, expected_code)
-                    self.assertNotIn(webhook, str(raised.exception))
-                    if status_code == 429:
-                        self.assertEqual(raised.exception.retry_after_seconds, 3.0)
-
-    def test_discord_timeout_and_connection_failures_have_safe_codes(self) -> None:
-        webhook = "https://example.invalid/private-webhook"
-        with tempfile.TemporaryDirectory() as tmp:
-            env_path = Path(tmp) / ".env"
-            env_path.write_text(f"DISCORD_WEBHOOK_URL={webhook}\n", encoding="utf-8")
-            for error, expected_code in (
-                (requests.Timeout("late"), "DISCORD_TIMEOUT"),
-                (requests.ConnectionError("offline"), "DISCORD_CONNECTION_FAILED"),
-            ):
-                with self.subTest(expected_code=expected_code):
-                    with mock.patch("temi_action_viewer.requests.post", side_effect=error):
-                        with self.assertRaises(DiscordDeliveryError) as raised:
-                            notify_discord_webhook("[TEST] delivery", [], env_path.as_posix(), 0)
-                    self.assertEqual(raised.exception.failure_code, expected_code)
-                    self.assertNotIn(webhook, str(raised.exception))
-
-    def test_discord_webhook_unset_and_empty_payload_are_classified(self) -> None:
-        with self.assertRaises(DiscordDeliveryError) as unset:
-            notify_discord_webhook("[TEST] delivery", [], "/does/not/exist", 0)
-        self.assertEqual(unset.exception.failure_code, "DISCORD_WEBHOOK_UNSET")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            env_path = Path(tmp) / ".env"
-            env_path.write_text("DISCORD_WEBHOOK_URL=https://example.invalid/hook\n", encoding="utf-8")
-            with self.assertRaises(DiscordDeliveryError) as malformed:
-                notify_discord_webhook("   ", [], env_path.as_posix(), 0)
-        self.assertEqual(malformed.exception.failure_code, "DISCORD_BAD_RESPONSE")
-
-    def test_notification_health_reports_booleans_without_webhook(self) -> None:
+    def test_notification_health_reports_bridge_ownership_without_credentials(self) -> None:
         class Args:
             abnormal_publish = "enabled"
-            discord_notify = "enabled"
-            discord_env_path = ""
-
-        with tempfile.TemporaryDirectory() as tmp:
-            env_path = Path(tmp) / ".env"
-            webhook = "https://example.invalid/private-webhook"
-            env_path.write_text(f"DISCORD_WEBHOOK_URL={webhook}\n", encoding="utf-8")
-            Args.discord_env_path = env_path.as_posix()
-            result = notification_health(Args)
+        result = notification_health(Args)
 
         self.assertEqual(
             result,
             {
                 "abnormal_publish_enabled": True,
-                "discord_notify_enabled": True,
-                "discord_webhook_configured": True,
+                "notification_bridge_owned": True,
             },
         )
-        self.assertNotIn(webhook, repr(result))
 
-    def test_controlled_discord_delivery_test_uses_production_sender(self) -> None:
+    def test_controlled_discord_delivery_test_is_rejected_as_bridge_owned(self) -> None:
         class Args:
             discord_notify = "enabled"
             discord_env_path = "/private/.env"
 
-        with mock.patch("temi_action_viewer.notify_discord_webhook", return_value={"failure_code": "DISCORD_DELIVERED"}) as sender:
-            result = run_discord_delivery_test(Args)
+        result = run_discord_delivery_test(Args)
 
-        self.assertEqual(result["failure_code"], "DISCORD_DELIVERED")
-        sender.assert_called_once_with(DISCORD_DELIVERY_TEST_MESSAGE, [], Args.discord_env_path, 0)
+        self.assertEqual(result["failure_code"], "DISCORD_BRIDGE_OWNED")
 
     def test_disabled_abnormal_publish_skips_persistence_and_notification(self) -> None:
         class Args:
@@ -367,7 +248,7 @@ class PromptParserTests(unittest.TestCase):
             self.assertIsNone(maybe_publish_abnormal_event(parsed, [make_frame(1, 1.0)], Args))
         save.assert_not_called()
 
-    def test_abnormal_publish_continues_to_discord_when_mqtt_fails(self) -> None:
+    def test_abnormal_publish_never_notifies_discord_when_mqtt_fails(self) -> None:
         class Args:
             abnormal_publish = "enabled"
             shared_root = ""
@@ -375,23 +256,18 @@ class PromptParserTests(unittest.TestCase):
             abnormal_source = "test"
             mqtt_broker = "127.0.0.1"
             mqtt_port = 1883
-            discord_notify = "enabled"
-            discord_env_path = ""
-            discord_max_files = 1
 
         parsed = parse_action_response("Action: falls down\nEvidence/Reason: The person is on the floor.")
         frames = [make_frame(index, float(index)) for index in range(2)]
         with tempfile.TemporaryDirectory() as tmp:
             Args.shared_root = tmp
             with mock.patch("temi_action_viewer.publish_abnormal_event_mqtt", side_effect=RuntimeError("mqtt down")):
-                with mock.patch("temi_action_viewer.maybe_notify_discord", return_value={"status_code": 204}) as notify:
-                    event = maybe_publish_abnormal_event(parsed, frames, Args)
+                event = maybe_publish_abnormal_event(parsed, frames, Args)
 
         self.assertIsNotNone(event)
         assert event is not None
         self.assertIn("mqtt_error", event)
-        self.assertEqual(event["discord"]["status_code"], 204)
-        self.assertEqual(notify.call_count, 1)
+        self.assertNotIn("discord", event)
 
     def test_abnormal_cooldown_blocks_second_emergency_within_window(self) -> None:
         self.assertTrue(abnormal_cooldown_elapsed(0.0, 100.0, 180.0))
@@ -406,9 +282,6 @@ class PromptParserTests(unittest.TestCase):
             abnormal_source = "test"
             mqtt_broker = "127.0.0.1"
             mqtt_port = 1883
-            discord_notify = "enabled"
-            discord_env_path = ""
-            discord_max_files = 1
             pre_alert_speak = "enabled"
             pre_alert_language = "zh-TW"
 
@@ -417,16 +290,15 @@ class PromptParserTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             Args.shared_root = tmp
             with mock.patch("temi_action_viewer.publish_abnormal_event_mqtt") as publish_event:
-                with mock.patch("temi_action_viewer.maybe_notify_discord", return_value={"status_code": 204}):
-                    event = maybe_publish_abnormal_event(parsed, frames, Args)
+                event = maybe_publish_abnormal_event(parsed, frames, Args)
 
         self.assertIsNotNone(event)
         assert event is not None
         self.assertEqual(event["pre_alert_speak"]["status"], "suppressed")
         self.assertEqual(event["pre_alert_speak"]["failure_code"], "ABNORMAL_PRE_ALERT_BRIDGE_OWNED")
         self.assertEqual(event["mqtt"]["status"], "ok")
-        self.assertEqual(event["discord"]["status_code"], 204)
-        self.assertEqual(event["payload"]["notification"]["immediate_alert"]["status"], "delivered")
+        self.assertNotIn("discord", event)
+        self.assertNotIn("notification", event["payload"])
         self.assertEqual(publish_event.call_count, 1)
 
     def test_inference_jpegs_use_pose_renderer(self) -> None:

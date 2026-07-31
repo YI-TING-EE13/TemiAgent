@@ -6,10 +6,24 @@ import argparse
 import json
 import logging
 from pathlib import Path
+import threading
 import time
 from typing import Any
 
 from .action_validator import ActionValidationError, validate_action_output
+from .abnormal_notification import AbnormalNotificationDispatcher
+from .care_episode import (
+    AWAITING_FIRST_RESPONSE,
+    ESCALATION_SENT,
+    EXPIRED,
+    FOLLOW_UP_REQUIRED,
+    INITIAL_ALERT_SENT,
+    NO_RESPONSE,
+    RESIDENT_RESPONDED,
+    RESOLVED,
+    CareEpisode,
+    CareEpisodeStore,
+)
 from .care_confirmation import (
     CARE_DECLINED,
     CARE_EXISTING_ALERT_DELIVERED,
@@ -18,6 +32,7 @@ from .care_confirmation import (
     CARE_REASK,
     CARE_UNRESOLVED,
     PendingCareConfirmationStore,
+    classify_care_episode_response,
     classify_care_confirmation_response,
     direct_alert_delivered,
     direct_alert_from_event,
@@ -86,6 +101,8 @@ class HermesTemiBridgeService:
         event_logger: EventJsonlLogger | None = None,
         memory_store: StructuredMemoryStore | None = None,
         care_confirmation_store: PendingCareConfirmationStore | None = None,
+        care_episode_store: CareEpisodeStore | None = None,
+        abnormal_notification_dispatcher: AbnormalNotificationDispatcher | None = None,
         care_context_builder: CareContextBuilder | None = None,
         media_registry: MediaSessionRegistry | None = None,
         resident_context: ResidentContextStore | None = None,
@@ -108,6 +125,16 @@ class HermesTemiBridgeService:
             config.memory_dir,
             config.abnormal_care_confirmation_ttl_seconds,
         )
+        self.care_episode_store = care_episode_store or CareEpisodeStore(
+            config.memory_dir,
+            first_response_timeout_seconds=config.abnormal_care_first_response_timeout_seconds,
+            second_response_timeout_seconds=config.abnormal_care_second_response_timeout_seconds,
+        )
+        self.abnormal_notification_dispatcher = (
+            abnormal_notification_dispatcher or AbnormalNotificationDispatcher(config)
+        )
+        self._episode_timeout_stop = threading.Event()
+        self._episode_timeout_thread: threading.Thread | None = None
         self.care_context_builder = (
             care_context_builder
             if care_context_builder is not None
@@ -189,10 +216,22 @@ class HermesTemiBridgeService:
             self._identity_callback_server.start()
         if self._care_callback_server is not None:
             self._care_callback_server.start()
+        if self.config.abnormal_care_episode_enabled:
+            self._episode_timeout_stop.clear()
+            self._episode_timeout_thread = threading.Thread(
+                target=self._episode_timeout_loop,
+                name="abnormal-care-episode-timeouts",
+                daemon=True,
+            )
+            self._episode_timeout_thread.start()
         try:
             self.mqtt_client.connect()
             self.mqtt_client.loop_forever()
         finally:
+            self._episode_timeout_stop.set()
+            if self._episode_timeout_thread is not None:
+                self._episode_timeout_thread.join(timeout=self.config.abnormal_care_timeout_poll_seconds + 1)
+                self._episode_timeout_thread = None
             if self._identity_controller is not None:
                 self._identity_controller.shutdown()
             if self._care_callback_server is not None:
@@ -649,7 +688,9 @@ class HermesTemiBridgeService:
             )
 
     def handle_abnormal_payload(self, topic: str, payload: dict[str, Any]) -> dict[str, Any]:
-        """Start the deterministic consent-first care flow for one abnormal event."""
+        """Start the immediate-alert, Hermes-led care flow for one abnormal event."""
+        if self.config.abnormal_care_episode_enabled:
+            return self._handle_abnormal_care_episode(topic, payload)
         if not self.config.abnormal_care_confirmation_enabled:
             return self._handle_abnormal_via_hermes_legacy(topic, payload)
         total_started = time.monotonic()
@@ -798,8 +839,191 @@ class HermesTemiBridgeService:
                 error_message=str(exc),
             )
 
+    def _handle_abnormal_care_episode(self, topic: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Validate, alert, invoke Hermes, and persist one abnormal-care episode."""
+        source_type = "perception.abnormal"
+        event_id = str(payload.get("event_id") or "unknown_event")
+        robot_id = str(payload.get("robot_id") or _robot_id_from_topic(topic) or "unknown_robot")
+        total_started = time.monotonic()
+        try:
+            event = PerceptionAbnormalEvent.from_payload(payload, self.config.robot_id_allowlist)
+        except EventValidationError as exc:
+            self.event_logger.write_trace(
+                event_id=event_id,
+                robot_id=robot_id,
+                source_type=source_type,
+                stage="input_validated",
+                status="rejected",
+                level="WARNING",
+                payload={"reason": exc.reason, "details": exc.details},
+            )
+            return {"status": "rejected", "reason": exc.reason, **exc.details}
+        try:
+            for frame in event.frames:
+                validate_image_file(frame.path, self.config.max_image_size_mb)
+        except ImageValidationError as exc:
+            self.event_logger.write_trace(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                source_type=source_type,
+                stage="input_validated",
+                status="rejected",
+                level="WARNING",
+                payload={"reason": exc.reason, "missing_path": exc.path},
+            )
+            return {"status": "rejected", "reason": exc.reason, "missing_path": exc.path}
+        if event.is_test and not self.config.demo_test_event_ingress_enabled:
+            self.event_logger.write_trace(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                source_type=source_type,
+                stage="input_validated",
+                status="rejected",
+                level="WARNING",
+                payload={"reason": "test_event_ingress_disabled"},
+            )
+            return {"status": "rejected", "reason": "test_event_ingress_disabled"}
+        if event.is_test and event.resident_id not in self.config.demo_test_resident_allowlist:
+            self.event_logger.write_trace(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                source_type=source_type,
+                stage="input_validated",
+                status="rejected",
+                level="WARNING",
+                payload={"reason": "unknown_test_resident"},
+            )
+            return {"status": "rejected", "reason": "unknown_test_resident"}
+        now_monotonic_ms = _monotonic_ms()
+        episode, created = self.care_episode_store.create(
+            event_id=event.event_id,
+            robot_id=event.robot_id,
+            event_type=event.event_type,
+            resident_id=event.resident_id,
+            detected_timestamp_ms=event.timestamp_ms,
+            request_id=event.request_id,
+            run_id=event.run_id,
+            scenario_id=event.scenario_id,
+            is_test=event.is_test,
+            now_monotonic_ms=now_monotonic_ms,
+        )
+        if not created:
+            self.event_logger.write_trace(
+                event_id=event.event_id,
+                robot_id=event.robot_id,
+                source_type=source_type,
+                stage="duplicate_event_ignored",
+                record_type="duplicate_event_ignored",
+                status="ignored",
+                level="WARNING",
+                payload={"reason": "persistent_care_episode_duplicate"},
+            )
+            return {"status": "ignored", "reason": "duplicate_event_id", "episode_status": episode.status}
+
+        self.event_logger.write_trace(
+            event_id=event.event_id,
+            robot_id=event.robot_id,
+            source_type=source_type,
+            stage="input_validated",
+            status="ok",
+            payload={
+                "event_type": event.event_type,
+                "is_test": event.is_test,
+                "run_id": event.run_id,
+                "scenario_id": event.scenario_id,
+                "request_id": event.request_id,
+                "evidence_frame_count": len(event.frames),
+            },
+        )
+        receipt = self._dispatch_episode_notification(episode, "initial_alert")
+        self.care_episode_store.transition(
+            event.event_id,
+            INITIAL_ALERT_SENT,
+            now_monotonic_ms=_monotonic_ms(),
+            reason="initial_alert_attempted",
+        )
+        self.event_logger.write_trace(
+            event_id=event.event_id,
+            robot_id=event.robot_id,
+            source_type=source_type,
+            stage="initial_notification_finished",
+            status=str(receipt.get("status") or "failed"),
+            payload={"notification_receipt": receipt},
+        )
+
+        # The legacy implementation below is the existing validated Hermes ->
+        # action-validator -> canonical-command path.  It is intentionally
+        # reused here instead of letting this episode layer build a command.
+        hermes_result = self._handle_abnormal_via_hermes_legacy(topic, payload)
+        self.care_episode_store.transition(
+            event.event_id,
+            AWAITING_FIRST_RESPONSE,
+            now_monotonic_ms=_monotonic_ms(),
+            reason="resident_hermes_invoked",
+        )
+        self.event_logger.write_trace(
+            event_id=event.event_id,
+            robot_id=event.robot_id,
+            source_type=source_type,
+            stage="episode_awaiting_first_response",
+            status="pending",
+            payload={
+                "first_response_timeout_seconds": self.config.abnormal_care_first_response_timeout_seconds,
+                "hermes_status": hermes_result.get("status"),
+                "total_duration_ms": _duration_ms(total_started),
+            },
+        )
+        return {
+            **hermes_result,
+            "care_episode": AWAITING_FIRST_RESPONSE,
+            "notification_receipt": receipt,
+        }
+
+    def _dispatch_episode_notification(
+        self,
+        episode: CareEpisode,
+        stage: str,
+        *,
+        resident_status: str | None = None,
+    ) -> dict[str, Any]:
+        """Reserve a stage before external I/O and return its persisted receipt."""
+        now_monotonic_ms = _monotonic_ms()
+        if not self.care_episode_store.reserve_notification_stage(
+            episode.event_id, stage, now_monotonic_ms=now_monotonic_ms
+        ):
+            current = self.care_episode_store.get(episode.event_id)
+            stages = current.notification_stages if current is not None else {}
+            existing = stages.get(stage, {}) if isinstance(stages, dict) else {}
+            receipt = existing.get("receipt") if isinstance(existing, dict) else None
+            return dict(receipt) if isinstance(receipt, dict) else {
+                "status": "unconfirmed_after_restart",
+                "failure_code": "NOTIFICATION_STAGE_ALREADY_RESERVED",
+                "stage": stage,
+            }
+        receipt = self.abnormal_notification_dispatcher.dispatch(
+            stage=stage,
+            event_id=episode.event_id,
+            event_type=episode.event_type,
+            robot_id=episode.robot_id,
+            resident_id=episode.resident_id,
+            detected_timestamp_ms=episode.detected_timestamp_ms,
+            run_id=episode.run_id,
+            scenario_id=episode.scenario_id,
+            is_test=episode.is_test,
+            resident_status=resident_status,
+        )
+        self.care_episode_store.complete_notification_stage(
+            episode.event_id,
+            stage,
+            receipt,
+            now_monotonic_ms=_monotonic_ms(),
+        )
+        return receipt
+
     def _handle_pending_care_confirmation(self, event: ASRFinalEvent) -> dict[str, Any] | None:
         """Resolve only an explicit answer before routing unrelated ASR to Hermes."""
+        if self.config.abnormal_care_episode_enabled:
+            return self._handle_care_episode_reply(event)
         if not self.config.abnormal_care_confirmation_enabled:
             return None
         pending = self.care_confirmation_store.active_for_robot(event.robot_id)
@@ -850,6 +1074,222 @@ class HermesTemiBridgeService:
             },
         )
         return {"status": "success", "command_id": command["command_id"], "care_confirmation": status, "failure_code": failure_code}
+
+    def _handle_care_episode_reply(self, event: ASRFinalEvent) -> dict[str, Any] | None:
+        """Route one explicit care reply through Hermes without replaying notification I/O."""
+        episode = self.care_episode_store.active_for_robot(event.robot_id)
+        if episode is None:
+            return None
+        response = classify_care_episode_response(
+            event.asr_text,
+            event.asr_confidence,
+            self.config.abnormal_care_confirmation_min_asr_confidence,
+        )
+        if response == "unrelated":
+            return None
+        now_monotonic_ms = _monotonic_ms()
+        if response == "ambiguous" and episode.clarification_count >= 1:
+            response = "unresolved"
+        self.care_episode_store.transition(
+            episode.event_id,
+            RESIDENT_RESPONDED,
+            now_monotonic_ms=now_monotonic_ms,
+            reason=f"resident_reply:{response}",
+        )
+        status_receipt = self._dispatch_episode_notification(
+            episode,
+            "status_update",
+            resident_status=response,
+        )
+        command_id = self._publish_episode_hermes_speak(
+            episode,
+            event_id=event.event_id,
+            robot_id=event.robot_id,
+            response_class=response,
+            notification_status=str(status_receipt.get("status") or "unconfirmed"),
+        )
+        okay_already_rechecked = any(
+            transition.get("reason") == "resident_reply:okay"
+            for transition in episode.transitions
+            if isinstance(transition, dict)
+        )
+        if response == "okay" and okay_already_rechecked:
+            next_status = RESOLVED
+            clarification_count = episode.clarification_count
+        elif response in {"okay", "ambiguous", "unresolved", "needs_assistance"}:
+            next_status = AWAITING_FIRST_RESPONSE
+            clarification_count = (
+                episode.clarification_count + 1
+                if response in {"okay", "ambiguous"}
+                else episode.clarification_count
+            )
+        else:
+            next_status = EXPIRED
+            clarification_count = episode.clarification_count
+        updated = self.care_episode_store.transition(
+            episode.event_id,
+            next_status,
+            now_monotonic_ms=_monotonic_ms(),
+            reason=f"resident_reply_processed:{response}",
+            clarification_count=clarification_count,
+        )
+        self.event_logger.write_trace(
+            event_id=episode.event_id,
+            robot_id=event.robot_id,
+            source_type="asr.final",
+            stage="abnormal_care_follow_up_resolved",
+            status=updated.status,
+            payload={
+                "follow_up_event_id": event.event_id,
+                "response_class": response,
+                "command_id": command_id,
+                "clarification_count": updated.clarification_count,
+                "notification_receipt": status_receipt,
+            },
+        )
+        return {
+            "status": "success",
+            "command_id": command_id,
+            "care_episode": updated.status,
+            "response_class": response,
+            "notification_receipt": status_receipt,
+        }
+
+    def _publish_episode_hermes_speak(
+        self,
+        episode: CareEpisode,
+        *,
+        event_id: str,
+        robot_id: str,
+        response_class: str,
+        notification_status: str | None = None,
+    ) -> str:
+        """Invoke resident Hermes, validate its speak-only action, and publish it."""
+        initial_status = _episode_notification_status(episode, "initial_alert")
+        request = HermesRequest(
+            event_id=event_id,
+            robot_id=robot_id,
+            conversation_id=f"care-{episode.event_id}",
+            language="zh-TW",
+            asr_text="",
+            frames=[],
+            source_type="care.follow_up",
+            care_context={
+                "response_class": response_class,
+                "initial_notification_status": initial_status,
+                "notification_status": notification_status or initial_status,
+                "originating_event_type": episode.event_type,
+            },
+        )
+        try:
+            hermes_response = self.hermes_client.invoke(request)
+            parsed = parse_hermes_output(hermes_response.raw_output)
+            validated = validate_action_output(
+                parsed,
+                expected_event_id=event_id,
+                expected_robot_id=robot_id,
+                max_actions=1,
+            )
+            if not validated.robot_actions or any(action["type"] != "speak" for action in validated.robot_actions):
+                raise ActionValidationError("care_follow_up_requires_speak")
+            command = build_command_request(validated)
+            self.mqtt_client.publish_command(robot_id, command)
+            status = "published"
+        except (HermesInvocationError, HermesOutputError, ActionValidationError) as exc:
+            validated = validate_action_output(
+                _episode_fallback_output(
+                    event_id,
+                    robot_id,
+                    response_class,
+                    notification_status=notification_status,
+                ),
+                expected_event_id=event_id,
+                expected_robot_id=robot_id,
+                max_actions=1,
+            )
+            command = build_command_request(validated)
+            self.mqtt_client.publish_command(robot_id, command)
+            status = "fallback_after_hermes_failure"
+            self.event_logger.write_trace(
+                event_id=episode.event_id,
+                robot_id=robot_id,
+                source_type="care.follow_up",
+                stage="hermes_follow_up_failed",
+                status="failed",
+                level="WARNING",
+                payload={"failure_code": type(exc).__name__},
+            )
+        self.event_logger.write_trace(
+            event_id=episode.event_id,
+            robot_id=robot_id,
+            source_type="care.follow_up",
+            stage="command_request_published",
+            status=status,
+            payload={"command_id": command["command_id"], "command_request": command},
+        )
+        return str(command["command_id"])
+
+    def _episode_timeout_loop(self) -> None:
+        """Run bounded episode timeout checks without blocking MQTT message processing."""
+        while not self._episode_timeout_stop.wait(self.config.abnormal_care_timeout_poll_seconds):
+            try:
+                self.process_abnormal_episode_timeouts()
+            except Exception:  # pragma: no cover - runtime containment
+                LOGGER.exception("abnormal care episode timeout processing failed")
+
+    def process_abnormal_episode_timeouts(self, *, now_monotonic_ms: int | None = None) -> None:
+        """Advance due episodes through one Hermes recheck and one deduplicated escalation."""
+        now_ms = _monotonic_ms() if now_monotonic_ms is None else now_monotonic_ms
+        for episode in self.care_episode_store.due_first_response(now_ms):
+            self.care_episode_store.transition(
+                episode.event_id,
+                FOLLOW_UP_REQUIRED,
+                now_monotonic_ms=now_ms,
+                reason="first_response_timeout",
+            )
+            self._publish_episode_hermes_speak(
+                episode,
+                event_id=f"{episode.event_id}:follow-up",
+                robot_id=episode.robot_id,
+                response_class="timeout",
+            )
+            self.care_episode_store.transition(
+                episode.event_id,
+                NO_RESPONSE,
+                now_monotonic_ms=_monotonic_ms(),
+                reason="follow_up_requested",
+            )
+        for episode in self.care_episode_store.due_escalation(now_ms):
+            receipt = self._dispatch_episode_notification(episode, "escalation")
+            status = str(receipt.get("status") or "failed")
+            final_state = ESCALATION_SENT if status in {"delivered", "mock_delivered"} else EXPIRED
+            command_id = None
+            if final_state == ESCALATION_SENT:
+                command_id = self._publish_episode_hermes_speak(
+                    episode,
+                    event_id=f"{episode.event_id}:escalation",
+                    robot_id=episode.robot_id,
+                    response_class="escalated",
+                    notification_status=status,
+                )
+            self.care_episode_store.transition(
+                episode.event_id,
+                final_state,
+                now_monotonic_ms=_monotonic_ms(),
+                reason="second_response_timeout",
+            )
+            self.event_logger.write_trace(
+                event_id=episode.event_id,
+                robot_id=episode.robot_id,
+                source_type="care.episode",
+                stage="escalation_notification_finished",
+                status=status,
+                payload={
+                    "notification_receipt": receipt,
+                    "episode_status": final_state,
+                    "command_id": command_id,
+                },
+            )
 
     def _handle_abnormal_via_hermes_legacy(self, topic: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Handle one abnormal perception event payload from MQTT."""
@@ -1549,6 +1989,70 @@ def _duration_ms(started: float | None) -> int | None:
     if started is None:
         return None
     return int((time.monotonic() - started) * 1000)
+
+
+def _monotonic_ms() -> int:
+    """Return the process-independent monotonic time basis used by care episodes."""
+    return int(time.monotonic() * 1000)
+
+
+def _episode_notification_status(episode: CareEpisode, stage: str) -> str:
+    """Read a persisted notification status without revealing transport configuration."""
+    stages = episode.notification_stages or {}
+    value = stages.get(stage) if isinstance(stages, dict) else None
+    return str(value.get("status") or "unconfirmed") if isinstance(value, dict) else "unconfirmed"
+
+
+def _episode_fallback_output(
+    event_id: str,
+    robot_id: str,
+    response_class: str,
+    *,
+    notification_status: str | None = None,
+) -> dict[str, Any]:
+    """Build a validator-bound fallback only after a resident Hermes invocation failed."""
+    texts = {
+        "okay": "好的，我知道了。我再確認一次：您現在有沒有頭暈、疼痛或需要協助？",
+        "ambiguous": CARE_REASK,
+        "unresolved": CARE_UNRESOLVED,
+        "timeout": "我想再確認你是否安全。如果需要協助，請直接告訴我。",
+    }
+    receipt_confirmed = notification_status in {"delivered", "mock_delivered"}
+    if response_class == "needs_assistance":
+        text = (
+            "我知道了，請先不要勉強移動。我已將需要協助的情況通知照護人員，會繼續陪著您。"
+            if receipt_confirmed
+            else "我知道了，請先不要勉強移動。我目前無法確認通知是否送出，會繼續陪著您。"
+        )
+    elif response_class == "escalated":
+        text = (
+            "我目前沒有收到您的回應，已通知照護人員前來確認。我會繼續留意您的狀況。"
+            if receipt_confirmed
+            else "我目前沒有收到您的回應，也無法確認通知是否送出。我會繼續留意您的狀況。"
+        )
+    else:
+        text = texts.get(response_class, CARE_UNRESOLVED)
+    return {
+        "schema_version": "1.0",
+        "event_id": event_id,
+        "robot_id": robot_id,
+        "confidence": 0.0,
+        "cognitive_state": {
+            "intent": "abnormal_care_follow_up",
+            "home_esi_level": "L2",
+            "risk_reason": "Resident Hermes follow-up was unavailable; Bridge used a bounded care fallback.",
+            "next_step": "speak",
+        },
+        "reasoning_summary": "Bounded care follow-up fallback after a failed Hermes invocation.",
+        "actions": [
+            {
+                "action_id": "act_001",
+                "type": "speak",
+                "text": text,
+                "language": "zh-TW",
+            }
+        ],
+    }
 
 
 def _payload_asr_text(payload: dict[str, Any]) -> str:

@@ -176,6 +176,27 @@ class EventValidationTests(unittest.TestCase):
             with self.assertRaisesRegex(EventValidationError, "missing_reason"):
                 PerceptionAbnormalEvent.from_payload(payload, ("temi-01",))
 
+    def test_test_abnormal_event_requires_formal_source_and_timestamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = make_abnormal_payload(Path(tmp) / "temi_shared")
+            payload["event_type"] = "fight"
+            payload["context"] = {
+                "source": "formal_demo_injector",
+                "test": True,
+                "resident_id": "test-resident",
+                "request_id": "req-test",
+                "run_id": "run-test",
+                "scenario_id": "A1",
+            }
+            del payload["timestamp_ms"]
+            with self.assertRaisesRegex(EventValidationError, "missing_test_metadata"):
+                PerceptionAbnormalEvent.from_payload(payload, ("temi-01",))
+
+            payload["timestamp_ms"] = 1_700_000_000_000
+            payload["context"]["source"] = "manual_mqtt"
+            with self.assertRaisesRegex(EventValidationError, "unsupported_test_event_source"):
+                PerceptionAbnormalEvent.from_payload(payload, ("temi-01",))
+
     def test_missing_event_id_should_fail(self):
         payload = load_fixture("asr_final_valid.json")
         del payload["event_id"]
@@ -219,7 +240,7 @@ class EventValidationTests(unittest.TestCase):
             self.assertEqual(second, {"status": "ignored", "reason": "duplicate_event_id"})
             self.assertEqual(len(mqtt.published), 1)
 
-    def test_abnormal_event_creates_pending_care_speak_without_invoking_hermes(self):
+    def test_abnormal_event_alerts_then_invokes_hermes_through_the_validated_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             bridge_root = root / "temi_shared"
@@ -245,11 +266,12 @@ class EventValidationTests(unittest.TestCase):
             result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", copy.deepcopy(payload))
 
             self.assertEqual(result["status"], "success")
-            self.assertEqual(hermes.requests, [])
+            self.assertEqual(len(hermes.requests), 1)
+            self.assertEqual(hermes.requests[0].source_type, "perception.abnormal")
             self.assertEqual(len(mqtt.published), 1)
             command = mqtt.published[0][1]
             self.assertEqual([action["type"] for action in command["actions"]], ["speak"])
-            self.assertIn("需要我幫忙通知", command["actions"][0]["text"])
+            self.assertNotIn("不支援", command["actions"][0]["text"])
 
     def test_abnormal_event_duplicate_should_be_ignored(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -276,7 +298,8 @@ class EventValidationTests(unittest.TestCase):
             second = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", copy.deepcopy(payload))
 
             self.assertEqual(first["status"], "success")
-            self.assertEqual(second, {"status": "ignored", "reason": "duplicate_event_id"})
+            self.assertEqual(second["status"], "ignored")
+            self.assertEqual(second["reason"], "duplicate_event_id")
             self.assertEqual(len(mqtt.published), 1)
 
     def test_abnormal_event_missing_image_uses_care_safe_prompt(self):
@@ -301,8 +324,9 @@ class EventValidationTests(unittest.TestCase):
 
             result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", payload)
 
-            self.assertEqual(result["status"], "success")
-            self.assertEqual([action["type"] for action in mqtt.published[0][1]["actions"]], ["speak"])
+            self.assertEqual(result["status"], "rejected")
+            self.assertEqual(result["reason"], "missing_image")
+            self.assertEqual(mqtt.published, [])
 
 
     def test_asr_event_builds_care_context_before_hermes_invocation(self):
@@ -340,7 +364,7 @@ class EventValidationTests(unittest.TestCase):
             self.assertEqual(care_context["active_reminders"][0]["reminder_id"], "rem_morning_medication")
             self.assertEqual(care_context["relevant_events"][0]["event_id"], "evt_prior_l2")
 
-    def test_abnormal_event_keeps_care_context_and_model_out_of_first_turn(self):
+    def test_abnormal_event_passes_care_context_to_resident_hermes_on_first_turn(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             bridge_root = root / "temi_shared"
@@ -367,7 +391,9 @@ class EventValidationTests(unittest.TestCase):
             result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", copy.deepcopy(payload))
 
             self.assertEqual(result["status"], "success")
-            self.assertEqual(hermes.requests, [])
+            self.assertEqual(len(hermes.requests), 1)
+            self.assertEqual(hermes.requests[0].source_type, "perception.abnormal")
+            self.assertIsNotNone(hermes.requests[0].care_context)
             self.assertEqual(len(mqtt.published), 1)
 
     def test_memory_actions_are_not_published_to_mqtt_with_care_context_enabled(self):

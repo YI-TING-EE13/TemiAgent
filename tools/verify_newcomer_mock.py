@@ -10,6 +10,7 @@ results, and writes all evidence below the configured external runtime root.
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -32,6 +33,7 @@ import demo_lifecycle as demo  # noqa: E402
 from create_mock_event_images import JPEG_1X1, build_event  # noqa: E402
 from hermes_temi_bridge.media_callback_socket import invoke_media_callback_socket  # noqa: E402
 from hermes_temi_bridge.memory_store import StructuredMemoryStore  # noqa: E402
+from hermes_temi_bridge.abnormal_notification import AbnormalNotificationDispatcher  # noqa: E402
 
 
 class ScenarioFailure(RuntimeError):
@@ -99,7 +101,12 @@ def _event(config: demo.DemoConfig, event_id: str, text: str) -> dict[str, Any]:
     )
 
 
-def _abnormal(config: demo.DemoConfig, event_id: str, action_name: str, *, delivered: bool = False) -> dict[str, Any]:
+def _abnormal(config: demo.DemoConfig, event_id: str, event_type: str) -> dict[str, Any]:
+    labels = {
+        "falls_down": "falls down",
+        "lies_on_floor": "lies on the floor",
+        "fight": "fights",
+    }
     evidence = config.shared_root / "events" / config.robot_id / event_id / "abnormal.jpg"
     evidence.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     evidence.write_bytes(JPEG_1X1)
@@ -109,11 +116,18 @@ def _abnormal(config: demo.DemoConfig, event_id: str, action_name: str, *, deliv
         "event_id": event_id,
         "robot_id": config.robot_id,
         "timestamp_ms": int(time.time() * 1000),
-        "observation": {"action_name": action_name, "reason": "newcomer deterministic abnormal test"},
+        "event_type": event_type,
+        "observation": {"action_name": labels[event_type], "reason": "newcomer deterministic abnormal test"},
         "evidence": {"frame_paths": [str(evidence)]},
+        "context": {
+            "source": "newcomer_mock_verifier",
+            "test": True,
+            "resident_id": "test-resident",
+            "request_id": f"req_{event_id}",
+            "run_id": "newcomer-mock",
+            "scenario_id": event_id,
+        },
     }
-    if delivered:
-        payload["notification"] = {"immediate_alert": {"transport": "discord_webhook", "status": "delivered", "target_class": "newcomer_mock"}}
     return payload
 
 
@@ -150,15 +164,6 @@ def _wait_command_result_trace(path: Path, command_id: str, *, timeout: float = 
     raise ScenarioFailure(f"Bridge did not consume command result {command_id}")
 
 
-def _post_mock_discord(config: demo.DemoConfig) -> None:
-    if config.mock_discord_url is None:
-        raise ScenarioFailure("mock Discord endpoint is not configured")
-    request = Request(config.mock_discord_url, data=b'{"content":"[TEST] newcomer receipt"}', headers={"Content-Type": "application/json"}, method="POST")
-    with urlopen(request, timeout=5) as response:
-        if response.status != 204 or response.headers.get("X-Newcomer-Mock") != "discord":
-            raise ScenarioFailure("mock Discord did not produce the expected local receipt")
-
-
 def _seed_reminder(config: demo.DemoConfig) -> None:
     """Seed one synthetic reminder through the public Bridge memory-store API."""
     store = StructuredMemoryStore(config.memory_dir)
@@ -192,19 +197,71 @@ def _media(config: demo.DemoConfig, capture: Capture, event_id: str) -> None:
 
 
 def _verify_discord_matrix(config: demo.DemoConfig, work_dir: Path) -> dict[str, Any]:
+    """Exercise the Bridge transport adapter against only the local mock server."""
     if config.mock_discord_url is None:
         raise ScenarioFailure("mock Discord endpoint is not configured")
-    completed = subprocess.run(
-        [str(ROOT / "anomaly_detection" / ".venv" / "bin" / "python"), str(ROOT / "tools" / "mocks" / "verify_discord_delivery.py"), "--endpoint", config.mock_discord_url, "--work-dir", str(work_dir)],
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=35,
+    work_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    statuses = (204, 401, 403, 404, 429)
+    results: dict[str, str] = {}
+    for status in statuses:
+        credential = work_dir / f"discord-{status}.env"
+        credential.write_text(
+            f"DISCORD_WEBHOOK_URL={config.mock_discord_url}?status={status}\n",
+            encoding="utf-8",
+        )
+        credential.chmod(0o600)
+        bridge_config = replace(
+            demo_bridge_config(config),
+            abnormal_notification_mode="discord_webhook",
+            abnormal_notification_discord_env_path=credential.as_posix(),
+        )
+        dispatcher = AbnormalNotificationDispatcher(bridge_config)
+        receipt = dispatcher.dispatch(
+            stage="initial_alert",
+            event_id=f"evt-discord-{status}",
+            event_type="falls_down",
+            robot_id=config.robot_id,
+            run_id=None,
+            scenario_id=None,
+            is_test=False,
+        )
+        expected = "delivered" if status == 204 else "failed"
+        if receipt.get("status") != expected:
+            raise ScenarioFailure(f"Bridge Discord adapter did not classify HTTP {status}: {receipt}")
+        results[str(status)] = str(receipt.get("failure_code"))
+    timeout_credential = work_dir / "discord-timeout.env"
+    timeout_credential.write_text(
+        f"DISCORD_WEBHOOK_URL={config.mock_discord_url}?delay=2\n",
+        encoding="utf-8",
     )
-    if completed.returncode:
-        raise ScenarioFailure(f"Discord failure matrix failed: {completed.stderr.strip() or completed.stdout.strip()}")
-    return json.loads(completed.stdout)
+    timeout_credential.chmod(0o600)
+    timeout_config = replace(
+        demo_bridge_config(config),
+        abnormal_notification_mode="discord_webhook",
+        abnormal_notification_discord_env_path=timeout_credential.as_posix(),
+        abnormal_notification_timeout_seconds=1,
+    )
+    timeout_receipt = AbnormalNotificationDispatcher(timeout_config).dispatch(
+        stage="initial_alert",
+        event_id="evt-discord-timeout",
+        event_type="falls_down",
+        robot_id=config.robot_id,
+        run_id=None,
+        scenario_id=None,
+        is_test=False,
+    )
+    results["timeout"] = str(timeout_receipt.get("failure_code"))
+    return results
+
+
+def demo_bridge_config(config: demo.DemoConfig):
+    """Build the minimal BridgeConfig used only by the loopback HTTP matrix."""
+    from hermes_temi_bridge.config import BridgeConfig
+
+    return BridgeConfig(
+        robot_id_allowlist=(config.robot_id,),
+        abnormal_notification_test_recipient_authorized=False,
+    )
 
 
 def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
@@ -242,7 +299,7 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
         _wait_legacy(capture, s3)
         results["S3_discomfort_care_first"] = "PASS"
 
-        # S4 uses the Bridge's existing consent-first abnormal handler, not the resident double.
+        # S4 validates a canonical event, records a Demo mock receipt, then invokes Resident Hermes.
         for index, category in enumerate(("falls_down", "lies_on_floor", "fight"), start=1):
             event_id = f"s4_{index}_{category}"
             capture.publish("perception/abnormal", _abnormal(config, event_id, category))
@@ -252,10 +309,9 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
             _wait_legacy(capture, decline_id)
         results["S4_abnormal_care_first"] = "PASS"
 
-        # S5 records a real local mock receipt before the existing Bridge follows up.
-        _post_mock_discord(config)
+        # S5 reuses the initial Bridge-owned mock receipt; affirmative speech does not create another alert.
         s5 = "s5_affirmative_abnormal"
-        capture.publish("perception/abnormal", _abnormal(config, s5, "falls_down", delivered=True))
+        capture.publish("perception/abnormal", _abnormal(config, s5, "falls_down"))
         _wait_legacy(capture, s5)
         s5_yes = "s5_affirmative_followup"
         capture.publish("asr/final", _event(config, s5_yes, "要，請通知家人"))

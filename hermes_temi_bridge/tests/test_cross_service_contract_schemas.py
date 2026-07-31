@@ -97,6 +97,34 @@ class CrossServiceContractSchemaTests(unittest.TestCase):
         }
         self.assert_schema("temi_command_request.schema.json", payload)
 
+    def test_abnormal_perception_event_requires_canonical_type_and_test_metadata(self):
+        legal = {
+            "schema_version": "1.0",
+            "event_id": "evt_abnormal_schema_001",
+            "robot_id": "temi-01",
+            "type": "perception.abnormal",
+            "event_type": "falls_down",
+            "timestamp_ms": 1785600000000,
+            "observation": {"action_name": "falls down", "reason": "synthetic acceptance event"},
+            "evidence": {"frame_paths": ["/runtime/shared/abnormal_events/frame_000.jpg"]},
+            "context": {
+                "source": "formal_demo_injector",
+                "test": True,
+                "resident_id": "test-resident",
+                "request_id": "req_abnormal_schema_001",
+                "run_id": "run-schema",
+                "scenario_id": "A1",
+            },
+        }
+        self.assert_schema("perception_abnormal_event.schema.json", legal)
+        self.assert_schema(
+            "perception_abnormal_event.schema.json",
+            {**legal, "event_type": "falls down"},
+            False,
+        )
+        invalid_test = {**legal, "context": {"source": "formal_demo_injector", "test": True}}
+        self.assert_schema("perception_abnormal_event.schema.json", invalid_test, False)
+
     def video_command(self, **overrides):
         payload = {
             "schema_version": "1.1",

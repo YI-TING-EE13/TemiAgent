@@ -28,6 +28,11 @@ def _plan(event_id: str, robot_id: str, language: str, text: str, prompt: str) -
         level = "L2"
         reason = "A test abnormal observation requires a consent-first safety question."
         action = [{"action_id": "act_001", "type": "speak", "text": "我注意到你可能需要協助。你現在安全嗎？需要我通知家人或照護者嗎？", "language": language}]
+    elif "source_type: care.follow_up" in prompt:
+        intent = "abnormal_care_follow_up"
+        level = "L2"
+        reason = "A test abnormal-care episode needs a bounded follow-up response."
+        action = [{"action_id": "act_001", "type": "speak", "text": "我會繼續關心你的狀況。請先留在安全的位置；需要協助時請直接告訴我。", "language": language}]
     elif text == "__unsupported_action__":
         # Deliberate failure injection: the Bridge validator must reject this
         # before it reaches the Android test double.

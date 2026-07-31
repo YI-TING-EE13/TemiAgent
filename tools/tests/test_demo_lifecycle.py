@@ -49,9 +49,6 @@ class DemoLifecycleConfigTests(unittest.TestCase):
                     f"HERMES_MEDIA_FAST_PATH_ENABLED={flags[2]}",
                 ]
         if viewer_enabled:
-            discord_env = root / "discord.env"
-            discord_env.write_text("DISCORD_WEBHOOK_URL=test-placeholder\n", encoding="utf-8")
-            discord_env.chmod(0o600)
             lines.extend(
                 [
                     "DEMO_ACTION_VIEWER_ENABLED=true",
@@ -60,8 +57,7 @@ class DemoLifecycleConfigTests(unittest.TestCase):
                     "DEMO_ACTION_VIEWER_MMPROJ_PATH=/tmp/test.mmproj",
                     "DEMO_ACTION_VIEWER_LLAMA_SERVER=/tmp/llama-server",
                     "DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH=enabled",
-                    "DEMO_ACTION_VIEWER_DISCORD_NOTIFY=enabled",
-                    f"DEMO_ACTION_VIEWER_DISCORD_ENV_PATH={discord_env}",
+                    "DEMO_ACTION_VIEWER_DISCORD_NOTIFY=disabled",
                 ]
             )
         config.write_text(
@@ -135,7 +131,7 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(demo.DemoError, "HERMES_MEDIA_FAST_PATH_ENABLED"):
                 demo.load_config(config)
 
-    def test_viewer_flags_are_forwarded_after_private_config_reload(self) -> None:
+    def test_viewer_abnormal_event_flags_are_forwarded_without_discord_route(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config_path = self.make_config(Path(temporary), viewer_enabled=True)
             config = demo.load_config(config_path)
@@ -146,14 +142,24 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             viewer_argv[viewer_argv.index("--abnormal-publish") + 1],
             "enabled",
         )
-        self.assertEqual(
-            viewer_argv[viewer_argv.index("--discord-notify") + 1],
-            "enabled",
-        )
-        self.assertEqual(
-            viewer_argv[viewer_argv.index("--discord-env-path") + 1],
-            str(config.viewer_discord_env_path),
-        )
+        self.assertNotIn("--discord-notify", viewer_argv)
+        self.assertNotIn("--discord-env-path", viewer_argv)
+
+    def test_viewer_discord_flag_is_rejected_before_service_start(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config_path = self.make_config(Path(temporary), viewer_enabled=True)
+            with config_path.open("a", encoding="utf-8") as handle:
+                handle.write("DEMO_ACTION_VIEWER_DISCORD_NOTIFY=enabled\n")
+            with self.assertRaisesRegex(demo.DemoError, "Bridge owns"):
+                demo.load_config(config_path)
+
+    def test_demo_mock_notification_requires_both_explicit_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config_path = self.make_config(Path(temporary))
+            with config_path.open("a", encoding="utf-8") as handle:
+                handle.write("ABNORMAL_NOTIFICATION_MODE=demo_mock\nDEMO_NOTIFICATION_MOCK_ENABLED=true\n")
+            with self.assertRaisesRegex(demo.DemoError, "both Demo notification mock flags"):
+                demo.load_config(config_path)
 
     def test_managed_ownership_requires_a_broker_config(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -214,6 +214,8 @@ def build_prompt(request: HermesRequest) -> str:
     """Build the deterministic prompt sent to Hermes for one event."""
     if request.source_type == "perception.abnormal":
         return build_abnormal_prompt(request)
+    if request.source_type == "care.follow_up":
+        return build_care_follow_up_prompt(request)
     return build_asr_prompt(request)
 
 
@@ -359,10 +361,10 @@ Evidence frames:
 
 Instructions:
 - Treat this as a low-frequency abnormal perception event, not an ASR event.
-- The Bridge owns the consent-first abnormal-care response. Do not claim that a family member,
-  caregiver, Discord, phone, or emergency service has been contacted.
-- If this prompt is used for a degraded compatibility path, emit only one speak action that asks
-  whether the person is safe and wants help notifying a family member or caregiver.
+- The Bridge owns notification delivery and command dispatch. Do not claim that a family member,
+  caregiver, Discord, phone, or emergency service has been contacted unless a later Bridge context
+  explicitly confirms a delivery receipt.
+- Emit one care-first speak action that asks whether the person is safe and needs help.
 - Output ONLY valid JSON.
 - Do not output Markdown.
 - Do not include explanations outside JSON.
@@ -398,6 +400,53 @@ Required output JSON schema:
 }}
 
 Every action object MUST include action_id. Use act_001, act_002, and so on.
+"""
+
+
+def build_care_follow_up_prompt(request: HermesRequest) -> str:
+    """Build a constrained Hermes request for an existing abnormal-care episode."""
+    care_context = request.care_context or {}
+    response_class = str(care_context.get("response_class") or "timeout")
+    notification_status = str(
+        care_context.get("notification_status")
+        or care_context.get("initial_notification_status")
+        or "unconfirmed"
+    )
+    return f"""You are the resident Hermes care assistant for an existing Temi abnormal-care episode.
+
+Task source:
+- source_type: care.follow_up
+- robot_id: {request.robot_id}
+- event_id: {request.event_id}
+- response_class: {response_class}
+- notification_status: {notification_status}
+
+The Bridge, not Hermes, controls notification delivery and robot commands. Reply with exactly one
+short, compassionate, non-diagnostic speak action. If response_class is needs_assistance or
+escalated, say a care team was notified only when notification_status is delivered or
+mock_delivered; otherwise say that delivery could not be confirmed. If response_class is okay,
+make one short safety recheck before resolving. If ambiguous or unresolved, ask one clear question
+and keep the episode active. If timeout, ask one final safety check without claiming anyone was
+contacted.
+
+Output ONLY valid JSON. Do not output Markdown. Do not use any action other than speak. Do not
+diagnose injuries, guarantee detection, or invoke a notification action.
+
+Required output JSON schema:
+{{
+  "schema_version": "1.0",
+  "event_id": "{request.event_id}",
+  "robot_id": "{request.robot_id}",
+  "confidence": 0.0,
+  "cognitive_state": {{
+    "intent": "brief intent",
+    "home_esi_level": "Normal|L1|L2|L3",
+    "risk_reason": "brief non-diagnostic reason",
+    "next_step": "speak"
+  }},
+  "reasoning_summary": "brief non-sensitive summary",
+  "actions": [{{"action_id":"act_001","type":"speak","text":"response text","language":"{request.language}"}}]
+}}
 """
 
 

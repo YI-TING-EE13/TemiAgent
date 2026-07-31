@@ -4,7 +4,12 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from hermes_temi_bridge.care_confirmation import PendingCareConfirmationStore, classify_care_confirmation_response
+from hermes_temi_bridge.care_confirmation import (
+    PendingCareConfirmationStore,
+    classify_care_confirmation_response,
+    classify_care_episode_response,
+)
+from hermes_temi_bridge.care_episode import AWAITING_FIRST_RESPONSE, ESCALATION_SENT, NO_RESPONSE, RESOLVED
 from hermes_temi_bridge.config import BridgeConfig
 from hermes_temi_bridge.hermes_client import HermesResponse
 from hermes_temi_bridge.idempotency import TTLProcessedEventCache
@@ -87,6 +92,10 @@ class AbnormalCareConfirmationTests(unittest.TestCase):
                 memory_dir=(root / "memory").as_posix(),
                 log_dir=(root / "logs").as_posix(),
                 abnormal_care_confirmation_ttl_seconds=60,
+                abnormal_notification_mode="demo_mock",
+                demo_notification_mock_enabled=True,
+                demo_notification_receipt_enabled=True,
+                demo_test_event_ingress_enabled=True,
             ),
             mqtt,
             hermes,
@@ -94,7 +103,7 @@ class AbnormalCareConfirmationTests(unittest.TestCase):
         )
         return service, mqtt, hermes
 
-    def test_first_turn_for_all_canonical_categories_is_one_care_speak(self):
+    def test_first_turn_for_all_canonical_categories_alerts_then_invokes_hermes_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             for index, category in enumerate(("falls down", "lies on the floor", "fights")):
@@ -102,29 +111,38 @@ class AbnormalCareConfirmationTests(unittest.TestCase):
                 payload = make_abnormal(root / str(index), f"evt_care_{index}")
                 payload["observation"]["action_name"] = category
                 result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", payload)
-                self.assertEqual(result["care_confirmation"], "pending")
-                self.assertEqual(hermes.requests, [])
+                self.assertEqual(result["care_episode"], AWAITING_FIRST_RESPONSE)
+                self.assertEqual(result["notification_receipt"]["status"], "mock_delivered")
+                self.assertEqual(len(hermes.requests), 1)
                 self.assertEqual([action["type"] for action in mqtt.published[0][1]["actions"]], ["speak"])
                 self.assertNotIn("不支援", mqtt.published[0][1]["actions"][0]["text"])
 
-    def test_affirmative_receipt_uses_existing_alert_without_duplicate_notification_action(self):
+    def test_resident_needs_assistance_creates_one_status_update_and_continues_care(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             service, mqtt, hermes = self.make_service(root)
             abnormal = make_abnormal(root)
-            abnormal["notification"] = {
-                "immediate_alert": {"transport": "discord_webhook", "status": "delivered", "target_class": "unverified_direct_alert"}
-            }
             service.handle_abnormal_payload("temi/temi-01/perception/abnormal", abnormal)
             result = service.handle_asr_payload(
                 "temi/temi-01/asr/final", make_asr(root, "evt_follow_yes", "請通知家人")
             )
-            self.assertEqual(result["care_confirmation"], "notification_already_sent")
-            self.assertEqual(hermes.requests, [])
+            self.assertEqual(result["care_episode"], AWAITING_FIRST_RESPONSE)
+            self.assertEqual(result["response_class"], "needs_assistance")
+            self.assertEqual(result["notification_receipt"]["status"], "mock_delivered")
+            self.assertEqual(len(hermes.requests), 2)
             self.assertEqual(len(mqtt.published), 2)
             self.assertEqual([action["type"] for action in mqtt.published[-1][1]["actions"]], ["speak"])
+            episode = service.care_episode_store.get("evt_abnormal_care")
+            self.assertEqual(episode.notification_stages["status_update"]["receipt"]["status"], "mock_delivered")
 
-    def test_decline_and_ambiguous_answers_resolve_without_notification_action(self):
+            duplicate_stage = service.handle_asr_payload(
+                "temi/temi-01/asr/final", make_asr(root, "evt_follow_need_again", "我還是需要幫忙")
+            )
+            self.assertEqual(duplicate_stage["notification_receipt"]["failure_code"], "DEMO_MOCK_DELIVERED")
+            episode = service.care_episode_store.get("evt_abnormal_care")
+            self.assertEqual(len(episode.notification_stages), 2)
+
+    def test_ambiguous_and_okay_answers_keep_the_episode_active_until_a_short_recheck(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             service, mqtt, _ = self.make_service(root)
@@ -132,11 +150,15 @@ class AbnormalCareConfirmationTests(unittest.TestCase):
             ambiguous = service.handle_asr_payload(
                 "temi/temi-01/asr/final", make_asr(root, "evt_follow_ambiguous", "嗯")
             )
-            self.assertEqual(ambiguous["care_confirmation"], "pending")
-            declined = service.handle_asr_payload(
-                "temi/temi-01/asr/final", make_asr(root, "evt_follow_no", "不用了")
+            self.assertEqual(ambiguous["care_episode"], AWAITING_FIRST_RESPONSE)
+            okay = service.handle_asr_payload(
+                "temi/temi-01/asr/final", make_asr(root, "evt_follow_okay", "我沒事")
             )
-            self.assertEqual(declined["care_confirmation"], "declined")
+            self.assertEqual(okay["care_episode"], AWAITING_FIRST_RESPONSE)
+            confirmed = service.handle_asr_payload(
+                "temi/temi-01/asr/final", make_asr(root, "evt_follow_okay_confirmed", "我真的沒事")
+            )
+            self.assertEqual(confirmed["care_episode"], RESOLVED)
             self.assertTrue(all(action["type"] == "speak" for _, command in mqtt.published for action in command["actions"]))
 
     def test_low_confidence_is_not_treated_as_consent_and_unrelated_asr_reaches_hermes(self):
@@ -147,12 +169,92 @@ class AbnormalCareConfirmationTests(unittest.TestCase):
             low_confidence = service.handle_asr_payload(
                 "temi/temi-01/asr/final", make_asr(root, "evt_low_confidence", "要", confidence=0.1)
             )
-            self.assertEqual(low_confidence["care_confirmation"], "pending")
+            self.assertEqual(low_confidence["care_episode"], AWAITING_FIRST_RESPONSE)
             unrelated = service.handle_asr_payload(
                 "temi/temi-01/asr/final", make_asr(root, "evt_unrelated", "今天天氣如何")
             )
             self.assertEqual(unrelated["status"], "success")
-            self.assertEqual(len(hermes.requests), 1)
+            self.assertEqual(len(hermes.requests), 3)
+
+    def test_timeout_progression_rechecks_with_hermes_then_sends_one_mock_escalation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service, mqtt, hermes = self.make_service(root)
+            service.handle_abnormal_payload("temi/temi-01/perception/abnormal", make_abnormal(root))
+            episode = service.care_episode_store.get("evt_abnormal_care")
+            self.assertIsNotNone(episode)
+            service.process_abnormal_episode_timeouts(
+                now_monotonic_ms=episode.first_response_deadline_monotonic_ms
+            )
+            after_follow_up = service.care_episode_store.get("evt_abnormal_care")
+            self.assertEqual(after_follow_up.status, NO_RESPONSE)
+            self.assertEqual(len(hermes.requests), 2)
+            service.process_abnormal_episode_timeouts(
+                now_monotonic_ms=after_follow_up.escalation_deadline_monotonic_ms
+            )
+            escalated = service.care_episode_store.get("evt_abnormal_care")
+            self.assertEqual(escalated.status, ESCALATION_SENT)
+            self.assertEqual(escalated.notification_stages["escalation"]["receipt"]["status"], "mock_delivered")
+            self.assertEqual(len(mqtt.published), 3)
+
+    def test_unknown_test_resident_is_rejected_before_notification_or_hermes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service, mqtt, hermes = self.make_service(root)
+            abnormal = make_abnormal(root)
+            abnormal["event_type"] = "falls_down"
+            abnormal["context"] = {
+                "source": "formal_demo_injector",
+                "test": True,
+                "resident_id": "unapproved-test-resident",
+                "request_id": "req-unknown",
+                "run_id": "run-unknown",
+                "scenario_id": "A10",
+            }
+            result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", abnormal)
+            self.assertEqual(result, {"status": "rejected", "reason": "unknown_test_resident"})
+            self.assertEqual(mqtt.published, [])
+            self.assertEqual(hermes.requests, [])
+
+    def test_test_event_ingress_is_rejected_when_the_explicit_gate_is_disabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service, mqtt, hermes = self.make_service(root)
+            service.config = BridgeConfig(
+                **{
+                    **service.config.__dict__,
+                    "demo_test_event_ingress_enabled": False,
+                }
+            )
+            abnormal = make_abnormal(root)
+            abnormal["event_type"] = "falls_down"
+            abnormal["context"] = {
+                "source": "formal_demo_injector",
+                "test": True,
+                "resident_id": "test-resident",
+                "request_id": "req-disabled",
+                "run_id": "run-disabled",
+                "scenario_id": "A1",
+            }
+            result = service.handle_abnormal_payload("temi/temi-01/perception/abnormal", abnormal)
+            self.assertEqual(result, {"status": "rejected", "reason": "test_event_ingress_disabled"})
+            self.assertEqual(mqtt.published, [])
+            self.assertEqual(hermes.requests, [])
+
+    def test_restart_preserves_initial_receipt_and_replays_no_notification_or_speak(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first_service, first_mqtt, first_hermes = self.make_service(root)
+            abnormal = make_abnormal(root, "evt_restart")
+            first_service.handle_abnormal_payload("temi/temi-01/perception/abnormal", abnormal)
+            self.assertEqual(len(first_mqtt.published), 1)
+            self.assertEqual(len(first_hermes.requests), 1)
+
+            restarted_service, restarted_mqtt, restarted_hermes = self.make_service(root)
+            replay = restarted_service.handle_abnormal_payload("temi/temi-01/perception/abnormal", abnormal)
+            self.assertEqual(replay["status"], "ignored")
+            self.assertEqual(restarted_mqtt.published, [])
+            self.assertEqual(restarted_hermes.requests, [])
 
     def test_store_expiry_and_classification_are_bounded(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -165,6 +267,8 @@ class AbnormalCareConfirmationTests(unittest.TestCase):
             self.assertEqual(classify_care_confirmation_response("要", 0.1, 0.7), "ambiguous")
             self.assertEqual(classify_care_confirmation_response("不用了", 0.9, 0.7), "declined")
             self.assertEqual(classify_care_confirmation_response("請通知家人", 0.9, 0.7), "accepted")
+            self.assertEqual(classify_care_episode_response("我頭很暈，需要幫忙", 0.9, 0.7), "needs_assistance")
+            self.assertEqual(classify_care_episode_response("我沒事", 0.9, 0.7), "okay")
 
 
 if __name__ == "__main__":

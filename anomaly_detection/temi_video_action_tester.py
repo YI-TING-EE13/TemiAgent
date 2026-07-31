@@ -15,7 +15,6 @@ from aiohttp import ClientSession
 
 from temi_action_viewer import (
     DEFAULT_GGUF_MODEL_PATH,
-    DEFAULT_DISCORD_ENV_PATH,
     DEFAULT_LLAMA_SERVER_PATH,
     DEFAULT_MMPROJ_PATH,
     BufferedFrame,
@@ -173,9 +172,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--abnormal-cooldown-seconds", type=float, default=0.0)
     parser.add_argument("--abnormal-source", default="temi_video_action_tester")
     parser.add_argument("--shared-root", default="/TemiAgent/temi_shared")
-    parser.add_argument("--discord-notify", choices=["enabled", "disabled"], default="enabled")
-    parser.add_argument("--discord-env-path", default=DEFAULT_DISCORD_ENV_PATH)
-    parser.add_argument("--discord-max-files", type=int, default=8)
     parser.add_argument("--pre-alert-speak", choices=["enabled", "disabled"], default="disabled")
     parser.add_argument("--pre-alert-language", default="zh-TW")
     parser.add_argument("--model", default="gemma-4-e4b-finetuned@q8_0")

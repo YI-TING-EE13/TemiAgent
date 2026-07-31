@@ -24,6 +24,11 @@ CARE_UNRESOLVED = "我還無法確認你的意思。如果需要協助，請直�
 CARE_EXISTING_ALERT_DELIVERED = "我已確認既有通知管道已送出提醒，請先不要勉強移動。"
 CARE_NOTIFICATION_UNAVAILABLE = "我目前無法確認通知是否送出。請附近的人協助，或再告訴我一次。"
 
+ASSISTANCE_TERMS = (
+    "不舒服", "頭暈", "跌倒", "站不起來", "需要幫忙", "需要協助",
+    "幫我通知", "請通知", "通知家人", "通知照護者",
+)
+OKAY_TERMS = ("我沒事", "沒事", "不用幫忙", "不用了", "不需要", "不用", "只是坐在")
 AFFIRMATIVE_TERMS = ("幫我通知", "請通知", "通知家人", "通知照護者", "需要", "可以", "要", "好")
 NEGATIVE_TERMS = ("不要通知", "不用了", "不需要", "不用", "我沒事", "沒事", "不要")
 AMBIGUOUS_TERMS = ("不知道", "不確定", "等一下", "可能", "嗯")
@@ -48,6 +53,24 @@ def classify_care_confirmation_response(
         return "declined"
     if any(term in normalized for term in AFFIRMATIVE_TERMS):
         return "accepted"
+    if any(term in normalized for term in AMBIGUOUS_TERMS):
+        return "ambiguous"
+    return "unrelated"
+
+
+def classify_care_episode_response(
+    text: str,
+    confidence: float | None,
+    minimum_confidence: float,
+) -> str:
+    """Classify a care-episode reply without changing legacy confirmation semantics."""
+    if confidence is None or confidence < minimum_confidence:
+        return "ambiguous"
+    normalized = re.sub(r"[\s，。！？、,.!?]", "", text).lower()
+    if any(term in normalized for term in ASSISTANCE_TERMS):
+        return "needs_assistance"
+    if any(term in normalized for term in OKAY_TERMS):
+        return "okay"
     if any(term in normalized for term in AMBIGUOUS_TERMS):
         return "ambiguous"
     return "unrelated"

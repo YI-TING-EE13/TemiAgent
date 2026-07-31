@@ -94,6 +94,18 @@ class BridgeConfig:
     abnormal_care_confirmation_enabled: bool = True
     abnormal_care_confirmation_ttl_seconds: int = 120
     abnormal_care_confirmation_min_asr_confidence: float = 0.70
+    abnormal_care_episode_enabled: bool = True
+    abnormal_care_first_response_timeout_seconds: int = 120
+    abnormal_care_second_response_timeout_seconds: int = 120
+    abnormal_care_timeout_poll_seconds: int = 5
+    abnormal_notification_mode: str = "disabled"
+    abnormal_notification_discord_env_path: str = ""
+    abnormal_notification_timeout_seconds: int = 15
+    abnormal_notification_test_recipient_authorized: bool = False
+    demo_notification_mock_enabled: bool = False
+    demo_notification_receipt_enabled: bool = False
+    demo_test_event_ingress_enabled: bool = False
+    demo_test_resident_allowlist: tuple[str, ...] = ("test-resident",)
     media_v11_enabled: bool = False
     hermes_media_tool_enabled: bool = False
     demo_care_scenario_prompt_enabled: bool = False
@@ -148,11 +160,54 @@ class BridgeConfig:
             raise ValueError(
                 "ABNORMAL_CARE_CONFIRMATION_MIN_ASR_CONFIDENCE must be between 0 and 1"
             )
+        if self.abnormal_care_first_response_timeout_seconds <= 0:
+            raise ValueError("ABNORMAL_CARE_FIRST_RESPONSE_TIMEOUT_SECONDS must be positive")
+        if self.abnormal_care_second_response_timeout_seconds <= 0:
+            raise ValueError("ABNORMAL_CARE_SECOND_RESPONSE_TIMEOUT_SECONDS must be positive")
+        if self.abnormal_care_timeout_poll_seconds <= 0:
+            raise ValueError("ABNORMAL_CARE_TIMEOUT_POLL_SECONDS must be positive")
+        if self.abnormal_notification_timeout_seconds <= 0:
+            raise ValueError("ABNORMAL_NOTIFICATION_TIMEOUT_SECONDS must be positive")
+        if self.abnormal_notification_mode not in {"disabled", "discord_webhook", "demo_mock"}:
+            raise ValueError("ABNORMAL_NOTIFICATION_MODE must be disabled, discord_webhook, or demo_mock")
+        if self.abnormal_notification_mode == "demo_mock" and not (
+            self.demo_notification_mock_enabled and self.demo_notification_receipt_enabled
+        ):
+            raise ValueError(
+                "ABNORMAL_NOTIFICATION_MODE=demo_mock requires both Demo notification mock flags"
+            )
+        if self.abnormal_notification_mode == "discord_webhook" and not self.abnormal_notification_discord_env_path:
+            raise ValueError(
+                "ABNORMAL_NOTIFICATION_MODE=discord_webhook requires ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH"
+            )
+        if self.demo_notification_mock_enabled and self.abnormal_notification_mode != "demo_mock":
+            raise ValueError("DEMO_NOTIFICATION_MOCK_ENABLED=true requires ABNORMAL_NOTIFICATION_MODE=demo_mock")
+        if self.demo_notification_receipt_enabled and not self.demo_notification_mock_enabled:
+            raise ValueError("DEMO_NOTIFICATION_RECEIPT_ENABLED=true requires DEMO_NOTIFICATION_MOCK_ENABLED=true")
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> "BridgeConfig":
         """Build configuration from process environment and an optional env file."""
         values = _read_env_file(Path(env_file))
+        configured_notification_mode = os.getenv(
+            "ABNORMAL_NOTIFICATION_MODE", values.get("ABNORMAL_NOTIFICATION_MODE", "")
+        ).strip().lower()
+        if configured_notification_mode:
+            notification_mode = configured_notification_mode
+        else:
+            legacy_event_publish_enabled = _get_bool(
+                values, "ABNORMAL_EVENT_PUBLISH_ENABLED", True
+            )
+            legacy_discord_enabled = _get_bool(values, "DISCORD_NOTIFY_ENABLED", False)
+            notification_mode = (
+                "discord_webhook"
+                if legacy_event_publish_enabled and legacy_discord_enabled
+                else cls.abnormal_notification_mode
+            )
+        notification_env_path = os.getenv(
+            "ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH",
+            values.get("ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH", ""),
+        ) or os.getenv("DISCORD_ENV_FILE", values.get("DISCORD_ENV_FILE", ""))
         username = os.getenv("MQTT_USERNAME", values.get("MQTT_USERNAME", "")) or None
         password = os.getenv("MQTT_PASSWORD", values.get("MQTT_PASSWORD", "")) or None
         legacy_operator_identity_enabled = _get_bool(
@@ -237,6 +292,50 @@ class BridgeConfig:
                 values,
                 "ABNORMAL_CARE_CONFIRMATION_MIN_ASR_CONFIDENCE",
                 cls.abnormal_care_confirmation_min_asr_confidence,
+            ),
+            abnormal_care_episode_enabled=_get_bool(
+                values, "ABNORMAL_CARE_EPISODE_ENABLED", cls.abnormal_care_episode_enabled
+            ),
+            abnormal_care_first_response_timeout_seconds=_get_int(
+                values,
+                "ABNORMAL_CARE_FIRST_RESPONSE_TIMEOUT_SECONDS",
+                cls.abnormal_care_first_response_timeout_seconds,
+            ),
+            abnormal_care_second_response_timeout_seconds=_get_int(
+                values,
+                "ABNORMAL_CARE_SECOND_RESPONSE_TIMEOUT_SECONDS",
+                cls.abnormal_care_second_response_timeout_seconds,
+            ),
+            abnormal_care_timeout_poll_seconds=_get_int(
+                values,
+                "ABNORMAL_CARE_TIMEOUT_POLL_SECONDS",
+                cls.abnormal_care_timeout_poll_seconds,
+            ),
+            abnormal_notification_mode=notification_mode,
+            abnormal_notification_discord_env_path=notification_env_path,
+            abnormal_notification_timeout_seconds=_get_int(
+                values,
+                "ABNORMAL_NOTIFICATION_TIMEOUT_SECONDS",
+                cls.abnormal_notification_timeout_seconds,
+            ),
+            abnormal_notification_test_recipient_authorized=_get_bool(
+                values,
+                "ABNORMAL_NOTIFICATION_TEST_RECIPIENT_AUTHORIZED",
+                cls.abnormal_notification_test_recipient_authorized,
+            ),
+            demo_notification_mock_enabled=_get_bool(
+                values, "DEMO_NOTIFICATION_MOCK_ENABLED", cls.demo_notification_mock_enabled
+            ),
+            demo_notification_receipt_enabled=_get_bool(
+                values,
+                "DEMO_NOTIFICATION_RECEIPT_ENABLED",
+                cls.demo_notification_receipt_enabled,
+            ),
+            demo_test_event_ingress_enabled=_get_bool(
+                values, "DEMO_TEST_EVENT_INGRESS_ENABLED", cls.demo_test_event_ingress_enabled
+            ),
+            demo_test_resident_allowlist=tuple(
+                _get_csv(values, "DEMO_TEST_RESIDENT_ALLOWLIST", list(cls.demo_test_resident_allowlist))
             ),
             media_v11_enabled=_get_bool(values, "MEDIA_V11_ENABLED", cls.media_v11_enabled),
             hermes_media_tool_enabled=_get_bool(
