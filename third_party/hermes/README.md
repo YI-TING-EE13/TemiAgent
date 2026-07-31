@@ -27,6 +27,10 @@ reproducibility is defined by `manifest.json` plus `patches/`, not by requiring
 an unavailable private commit object. The one historical host-specific path in
 the captured source was normalized to the canonical container path
 `/TemiAgent/temi_shared/`; this is a documentation portability correction only.
+Applying the series creates local commit IDs, so a clean clone can report the
+historical gitlink as changed even when reconstruction succeeds. Treat the
+manifest tree hash and nested-clean check as the source-equivalence gate; do
+not stage that generated gitlink change in a clean-room checkout.
 
 Do not edit a patch in place without updating its manifest SHA-256 and running
 the clean-room reconstruction check. Do not add credentials, webhook URLs,

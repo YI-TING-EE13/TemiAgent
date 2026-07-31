@@ -43,6 +43,10 @@ runtime-artifact paths and timestamps.
 | `/tmp/temiagent_lms_daemon_help.txt` | `ARCHIVE_REFERENCE_ONLY` | Historical command help; no source migration. |
 | `/tmp/temiagent_main_integration_20260731_021414/` | `ARCHIVE_REFERENCE_ONLY` | Current owner-only integration acceptance evidence; retain outside Git. |
 | `/tmp/temiagent_main_integration_current` | `ARCHIVE_REFERENCE_ONLY` | Pointer to current acceptance evidence; retain outside Git. |
+| `/tmp/temiagent_clean_bootstrap_20260731_021414/` | `PENDING_USER_REVIEW` | First clean-room prototype retained after a clone checkout timing experiment; do not copy or delete. |
+| `/tmp/temiagent_clean_bootstrap_20260731_021414_v2/` | `PENDING_USER_REVIEW` | Second clean-room prototype retained after the same timing investigation; do not copy or delete. |
+| `/tmp/temiagent_clean_bootstrap_20260731_021414_v3/` | `PENDING_USER_REVIEW` | Third clean-room prototype retained while replacing clone checkout with explicit-base reconstruction; do not copy or delete. |
+| `/tmp/temiagent_clean_bootstrap_20260731_021414_v4/` | `ARCHIVE_REFERENCE_ONLY` | Final clean-room evidence: public-base reconstruction, expected tree hash, clean nested checkout and idempotent second bootstrap all passed. |
 
 No root was classified `MIGRATE_TRACKED`: all source changes needed for the
 canonical Demo were integrated through Git history or the tracked Hermes patch
@@ -65,6 +69,12 @@ truth. The active lifecycle requires `TEMIAGENT_RUNTIME_ROOT`, `MEMORY_DIR`,
 Bridge logs, shared media and callback sockets to remain below an external
 owner-only runtime root; private config and Discord credential files remain
 outside every Git worktree.
+
+The Hermes overlay verifies source equivalence by tree hash. A clean-room
+checkout can display only the historical nested gitlink as modified after a
+successful reconstruction because patch application creates local commit IDs;
+the generated gitlink must not be staged. The canonical `/TemiAgent` checkout
+is the clean source-of-record for `main`.
 
 ## Duplicates, risks and deferred ownership
 
