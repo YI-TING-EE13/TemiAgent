@@ -147,6 +147,52 @@ the changed area.
 | Media v1.1 fake Android | `cd /TemiAgent && python3 tools/media_v11_fake_e2e.py` | Request/result correlation, lifecycle, replay and trace in-process. |
 | Pinned Hermes compressor | `cd /TemiAgent/hermes-agent && venv/bin/python -m pytest tests/agent/test_context_compressor.py` | Nested overlay compressor behavior, when the pre-existing nested environment is provisioned. |
 
+## Immediate abnormal-care validation
+
+The abnormal-care flow is implemented in the Bridge and has separate
+hardware-free and external evidence requirements. Run the focused test before
+the wider matrix when the episode, notification, schema, or viewer boundary
+changes:
+
+```bash
+cd /TemiAgent/hermes_temi_bridge
+uv run python -m unittest \
+  tests.test_care_episode \
+  tests.test_abnormal_notification \
+  tests.test_abnormal_care_confirmation \
+  tests.test_event_validation \
+  tests.test_cross_service_contract_schemas
+```
+
+The focused suite verifies canonical abnormal types, persistent episode and
+stage deduplication, Resident Hermes invocation, validated speak commands,
+mock receipts, restart handling, no-response escalation, and the isolated
+HTTP 204/401/403/404/429/timeout/connection matrix. It does not establish
+real Android execution or real Discord delivery.
+
+For a Demo mock lifecycle run, start the configured lifecycle and use the
+formal injector instead of publishing an MQTT command by hand:
+
+```bash
+cd /TemiAgent
+./scripts/demo --config <PRIVATE_CONFIG> doctor
+./scripts/demo --config <PRIVATE_CONFIG> start
+./scripts/inject_demo_event \
+  --config <PRIVATE_CONFIG> \
+  --event falls_down \
+  --resident-id <TEST_RESIDENT> \
+  --run-id <RUN_ID> \
+  --scenario-id A1
+./scripts/verify_newcomer_mock --config <PRIVATE_CONFIG>
+./scripts/demo --config <PRIVATE_CONFIG> stop
+```
+
+The private configuration MUST select the explicit Demo mock notification
+route and test ingress. Retain the Bridge trace, episode state, mock receipt,
+canonical `cmd/request`, matching mock Android `cmd/result`, and final
+lifecycle stop evidence below the private acceptance root. A mock receipt is
+not real Discord delivery evidence.
+
 The operator should record command output, test count when available, and any
 environment prerequisite. A passed mock E2E is not a claim that the robot,
 camera, model, or Discord was live.

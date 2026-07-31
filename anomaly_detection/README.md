@@ -148,9 +148,10 @@ temi/{robot_id}/perception/abnormal
 
 MQTT payload 只包含 JSON metadata 和 frame paths。不包含 image bytes、confidence、confidence_source 或 severity。
 
-viewer 不再直接發布 `cmd/request` pre-alert。偵測到 canonical abnormal event 後，
-Bridge 會建立可過期的 pending confirmation，並發出唯一已支援的 `speak` 關懷提問。
-這避免 viewer 與 Bridge 同時發話，且不讓 perception bypass action validation。
+viewer 不再直接發布 `cmd/request` pre-alert、`cmd/result` 或 Discord webhook。偵測到
+canonical abnormal event 後，Bridge 驗證 evidence、保留 notification stage、呼叫 Resident
+Hermes，並只在 action validator 通過後發布 speak command。這避免 perception bypass
+action validation，也讓 reply、timeout 與 escalation 有可重啟的 episode evidence。
 
 舊的 `--pre-alert-speak enabled` 僅會在 event result 記錄
 `ABNORMAL_PRE_ALERT_BRIDGE_OWNED`；它不會發送 MQTT command。新 Demo 預設為
@@ -165,62 +166,12 @@ ABNORMAL_COOLDOWN_SECONDS=300 ./restart_action_viewer_8010.sh
 
 這個 cooldown 是全域 emergency cooldown，不依 action 類別分開計算；因此 `falls down` 和 `lies on the floor` 在 3 分鐘內互相切換時，也不會重複觸發 Hermes。
 
-Discord 通知也作為 best-effort side channel 支援。當 abnormal event 建立時，viewer/tester 可以透過以下檔案設定的 webhook 發送訊息和 evidence frame 附件：
-
-```text
-/TemiAgent/anomaly_detection/.env
-```
-
-預期環境變數名稱是：
-
-```text
-DISCORD_WEBHOOK_URL
-```
-
-Discord 通知由以下參數控制：
-
-```bash
---discord-notify enabled \
---discord-env-path /TemiAgent/anomaly_detection/.env \
---discord-max-files 8
-```
-
-MQTT 和 Discord 發布彼此獨立。viewer 會先取得 Discord 的 non-secret delivery
-receipt，再將其附在既有 abnormal event 的 `notification.immediate_alert`。receipt
-只含 transport、status、failure code 與未驗證 target class；它不含 webhook、channel
-ID 或 credential。若 MQTT 不可用，event result 仍會記錄 `mqtt_error`；若 Discord
-失敗，event 仍會發布，Bridge 會將後續肯定回答處理成「無法確認送出」，而不假裝已通知。
-
-Discord sender only records a non-secret delivery code: `DISCORD_DELIVERED`,
-`DISCORD_WEBHOOK_UNSET`, `DISCORD_UNAUTHORIZED`, `DISCORD_FORBIDDEN`,
-`DISCORD_WEBHOOK_NOT_FOUND`, `DISCORD_RATE_LIMITED`, `DISCORD_TIMEOUT`,
-`DISCORD_CONNECTION_FAILED`, or `DISCORD_BAD_RESPONSE`. For HTTP 429, the
-viewer records a valid `Retry-After` value for operator-controlled retry and
-does not retry alerts automatically.
-
-`/health` also returns three readiness booleans without the webhook or channel ID:
-
-```json
-{
-  "abnormal_publish_enabled": true,
-  "discord_notify_enabled": true,
-  "discord_webhook_configured": true
-}
-```
-
-After recording has ended and a human has explicitly authorized it, the operator
-may run one controlled delivery test. It bypasses detector, MQTT, TTS, and care
-memory, sends the fixed `[TEST]` message, and calls the production sender:
-
-```bash
-cd /TemiAgent/anomaly_detection
-.venv/bin/python temi_action_viewer.py \
-  --discord-delivery-test \
-  --discord-notify enabled \
-  --discord-env-path /TemiAgent/anomaly_detection/.env
-```
-
-The command outputs only the delivery code, HTTP status, and available retry-after value.
+The viewer has no Discord delivery route. `--discord-delivery-test` returns
+`DISCORD_BRIDGE_OWNED`, and lifecycle rejects
+`DEMO_ACTION_VIEWER_DISCORD_NOTIFY=enabled`. Bridge configuration selects
+`disabled`, `demo_mock`, or an authorized `discord_webhook` route. Demo mock
+receipts never contact a recipient; real delivery is accepted only after HTTP
+204. See [the immediate abnormal-care flow](../docs/operations/immediate_abnormal_care_flow.md).
 
 ## 影片動作測試工具
 
@@ -264,7 +215,8 @@ cd /TemiAgent/anomaly_detection
   --output-jsonl /tmp/temi_video_predictions.jsonl
 ```
 
-發布後的 JSONL result 會依照 side effect 成功或失敗情況，包含 `published_event.mqtt`、`published_event.mqtt_error`、`published_event.discord` 或 `published_event.discord_error`。
+發布後的 JSONL result 只包含 perception MQTT publication status。Notification receipt、
+Hermes request、validated command、Android result 和 episode transition 由 Bridge trace 保存。
 
 完整 Bridge/Hermes route 需要以下 companion services：
 
@@ -273,12 +225,10 @@ cd /TemiAgent/anomaly_detection
 - `8765` 上的 Hermes resident server。
 - HTTP mode 的 `hermes_temi_bridge`。
 
-目前預設的 abnormal route 在 Bridge 第一輪就發出 deterministic 關懷 `speak`，不會呼叫
-Hermes 或 private Care Memory。若 operator 明確關閉這個 safety gate 而走 legacy Hermes
-compatibility route，unknown resident 的 memory isolation 拒絕仍會保留
-`unknown_resident_memory_forbidden` trace/error code，但 Temi 會改說關懷提示，不會說做不到。
-
-若只測 Discord 通知，MQTT 可以是關閉狀態；tester 會在記錄 `mqtt_error` 後繼續執行。
+目前預設 abnormal route 在 Bridge 驗證後建立 episode、記錄 notification stage，並呼叫
+Resident Hermes。Bridge 仍擁有 action validation、command publication 與 private Care
+Memory boundary；viewer 不會因偵測結果直接控制硬體或通知收件者。legacy route 只供相容性
+測試，不是正式 Demo acceptance route。
 
 ## 注意事項
 

@@ -32,6 +32,7 @@ authoritative when any prose conflicts with them.
 | Private Demo configuration and ownership | [Demo configuration reference](operations/demo_configuration_reference.md) | Operator-supplied owner-only env, including the isolated `newcomer_mock` profile; never commit values or credentials. |
 | Incident diagnosis and recovery boundary | [Demo troubleshooting](operations/demo_troubleshooting.md) | Exact-PID investigation; no broad process control. |
 | Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes the Bridge-backed software-only newcomer acceptance. Hardware, Android, GPU and Discord remain external gates. |
+| Bridge-owned abnormal alert, follow-up, and Demo injection | [Immediate abnormal-care flow](operations/immediate_abnormal_care_flow.md) | Bridge owner; formal injector is synthetic-only and real Discord remains an authorization-gated external path. |
 | Module commands and artifacts | Each module README in the root module index | Owning module; do not infer contracts from a README alone. |
 | Hermes integration overlay | [`third_party/hermes/`](../third_party/hermes/README.md) and reconstructed `hermes-agent/README.TemiAgent.md` | Tracked manifest/patches; do not stage the generated nested gitlink. |
 

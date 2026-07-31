@@ -152,7 +152,7 @@ following groups together:
 | Hermes | HTTP resident endpoint, media flags, callback sockets, and canonical nested pin. |
 | MQTT | broker endpoint, port, config path, robot allowlist, and ownership. |
 | Gateway | `HERMES_GATEWAY_ENABLED` and ownership agree. |
-| Viewer | local model paths, CUDA/pose settings, abnormal and Discord flags, and an owner-only credential env path. |
+| Viewer | local model paths, CUDA/pose settings, and the abnormal publication flag. The Viewer does not read or send Discord credentials. |
 | Android | `MANAGE_ANDROID=0` unless a separate Android owner authorizes lifecycle control. |
 
 The resident validates the active and compression contexts as `64000` before
@@ -170,10 +170,35 @@ intent, or media bytes. The Android App owns the final deployed asset mapping.
 Bridge tests verify the allowlist and command contract; a device-owner must
 separately verify the actual Android asset after an App deployment.
 
-The abnormal route remains care-first: detector event → Bridge supportive TTS
-and consent question → optional notification path. Viewer pre-alert TTS does
-not bypass Bridge. Discord is best-effort only; gateway health or webhook
+The abnormal route is immediate-alert and care-first: detector event → Bridge
+validation → Bridge notification-stage attempt → Resident Hermes supportive
+TTS → canonical command request/result → reply or timeout follow-up. The
+first notification does not wait for resident consent. Viewer pre-alert TTS
+does not bypass Bridge. Discord is best-effort only; gateway health or webhook
 configuration never proves delivery and is not an emergency service.
+
+## Abnormal-care handover boundary
+
+The Bridge persists each abnormal-care episode in
+`MEMORY_DIR/abnormal_care_episodes.json`. The state contains identifiers,
+monotonic deadlines, transitions, and redacted stage receipts; it does not
+contain webhook URLs, credentials, raw ASR, or evidence images. Preserve that
+file when handing over an active Demo issue because it prevents an initial
+notification from being replayed after a restart.
+
+The Bridge owns three notification stages: `initial_alert`, `status_update`,
+and `escalation`. A real Discord receipt is `delivered` only for HTTP 204. A
+Demo-only mock receipt is `mock_delivered` only when both Demo mock flags are
+enabled. Any other result prohibits the care dialogue from claiming a
+notification succeeded.
+
+Before an authorized Demo run, the operator MUST verify
+`ABNORMAL_NOTIFICATION_MODE`, the two Demo mock flags or the owner-only real
+credential file, timeout values, test-ingress flag, and test-resident
+allowlist. Use `scripts/inject_demo_event` for synthetic abnormal events; do
+not substitute a raw command request or Android result. Stop the lifecycle
+through `scripts/demo` after collecting the Bridge trace, stage receipts,
+command/result evidence, and final port inventory.
 
 ## Recovery and limits
 

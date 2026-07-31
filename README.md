@@ -14,11 +14,13 @@ TemiAgent 是以 Temi robot 為實體載具、Hermes Agent 為認知核心的 em
 | Resident Hermes HTTP mode | Implemented; Demo route verified | `tools/hermes_resident_server.py` 提供 `/health` 與 `/invoke`；預設整合 port 為 `8765`。 |
 | Structured care memory | Demo-only | `memory/` 只應保存合成 Demo 資料；不是病歷或正式個資儲存系統。 |
 | Continuous abnormal perception | Experimental Demo | `anomaly_detection/` 可產生 abnormal event；模型結果未經醫療或安全認證。 |
-| Caregiver notification | Demo-only | Bridge action `notify_caregiver_mock` 不是真實通報。Discord webhook 是 best-effort side channel。 |
+| Immediate abnormal-care flow | Demo-only; hardware-free and isolated mock E2E verified | Bridge validates an abnormal event, records one notification-stage receipt, invokes Resident Hermes, validates the resulting speak command, and persists a bounded follow-up episode. Real recipient delivery still requires a separately authorized credential and real-device evidence. |
 
-異常 perception 的 care-first TTS 由 Bridge 擁有；action viewer 不再直接發布
-`cmd/request` pre-alert。Discord delivery 僅是 best-effort side channel，沒有 target
-semantic 或 delivery receipt 時不得宣稱已通知照護者；詳見 [contract traceability](docs/architecture/contract_traceability.md)。
+異常 perception 的 notification、care-first TTS、timeout 與 escalation 都由 Bridge 擁有；
+action viewer 不再直接發布 `cmd/request`、`cmd/result` 或 Discord webhook。Demo mock
+receipt 不會聯絡任何收件者；真實 Discord 只有 HTTP 204 receipt 才可稱為 delivered。詳見
+[immediate abnormal-care flow](docs/operations/immediate_abnormal_care_flow.md) 與
+[contract traceability](docs/architecture/contract_traceability.md)。
 
 ## Architecture
 

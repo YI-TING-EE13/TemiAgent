@@ -30,6 +30,23 @@ below are retained architecture, planning and validation history. They explain
 how the design evolved, but their commands, deployment examples and milestones
 are not the current operator contract.
 
+## Current abnormal-care route
+
+The current abnormal route is `perception.abnormal -> Bridge -> Resident Hermes
+-> Bridge validator -> canonical Temi command`. The Bridge validates the
+authoritative abnormal-event schema and evidence paths, persists an episode,
+reserves one immediate notification stage, invokes Resident Hermes, and then
+publishes only a validator-approved command. The Temi Android App remains the
+only hardware executor and publishes the matching command result.
+
+The episode uses explicit states `DETECTED`, `INITIAL_ALERT_SENT`,
+`AWAITING_FIRST_RESPONSE`, `RESIDENT_RESPONDED`, `FOLLOW_UP_REQUIRED`,
+`NO_RESPONSE`, `ESCALATION_SENT`, `RESOLVED`, and `EXPIRED`. Notification-stage
+dedup is persisted before external I/O, so a process restart does not replay a
+delivery attempt. Viewer, injector, and Hermes never call a Discord webhook or
+publish a robot command directly. See the executable operator boundary in
+[immediate abnormal-care flow](../operations/immediate_abnormal_care_flow.md).
+
 ## 0. 文件目的
 
 本文件用於說明目前分散的專案模組如何整合成一套完整的 Embodied AI 系統。

@@ -25,10 +25,11 @@ Continuous vision abnormal events use the same Bridge safety boundary:
 ```text
 Temi Action Viewer / Video Action Tester
   -> MQTT temi/{robot_id}/perception/abnormal
-  -> HermesTemiBridge
-  -> deterministic care-first speak + pending confirmation
-  -> later ASR confirmation or ordinary Hermes route
+  -> HermesTemiBridge validation + persistent care episode
+  -> one Bridge-owned notification receipt attempt
+  -> Resident Hermes constrained care response
   -> validated temi/{robot_id}/cmd/request (speak only for the care flow)
+  -> Temi Android cmd/result + reply/timeout follow-up
 ```
 
 ## 對外關係
@@ -50,10 +51,10 @@ Temi Action Viewer / Video Action Tester
 - 驗證 ASR event schema 與 robot allowlist。
 - 驗證三張影像存在、大小合理，且位於 shared root 內。
 - 驗證 abnormal event 內的 evidence frame paths 存在、大小合理，且位於 shared root 內。
-- 對 abnormal event 建立 bounded、atomic 的 pending care confirmation；第一輪不呼叫
-  Hermes，不將 notification 或 memory action 發到 Temi。
-- 在下一個同 robot 的高信心 ASR 先處理明確同意／拒絕；模糊回答最多重問一次，過期或
-  無關 ASR 不會被誤判為同意。
+- 對 abnormal event 建立 bounded、atomic、restart-safe care episode；先保留 notification
+  stage，再呼叫 Resident Hermes，並透過既有 action validator 發出 speak command。
+- 在下一個同 robot 的高信心 ASR 先處理明確同意／拒絕；模糊回答最多重問一次。第一與第二
+  monotonic timeout 分別觸發一次 Hermes recheck 與一次 deduplicated escalation。
 - 將 `/var/lib/temi_shared/...` 轉成 Hermes 可讀的 `/shared/temi/...` 或本機等價路徑。
 - 建立 Hermes prompt。
 - 支援 `mock`、`cli`、`http` 三種 Hermes invocation mode。
@@ -88,13 +89,14 @@ Temi Action Viewer / Video Action Tester
 - Robot-facing actions：`speak`、`ask_clarification`、`turn`、`navigate`、`stop`、`noop`。
 - Bridge-internal memory/demo actions：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
 - 只有 robot-facing actions 會 publish 到 `temi/{robot_id}/cmd/request`；memory/demo actions 只寫入 `MEMORY_DIR`。
-- Abnormal perception events currently carry only `observation.action_name`, `observation.reason`, and `evidence.frame_paths`; they do not carry model confidence, confidence_source, or severity.
-- Viewer 可在既有 abnormal event 的 optional `notification.immediate_alert` 放入 non-secret
-  Discord delivery receipt。Bridge 只在 `transport=discord_webhook` 與 `status=delivered`
-  時承認既有通知管道已送出；target class 未經 source/config 證實，因此不宣稱已通知家人。
-- Pending confirmation state 寫入 `MEMORY_DIR/pending_care_confirmations.json`，只保存 event、
-  robot、conversation、category、timestamps、status、expiry、dedup key 與 delivery receipt；
-  不保存 raw ASR 或 hidden reasoning，最多保留 100 筆。
+- Canonical abnormal events include `event_type`, `observation`, `evidence.frame_paths`, and
+  `context.source`. Formal test events additionally require `test`, `resident_id`, `request_id`,
+  `run_id`, and `scenario_id`; they do not carry image bytes, model confidence, or severity.
+- The Bridge, never the viewer, owns Discord or Demo mock delivery. `mock_delivered` means an
+  explicit Demo mock route recorded a receipt; real Discord is delivered only after HTTP 204.
+- Episode state is written atomically to `MEMORY_DIR/abnormal_care_episodes.json`. It stores only
+  bounded IDs, monotonic deadlines, transitions, and redacted receipt fields; it excludes raw ASR,
+  prompts, evidence, recipient details, webhook URLs, and hidden reasoning.
 - 當 feature-gated private Care Memory 因 resident 為 `unknown` 而拒絕存取時，Bridge 保留
   `unknown_resident_memory_forbidden` error code、絕不讀寫任何 resident partition，並改發一個
   speak-only 關懷提示；它不會把拒絕說成已完成照護或通知。
@@ -176,6 +178,7 @@ Expected payload shape:
   "event_id": "evt_abnormal_...",
   "robot_id": "temi-01",
   "type": "perception.abnormal",
+  "event_type": "falls_down",
   "timestamp_ms": 1780000000000,
   "observation": {
     "action_name": "falls down",
@@ -187,11 +190,17 @@ Expected payload shape:
     ]
   },
   "context": {
-    "source": "temi_action_viewer"
+    "source": "temi_action_viewer",
+    "test": true,
+    "resident_id": "test-resident",
+    "request_id": "req_abnormal_...",
+    "run_id": "run_...",
+    "scenario_id": "A1"
   }
 }
 ```
 
+The authoritative schema is `schemas/perception_abnormal_event.schema.json`.
 Bridge validates that every evidence path is under `TEMI_SHARED_BRIDGE_PATH`, exists, is readable, and is below `MAX_IMAGE_SIZE_MB`. The Hermes prompt receives:
 
 - `source_type: perception.abnormal`
@@ -271,6 +280,11 @@ remain authoritative.
 | `ABNORMAL_CARE_CONFIRMATION_ENABLED` | 啟用 Bridge-owned abnormal care confirmation；預設 `true`。 |
 | `ABNORMAL_CARE_CONFIRMATION_TTL_SECONDS` | pending care question 的 expiry；預設 `120`。 |
 | `ABNORMAL_CARE_CONFIRMATION_MIN_ASR_CONFIDENCE` | affirmative answer 可自動接受的最小 ASR confidence；預設 `0.70`。 |
+| `ABNORMAL_CARE_EPISODE_ENABLED` | 啟用 Bridge-owned immediate abnormal alert、Resident Hermes、reply/timeout episode；預設 `true`。 |
+| `ABNORMAL_CARE_FIRST_RESPONSE_TIMEOUT_SECONDS` / `ABNORMAL_CARE_SECOND_RESPONSE_TIMEOUT_SECONDS` | 兩個 positive monotonic response deadlines；各預設 `120`。 |
+| `ABNORMAL_NOTIFICATION_MODE` | `disabled`、`demo_mock` 或 `discord_webhook`；預設 `disabled`。 |
+| `DEMO_NOTIFICATION_MOCK_ENABLED` / `DEMO_NOTIFICATION_RECEIPT_ENABLED` | `demo_mock` 必須同時為 `true`；預設皆為 `false`，且不接觸網路收件者。 |
+| `DEMO_TEST_EVENT_INGRESS_ENABLED` / `DEMO_TEST_RESIDENT_ALLOWLIST` | 控制 synthetic formal injector 與可接受的 test resident；預設 ingress 為 `false`。 |
 | `MEDIA_V11_ENABLED` | 啟用 isolated media v1.1 producer/consumer；預設 `false`。 |
 | `HERMES_MEDIA_TOOL_ENABLED` | 接受 root-owned native tool callback；預設 `false`。 |
 | `HERMES_MEDIA_FAST_PATH_ENABLED` | Resident-only exact Media matcher；需兩個 Media flag，預設 `false`。 |
@@ -313,6 +327,10 @@ input_validated
 care_context_built
 abnormal_care_confirmation_created
 abnormal_care_follow_up_resolved
+initial_notification_finished
+episode_awaiting_first_response
+hermes_follow_up_failed
+escalation_notification_finished
 hermes_request_prepared
 hermes_invocation_finished
 hermes_output_validated

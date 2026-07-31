@@ -23,7 +23,7 @@ documents do not replace the runtime sources named in this matrix.
 | Canonical MQTT topics | ASR, abnormal, command request/result implemented; state topic reserved | `hermes_temi_bridge/src/hermes_temi_bridge/mqtt_client.py`, `tools/temi_overview_adapter.py`, Android behavior documented externally | Overview adapter, Bridge, Temi App, anomaly producer | Bridge MQTT client and Temi App | Bridge tests, `tools/e2e_test_runner.py`, hardware runbooks | Producer/consumer code, `mqtt/README.md`, architecture, Android contract and integration tests |
 | Legacy MQTT topics | Verified legacy Demo route | `temi_backend/src/temi_backend/mqtt_bridge.py` | Temi App and legacy backend | Legacy backend and Temi App | `temi_backend/tests/`, manual hardware checks | Backend, Android contract, module README and tests |
 | ASR final event v1.0 | Implemented; hardware-free verified | `hermes_temi_bridge/schemas/asr_final_event.schema.json` plus enforcement in `event_models.py` and `image_resolver.py` | Overview adapter and mock publisher | Bridge | `test_event_validation.py`, image/path tests, `e2e_test_runner.py` | Runtime schema, adapter, Bridge validation/tests, reader copy, `temi_shared/README.md` |
-| Abnormal perception event v1.0 | Experimental Demo; consent-first care prompt implemented | Enforcement in `event_models.py`, `image_resolver.py`, `care_confirmation.py`; no standalone runtime JSON schema | Action viewer and video tester | Bridge creates one speak-only pending confirmation and routes the next explicit ASR answer before Hermes | Bridge abnormal-care tests and viewer receipt tests | Producer receipt fields, Bridge parser/state tests, anomaly/Bridge README and architecture |
+| Abnormal perception event v1.0 | Experimental Demo; immediate Bridge-owned alert and Hermes care follow-up implemented | `hermes_temi_bridge/schemas/perception_abnormal_event.schema.json`, `event_models.py`, `image_resolver.py`, `care_episode.py`, and `abnormal_notification.py` | Viewer, video tester, and `scripts/inject_demo_event` | Bridge validates evidence and test metadata, persists event/stage dedup, attempts one notification, invokes Resident Hermes, validates the speak command, and correlates reply/timeout state | schema, episode, notification, Bridge, viewer, injector, lifecycle, and isolated E2E tests | Runtime schema and reader copy, all producers/consumers, config, docs, and tests |
 | Hermes action output v1.0 | Implemented; Bridge validation verified | `hermes_temi_bridge/schemas/hermes_action_output.schema.json` and `action_validator.py` | Hermes runtime or mock client | Bridge | `test_action_validation.py`, client tests and fixtures | Schema, validator, Hermes prompt/skills, tests and reader copy |
 | Command request v1.0 | Implemented; hardware-free verified | `hermes_temi_bridge/schemas/temi_command_request.schema.json` and `command_dispatcher.py` | Bridge; viewer no longer publishes abnormal pre-alert commands | Temi App | dispatcher/Bridge tests, mock E2E and real-device runbook | Schema, dispatcher, Temi App, tests, reader copy and MQTT docs |
 | Command result v1.0 | Implemented | `hermes_temi_bridge/schemas/temi_command_result.schema.json` and result handler | Temi App or mock publisher | Bridge trace/result handler | Bridge result/trace tests and mock E2E | Schema, Android producer, Bridge consumer/tests and reader copy |
@@ -77,6 +77,9 @@ until code and tests establish ownership.
 ```text
 hermes_temi_bridge/schemas/asr_final_event.schema.json
   -> docs/schemas/asr_final_event.schema.json
+
+hermes_temi_bridge/schemas/perception_abnormal_event.schema.json
+  -> docs/schemas/perception_abnormal_event.schema.json
 
 hermes_temi_bridge/schemas/hermes_action_output.schema.json
   -> docs/schemas/hermes_output.schema.json
@@ -132,7 +135,7 @@ Do not rewrite a planned or experimental item as an implemented, verified or reg
 
 ## Known Governance Gaps
 
-1. Abnormal perception input has validation code but no standalone runtime JSON schema.
+1. No abnormal perception contract gap is currently known: the runtime schema and reader copy are checked together. Real device, real recipient, and care outcome validation remain external acceptance work.
 2. Topic strings and some service defaults are duplicated across modules.
 3. `.env.example` does not list every `BridgeConfig` setting.
 4. Runtime synthetic memory output and a model checkpoint are already tracked by Git.

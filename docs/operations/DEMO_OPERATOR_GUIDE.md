@@ -201,21 +201,21 @@ request published、Android accepted、Android started/playing、螢幕播放。
 
 ## Viewer 與安全停止
 
-設定 `DEMO_ACTION_VIEWER_ENABLED=true` 才會管理 viewer。lifecycle 將 viewer 的
-`DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH`、`DEMO_ACTION_VIEWER_DISCORD_NOTIFY` 與
-`DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK` 從 private env 傳入；沒有明確人類授權時三者必須是
-`disabled`。即使 legacy `PRE_ALERT_SPEAK` 被設為 enabled，viewer 也只記錄
-`ABNORMAL_PRE_ALERT_BRIDGE_OWNED`，不會直接發送 command；Bridge 是異常 care TTS 的唯一 owner。
+設定 `DEMO_ACTION_VIEWER_ENABLED=true` 才會管理 viewer。lifecycle 只將
+`DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH` 與 legacy
+`DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK` 傳入 viewer；
+`DEMO_ACTION_VIEWER_DISCORD_NOTIFY=enabled` 會被 lifecycle 拒絕。即使 legacy
+`PRE_ALERT_SPEAK` 被設為 enabled，viewer 也只記錄
+`ABNORMAL_PRE_ALERT_BRIDGE_OWNED`，不會直接發送 command。Bridge 是異常
+notification 與 care TTS 的唯一 owner。
 
-When an operator explicitly authorizes abnormal MQTT publication and Discord
-notification, viewer `/health` must show `abnormal_publish_enabled=true`,
-`discord_notify_enabled=true`, and `discord_webhook_configured=true`. These
-fields are booleans only and never disclose the webhook or channel ID. After
-recording ends, the operator may run one `temi_action_viewer.py` invocation
-with `--discord-delivery-test` using the fixed `[TEST]` message. That
-entry bypasses detector, MQTT, TTS, Bridge, and care memory but uses the same
-production webhook sender; it requires a configured private webhook and explicit
-authorization for this operation.
+異常 notification 的操作入口是
+[immediate abnormal-care flow](immediate_abnormal_care_flow.md)。operator 先以
+`scripts/demo doctor` 確認私有設定，再以 `scripts/inject_demo_event` 發布唯一允許的
+synthetic abnormal event。viewer `/health` 的
+`abnormal_publish_enabled=true` 只代表 event publication 已啟用；
+`notification_bridge_owned=true` 表示 viewer 不讀取 webhook、也不送出 Discord。不要執行
+viewer `--discord-delivery-test`，它會明確拒絕，且不會測試任何 delivery route。
 
 正常停止順序為 viewer → gateway → Bridge → resident → adapter → MQTT → LM Studio。每一項
 只接受 lifecycle state 裡同時匹配 PID、start time、cwd、executable 與 command digest 的

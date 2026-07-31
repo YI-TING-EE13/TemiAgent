@@ -46,7 +46,10 @@ care records, images, or full debug traces.
 | No Temi action is observed | `command_request_published`, `cmd/result`, Android subscription/session evidence. | A Bridge publish is not proof of Android execution. Verify command result and device observation separately. |
 | Abnormal event produces care TTS but no memory update | Abnormal-care trace stage and active resident status. | This may be intentional: `unknown_resident_memory_forbidden` prevents resident-memory access and must produce a speak-only care response, not an identity guess. |
 | Abnormal event has neither care response nor trace | Viewer receipt/event ID, Bridge trace index, Bridge health and listener evidence. | Identify whether the viewer published, Bridge accepted, or input validation failed. Do not re-trigger the detection during a recording. |
-| Gateway is healthy but no Discord message appears | Gateway health, viewer health booleans, existing Bridge/viewer delivery receipt, Discord provider-side evidence if available. | Gateway connectivity and webhook configuration are not delivery acknowledgement. Treat it as best effort; do not claim notification success. |
+| Immediate abnormal notification is `failed` or `disabled` | Bridge `initial_notification_finished` trace and the redacted stage receipt in `MEMORY_DIR/abnormal_care_episodes.json`. | The Bridge owns this route. `disabled`, `401`, `403`, `404`, `429`, timeout, and connection failure are not delivery. Check the selected Bridge mode and credential-file metadata; do not enable viewer Discord flags or claim a caregiver was notified. |
+| Demo mock notification does not create a receipt | Bridge trace, `ABNORMAL_NOTIFICATION_MODE`, both Demo notification flags, and the persisted stage receipt. | `demo_mock` requires both explicit flags. Correct the private Demo configuration only; a missing receipt prohibits a success statement. |
+| Duplicate abnormal event or restart appears to notify twice | Original `event_id`, episode `notification_stages`, transitions, and the post-restart Bridge trace. | The same event/stage must have one persisted reservation and receipt. Preserve the state file and trace for a contract defect; do not delete state to re-run the alert. |
+| Gateway is healthy but no Discord message appears | Gateway health, Bridge stage receipt, and Discord provider-side evidence if available. | Gateway connectivity and credential configuration are not delivery acknowledgement. The viewer never owns Discord delivery. |
 | Discord notification says delivered but target is unclear | Existing receipt fields and operator-provided target evidence. | Do not infer a caregiver, channel, or emergency recipient from a generic delivery result. |
 | Viewer health fails | Viewer `/health` booleans, exact PID identity, managed llama-server listener, viewer log path. | Diagnose model asset/config/precondition under the optional viewer scope; do not restart shared LM Studio as a shortcut. |
 | Media request is published but nothing plays | Bridge media trace, Android `accepted`/`started`/`playing` result, screen observation. | Publication or native callback acceptance is insufficient. Android asset mapping and device playback are external acceptance gates. |
@@ -71,11 +74,23 @@ event_received
   -> event_completed | event_failed
 ```
 
-Abnormal events can instead start with
-`abnormal_care_confirmation_created` and later resolve through
-`abnormal_care_follow_up_resolved`. The first care prompt is Bridge-owned and
-speak-only; no Discord receipt or memory action should be presented as an
-emergency response.
+The current abnormal-care episode route records these additional stages:
+
+```text
+initial_notification_finished
+  -> hermes_request_prepared
+  -> hermes_invocation_finished
+  -> hermes_output_validated
+  -> command_request_published
+  -> episode_awaiting_first_response
+  -> abnormal_care_follow_up_resolved | escalation_notification_finished
+```
+
+`initial_notification_finished` records a redacted receipt for the immediate
+stage. `abnormal_care_follow_up_resolved` records a deduplicated status update
+when the resident replies. `escalation_notification_finished` records the
+second-timeout result. A Bridge command publish remains distinct from Android
+`cmd/result` evidence.
 
 ## Escalation boundary
 

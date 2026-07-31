@@ -150,15 +150,41 @@ runtime route.
 | `DEMO_ACTION_VIEWER_POSE_MODE` / `DEMO_ACTION_VIEWER_POSE_MODEL` / `DEMO_ACTION_VIEWER_POSE_DEVICE` | Optional pose backend selection. | Model/weights are runtime assets, not source evidence. |
 | `DEMO_ACTION_VIEWER_MAX_OUTPUT_TOKENS` | Bounded model output. | Does not establish detection accuracy. |
 | `DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH` | Explicit abnormal-event publication flag. | Keep `disabled` unless a human authorizes the Demo event path. |
-| `DEMO_ACTION_VIEWER_DISCORD_NOTIFY` | Explicit Discord side-channel flag. | Keep `disabled` unless separately authorized; best-effort only. |
-| `DEMO_ACTION_VIEWER_DISCORD_ENV_PATH` | Owner-only credential env containing `DISCORD_WEBHOOK_URL`. | The value is never printed, committed, or included in an export. |
+| `DEMO_ACTION_VIEWER_DISCORD_NOTIFY` | Retired viewer-owned Discord flag. | Must remain `disabled`; lifecycle rejects `enabled` because the Bridge owns notification delivery. |
 | `DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK` | Legacy viewer pre-alert switch. | Viewer records Bridge-owned handling; it does not bypass Bridge command ownership. |
 | `DEMO_START_TIMEOUT_SECONDS` | Bounded managed-service start wait. | Must remain in the lifecycle's accepted range. |
 
-The viewer may expose boolean health fields such as credential configured or
-notification enabled. They do not disclose a webhook or target and do not prove
-delivery. Use [troubleshooting](demo_troubleshooting.md) and Bridge traces to
-classify an observed notification result.
+The viewer health surface does not prove notification delivery. Use Bridge trace
+and the abnormal-care episode receipt to classify an observed result.
+
+## Immediate abnormal-care and notification route
+
+The Bridge requires `ABNORMAL_CARE_EPISODE_ENABLED=true` for the current
+abnormal-care route. `ABNORMAL_CARE_FIRST_RESPONSE_TIMEOUT_SECONDS`,
+`ABNORMAL_CARE_SECOND_RESPONSE_TIMEOUT_SECONDS`, and
+`ABNORMAL_CARE_TIMEOUT_POLL_SECONDS` must be positive and define the persisted
+monotonic state-machine deadlines.
+
+| Key | Role | Constraint |
+|---|---|---|
+| `ABNORMAL_NOTIFICATION_MODE` | Bridge notification adapter. | `disabled` by default; only `demo_mock` or `discord_webhook` enable an attempt. |
+| `DEMO_NOTIFICATION_MOCK_ENABLED` and `DEMO_NOTIFICATION_RECEIPT_ENABLED` | Demo mock receipt gate. | Both must be `true` with `ABNORMAL_NOTIFICATION_MODE=demo_mock`; this route has no network recipient. |
+| `ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH` | Owner-only Discord credential env. | Required for `discord_webhook`; regular, non-symlink, lifecycle-user-owned, exact mode `0600`. |
+| `ABNORMAL_NOTIFICATION_TEST_RECIPIENT_AUTHORIZED` | Explicit test-recipient gate. | A test event cannot use real Discord unless this is `true`; never infer authorization from a caregiver webhook. |
+| `DEMO_TEST_EVENT_INGRESS_ENABLED` | Formal synthetic abnormal injector gate. | Default `false`; set `true` only for a bounded Demo mock run. |
+| `DEMO_TEST_RESIDENT_ALLOWLIST` | Accepted synthetic resident identifiers. | Test event metadata outside this allowlist is rejected before notification/Hermes. |
+
+For compatibility, a private Bridge env may set
+`ABNORMAL_EVENT_PUBLISH_ENABLED=true`, `DISCORD_NOTIFY_ENABLED=true`, and
+`DISCORD_ENV_FILE=<owner-only credential env>`. The Bridge maps that complete
+legacy trio to `discord_webhook`. The credential env, not the lifecycle env,
+contains `DISCORD_WEBHOOK_URL`; the webhook value is never read from a command
+line or written to a trace. New configuration SHOULD use the
+`ABNORMAL_NOTIFICATION_*` keys above.
+
+Use `scripts/inject_demo_event` rather than publishing a command or an Android
+result. The complete synthetic-event and receipt boundary is in
+[immediate abnormal-care flow](immediate_abnormal_care_flow.md).
 
 ## Change checklist
 

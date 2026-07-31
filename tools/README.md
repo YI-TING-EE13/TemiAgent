@@ -28,6 +28,7 @@
 | `publish_mock_asr_event.sh` | 發送 canonical mock ASR event。 |
 | `subscribe_cmd_request.sh` | 訂閱 canonical command request，方便觀察 Bridge output。 |
 | `publish_mock_cmd_result.sh` | 發送 mock command result。 |
+| `inject_demo_event.py` / `scripts/inject_demo_event` | 以 owner-only config 建立 synthetic evidence 並發布 canonical Demo abnormal event；不發 command、result 或 Discord webhook。 |
 | `dispatch_hermes_action_output.py` | 將 Hermes skill action JSON 驗證、包成 `temi/{robot_id}/cmd/request`，並可 publish 到 MQTT，供 Discord/manual TTS 執行使用。 |
 | `capture_temi_live_snapshot.py` | 從 `8081` decoded JPEG broadcast 按需擷取目前畫面，存到 `temi_shared/live_snapshots/`，輸出 Hermes/Skills 可分析的 frame path JSON。 |
 | `start_temi_pc_services.sh` | 啟動 PC 端 Temi legacy services。 |
