@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Historical full-stack validation harness; it starts/stops services and is not a documentation check.
+
 ROOT="${ROOT:-/TemiAgent}"
 : "${PC_IP:?Set PC_IP to the MQTT/video host address.}"
 : "${TEMI_IP:?Set TEMI_IP to the Temi robot address.}"

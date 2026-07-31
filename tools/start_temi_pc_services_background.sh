@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Legacy machine-specific background starter; use scripts/demo for the canonical lifecycle.
+
 ROOT="${ROOT:-/TemiAgent}"
 PC_IP="${PC_IP:-192.168.50.236}"
 MQTT_PORT="${MQTT_PORT:-1883}"

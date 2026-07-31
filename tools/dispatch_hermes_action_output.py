@@ -138,6 +138,8 @@ def _mqtt_connection_diagnostic(port: int) -> dict[str, Any]:
 
 
 def dispatch_action(args: argparse.Namespace) -> dict[str, Any]:
+    """Validate one manual Hermes plan and optionally publish its command request."""
+
     raw_text = _read_input(args)
     payload = _extract_first_json_object(raw_text)
     payload = _with_manual_defaults(payload, args.strict_cognitive_state)
@@ -184,6 +186,8 @@ def dispatch_action(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the explicit input, validation, and optional publication CLI."""
+
     parser = argparse.ArgumentParser(
         description="Validate Hermes Temi action JSON and optionally publish a command request."
     )
@@ -213,6 +217,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """Run the manual dispatcher and return a concise machine-readable result."""
+
     parser = build_parser()
     args = parser.parse_args()
     try:

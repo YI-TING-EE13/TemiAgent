@@ -68,6 +68,8 @@ def install_identity_tools(*, callback_socket: str) -> list[str]:
 
 @contextmanager
 def invocation_context(context: dict[str, str]) -> Iterator[None]:
+    """Scope one Bridge-validated event context to an identity tool invocation."""
+
     token = _context.set(dict(context))
     try:
         yield

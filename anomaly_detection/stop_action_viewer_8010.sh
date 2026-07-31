@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Legacy exact-PID viewer stop helper; it refuses an unexpected process identity.
+
 ROOT="${ROOT:-/TemiAgent/anomaly_detection}"
 PORT="${PORT:-8010}"
 LLAMA_SERVER_PORT="${LLAMA_SERVER_PORT:-8011}"

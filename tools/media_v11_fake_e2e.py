@@ -205,6 +205,8 @@ def _read_trace(log_dir: Path, event_id: str) -> list[dict[str, Any]]:
 
 
 def main() -> int:
+    """Run the isolated fake-Android media lifecycle exercise and print its summary."""
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--work-root", help="Optional output root; defaults to a temporary directory.")
     args = parser.parse_args()

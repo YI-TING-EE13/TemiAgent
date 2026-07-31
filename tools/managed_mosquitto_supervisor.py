@@ -16,6 +16,8 @@ import time
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Supervise one Mosquitto child while preserving an exact parent identity."""
+
     parser = argparse.ArgumentParser(description="Supervise one managed Mosquitto child.")
     parser.add_argument("--config", required=True)
     args = parser.parse_args(argv)

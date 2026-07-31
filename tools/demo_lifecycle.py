@@ -159,6 +159,8 @@ def _ownership(values: dict[str, str], name: str, *, default: str) -> str:
 
 @dataclass(frozen=True)
 class DemoConfig:
+    """Validated private configuration and derived paths for one Demo lifecycle."""
+
     config_path: Path
     runtime_root: Path
     values: dict[str, str]
@@ -234,6 +236,8 @@ class DemoConfig:
 
 
 def load_config(raw_path: str | Path) -> DemoConfig:
+    """Validate a private env file and derive the fail-closed Demo configuration."""
+
     path = Path(raw_path).expanduser()
     if not path.is_absolute():
         raise DemoError("--config must be an absolute private env path")
@@ -443,6 +447,8 @@ def _has_writable_existing_parent(path: Path) -> bool:
 
 
 def ensure_runtime_layout(config: DemoConfig) -> None:
+    """Create only the owner-only external runtime directories required by a mutation."""
+
     _mkdir_private(config.runtime_root)
     for path in (
         config.runtime_root / "config",
@@ -742,6 +748,8 @@ def _broker_sessions(config: DemoConfig) -> dict[str, int]:
 
 @dataclass(frozen=True)
 class ServiceSpec:
+    """Immutable expected identity and health surface for one lifecycle service."""
+
     name: str
     cwd: Path
     token: str
@@ -1241,6 +1249,8 @@ def _stop_lmstudio(config: DemoConfig) -> None:
 
 
 def start(config: DemoConfig) -> dict[str, Any]:
+    """Start or reuse only verified managed services in dependency order."""
+
     source = _validate_source()
     ensure_runtime_layout(config)
     existing = _read_json(config.state_path)
@@ -1333,6 +1343,8 @@ def start(config: DemoConfig) -> dict[str, Any]:
 
 
 def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool = False) -> dict[str, Any]:
+    """Stop recorded exact process identities in reverse dependency order."""
+
     state = _read_json(config.state_path)
     specs = _specs(config)
     if state is None and adopt_for_restart:
@@ -1376,6 +1388,8 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
 
 
 def restart(config: DemoConfig) -> dict[str, Any]:
+    """Archive pre-restart evidence, then perform one verified stop/start transition."""
+
     source = _validate_source()
     ensure_runtime_layout(config)
     before = _write_pre_restart_evidence(config)
@@ -1400,6 +1414,8 @@ def _latest_trace(log_dir: Path) -> dict[str, Any] | None:
 
 
 def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return non-mutating readiness, ownership, process, listener, and trace evidence."""
+
     state = state or _read_json(config.state_path) or {}
     records = _state_records(state) if state else {}
     service_identity = {name: _identity_matches(record.get("leader", {})) for name, record in records.items()}
@@ -1472,6 +1488,8 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
 
 
 def doctor(config: DemoConfig) -> dict[str, Any]:
+    """Run non-mutating configuration, source, dependency, and ownership diagnostics."""
+
     checks: list[dict[str, str]] = []
 
     def check(name: str, operation: Callable[[], str]) -> None:
@@ -1540,6 +1558,8 @@ def _sha256(path: Path) -> str:
 
 
 def trace_export(config: DemoConfig) -> dict[str, Any]:
+    """Export existing bounded runtime evidence into an owner-only local bundle."""
+
     state = _read_json(config.state_path) or _read_json(config.last_run_path)
     if state is None:
         raise DemoError("no lifecycle state is available for trace export")
@@ -1662,6 +1682,8 @@ def _failure_code(message: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse the lifecycle command and map expected failures to stable results."""
+
     parser = argparse.ArgumentParser(description="Operate the current TemiAgent Demo backend by exact process ownership.")
     parser.add_argument("--config", required=True, help="absolute owner-only private Demo env file")
     parser.add_argument("--json", action="store_true", help="emit full machine-readable status")

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Explicit test publisher for a mock command result; it is not Android execution evidence.
+
 BROKER="${BROKER:-localhost}"
 PORT="${PORT:-1883}"
 ROBOT_ID="${ROBOT_ID:-temi-01}"

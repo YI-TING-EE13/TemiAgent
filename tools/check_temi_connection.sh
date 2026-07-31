@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -u
 
+# Read-only machine connectivity probe; it may contact the supplied endpoints but changes no service state.
+
 : "${TEMI_IP:?Set TEMI_IP to the Temi robot address.}"
 : "${PC_IP:?Set PC_IP to the MQTT/video host address.}"
 

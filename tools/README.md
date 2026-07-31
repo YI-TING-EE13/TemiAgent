@@ -1,6 +1,6 @@
 # Tools 模組 README
 
-最後更新日期：2026-06-01
+最後更新日期：2026-07-31
 
 ## 本文件維護規則
 
@@ -32,6 +32,7 @@
 | `start_temi_pc_services.sh` | 啟動 PC 端 Temi legacy services。 |
 | `start_temi_pc_services_background.sh` | 背景啟動 PC 端 services。 |
 | `check_temi_connection.sh` | 檢查 Temi ADB、MQTT、WebSocket 等連線狀態。 |
+| `validate_documentation.py` | 唯讀檢查 tracked Markdown links、fences 與 reader-schema copies；不啟動服務。 |
 
 ## 常用流程
 
@@ -194,6 +195,13 @@ best-effort publish、Discord delivery 或缺少 command result 報為成功。
 ```bash
 cd /TemiAgent
 python3 tools/e2e_test_runner.py
+```
+
+Documentation-only changes first run:
+
+```bash
+cd /TemiAgent
+python3 tools/validate_documentation.py
 ```
 
 其他 script 應使用 `--help`、相鄰 unit test 或對應 runbook 的 bounded smoke procedure。

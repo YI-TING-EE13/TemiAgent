@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Explicit test publisher for an isolated mock ASR event; never use during a live Demo recording.
+
 BROKER="${BROKER:-localhost}"
 PORT="${PORT:-1883}"
 ROBOT_ID="${ROBOT_ID:-temi-01}"

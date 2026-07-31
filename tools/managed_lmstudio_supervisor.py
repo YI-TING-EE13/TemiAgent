@@ -28,6 +28,8 @@ def _shutdown(target_dir: Path, identifier: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the reviewed loader and remain as its exact graceful-stop owner."""
+
     parser = argparse.ArgumentParser(description="Supervise a managed LM Studio run.")
     parser.add_argument("--startup-script", required=True)
     parser.add_argument("--target-dir", required=True)

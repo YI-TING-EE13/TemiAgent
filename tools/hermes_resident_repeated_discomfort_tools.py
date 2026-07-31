@@ -48,6 +48,8 @@ def install_repeated_discomfort_tools(*, callback_socket: str) -> list[str]:
 
 @contextmanager
 def invocation_context(context: dict[str, str]) -> Iterator[None]:
+    """Scope one Bridge-validated resident context to the care tool invocation."""
+
     token = _context.set(dict(context))
     try:
         yield

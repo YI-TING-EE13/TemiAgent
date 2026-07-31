@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Legacy direct viewer restart helper; the canonical Demo uses scripts/demo ownership.
+
 ROOT="${ROOT:-/TemiAgent/anomaly_detection}"
 PORT="${PORT:-8010}"
 HOST="${HOST:-0.0.0.0}"

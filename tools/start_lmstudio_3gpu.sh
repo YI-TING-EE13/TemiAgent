@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Reviewed LM Studio loader used by the managed supervisor; it intentionally changes model-service state.
+
 LMSTUDIO_PROJECT_ROOT="${LMSTUDIO_PROJECT_ROOT:-/TemiAgent}"
 LMSTUDIO_TARGET_DIR="${LMSTUDIO_TARGET_DIR:-/TemiAgent/.lmstudio-data}"
 LMSTUDIO_MODEL_ID="${LMSTUDIO_MODEL_ID:-temi/gemma-4-31b-it-qat}"
