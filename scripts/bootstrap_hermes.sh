@@ -86,7 +86,7 @@ if [[ ! -e "$RUNTIME_PATH/.git" ]]; then
     exit 1
   }
   mkdir -p "$(dirname "$RUNTIME_PATH")"
-  git clone --no-checkout "$UPSTREAM_URL" "$RUNTIME_PATH"
+  git clone "$UPSTREAM_URL" "$RUNTIME_PATH"
 fi
 
 git -C "$RUNTIME_PATH" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
