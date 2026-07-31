@@ -122,6 +122,16 @@ def _wait_legacy(capture: Capture, event_id: str) -> dict[str, Any]:
     return payload
 
 
+def _wait_trace_contains(path: Path, needle: str, *, timeout: float = 8) -> None:
+    """Wait for the asynchronous Bridge trace writer to persist one stage."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.is_file() and needle in path.read_text(encoding="utf-8"):
+            return
+        time.sleep(0.05)
+    raise ScenarioFailure(f"Bridge trace did not record {needle}")
+
+
 def _post_mock_discord(config: demo.DemoConfig) -> None:
     if config.mock_discord_url is None:
         raise ScenarioFailure("mock Discord endpoint is not configured")
@@ -204,9 +214,7 @@ def run(config: demo.DemoConfig, artifacts: Path) -> dict[str, Any]:
         if not any(item.get("reminder_id") == "breakfast-medication" and item.get("status") == "completed" for item in reminders.get("reminders", [])):
             raise ScenarioFailure("reminder completion did not create isolated Bridge memory evidence")
         capture.publish("asr/final", _event(config, s2, "我吃完早餐後的藥了"))
-        trace = (config.bridge_log_dir / f"{s2}.jsonl").read_text(encoding="utf-8")
-        if "duplicate_event_ignored" not in trace:
-            raise ScenarioFailure("reminder retry did not preserve Bridge event idempotency")
+        _wait_trace_contains(config.bridge_log_dir / f"{s2}.jsonl", "duplicate_event_ignored")
         results["S2_reminder_completion"] = "PASS"
 
         s3 = "s3_discomfort"
