@@ -131,7 +131,7 @@ a gateway can run, not that Discord has delivered a message.
 | Generic Media v1.1 | `MEDIA_V11_ENABLED`, `HERMES_MEDIA_TOOL_ENABLED`, `HERMES_MEDIA_FAST_PATH_ENABLED` all `true`; valid `HERMES_MEDIA_CALLBACK_SOCKET`. | The logical allowlist currently exposes only `elderly_hand_exercise`; Android mapping remains external. |
 | Operator identity Demo | `DEMO_OPERATOR_IDENTITY_ENABLED`, `RESIDENT_IDENTITY_ENABLED`, `HERMES_DEMO_IDENTITY_TOOL_ENABLED`, `HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED`, identity socket and state dir. | Exact operator phrases only; no visual identity inference and no natural-language identity selection. |
 | Repeated-discomfort Demo | `CARE_MEMORY_V2_ENABLED`, `DEMO_REPEATED_DISCOMFORT_ENABLED`, `DEMO_CARE_SCENARIO_PROMPT_ENABLED`, care root and care callback socket, plus the identity prerequisites. | Father-only synthetic flow; it does not diagnose or access unknown/mother partitions. |
-| Visual routing / generic care context | `DEMO_RESIDENT_VISUAL_ROUTING_ENABLED`, `CARE_CONTEXT_ENABLED`. | Keep disabled unless the documented feature acceptance is in scope. |
+| Visual routing / care context | `DEMO_RESIDENT_VISUAL_ROUTING_ENABLED`, `CARE_CONTEXT_ENABLED`. | Keep visual routing disabled. Production reminder acceptance requires `CARE_CONTEXT_ENABLED=true` so active reminders reach Hermes; the generic unknown-resident route remains disabled. |
 | Identity bounds | `DEMO_IDENTITY_REFRESH_SECONDS`, `DEMO_IDENTITY_MAX_DURATION_SECONDS`. | Positive bounds; refresh cannot exceed duration. |
 
 Do not enable a group by setting only some of its keys. `tools/demo_lifecycle.py`

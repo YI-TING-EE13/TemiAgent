@@ -660,6 +660,28 @@ class DemoLifecycleConfigTests(unittest.TestCase):
 
         self.assertGreaterEqual(fsync.call_count, 2)
 
+    def test_lifecycle_reset_replaces_stale_identity_without_deleting_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            state_dir = root / "identity-state"
+            state_dir.mkdir()
+            current = state_dir / "current.json"
+            current.write_text(json.dumps({"identity_status": "father", "process_scoped": True}) + "\n", encoding="utf-8")
+            config = mock.Mock(identity_state_dir=state_dir, robot_id="temi-01")
+
+            self.assertTrue(demo._reset_ephemeral_demo_identity(config))
+            payload = json.loads(current.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["identity_status"], "unknown")
+        self.assertTrue(payload["process_scoped"])
+        self.assertTrue(payload["lifecycle_reset"])
+        self.assertEqual(payload["robot_id"], "temi-01")
+
+    def test_lifecycle_reset_is_noop_when_identity_is_disabled(self) -> None:
+        config = mock.Mock(identity_state_dir=None, robot_id="temi-01")
+        self.assertFalse(demo._reset_ephemeral_demo_identity(config))
+
+
 class DemoLifecycleRecordTests(unittest.TestCase):
     def test_pre_restart_evidence_preserves_exact_owned_processes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -902,6 +902,30 @@ def _atomic_json(path: Path, payload: object) -> None:
             temporary.unlink()
 
 
+def _reset_ephemeral_demo_identity(config: DemoConfig) -> bool:
+    """Reset the lifecycle-owned Demo identity without deleting its state file."""
+    state_dir = config.identity_state_dir
+    if state_dir is None:
+        return False
+    if state_dir.is_symlink() or (state_dir.exists() and not state_dir.is_dir()):
+        raise DemoError("Demo identity state directory must be a regular directory")
+    current_path = state_dir / "current.json"
+    if current_path.is_symlink() or (current_path.exists() and not current_path.is_file()):
+        raise DemoError("Demo identity state must be a regular file")
+    _atomic_json(
+        current_path,
+        {
+            "schema_version": "temiagent.demo_identity.v1",
+            "robot_id": config.robot_id,
+            "identity_status": "unknown",
+            "process_scoped": True,
+            "lifecycle_reset": True,
+            "updated_at": _utc_now(),
+        },
+    )
+    return True
+
+
 @contextmanager
 def _lifecycle_lock(config: DemoConfig) -> Iterable[None]:
     """Serialize mutating lifecycle commands with an owner-only advisory lock."""
@@ -1852,6 +1876,7 @@ def start(config: DemoConfig) -> dict[str, Any]:
                 raise DemoError("incomplete ownership recovery did not stop recorded processes")
         else:
             raise DemoError(f"lifecycle state {existing_status or 'UNKNOWN'} requires exact-owner recovery")
+    identity_state_reset = _reset_ephemeral_demo_identity(config)
     specs = _specs(config)
     _validate_resource_manifest()
     _reconcile_archived_callback_socket(config)
@@ -1933,7 +1958,13 @@ def start(config: DemoConfig) -> dict[str, Any]:
         state["ready_state"] = runtime_health(config, state)["readiness"]
         state["updated_at"] = _utc_now()
         _atomic_json(config.state_path, state)
-        return {"state": state["ready_state"], "reused": False, "run_id": run_id, "health": runtime_health(config, state)}
+        return {
+            "state": state["ready_state"],
+            "reused": False,
+            "run_id": run_id,
+            "identity_state_reset": identity_state_reset,
+            "health": runtime_health(config, state),
+        }
     except Exception as exc:
         state["status"] = STATE_UNHEALTHY
         state["failure"] = {
@@ -1996,7 +2027,13 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
                 "findings": findings,
                 "results": [],
             }
-        return {"state": "DEMO_STOPPED", "already_stopped": True, "results": []}
+        identity_state_reset = False if dry_run else _reset_ephemeral_demo_identity(config)
+        return {
+            "state": "DEMO_STOPPED",
+            "already_stopped": True,
+            "identity_state_reset": identity_state_reset,
+            "results": [],
+        }
     records = _state_records(state)
     findings = _managed_like_unrecorded_services(specs, records)
     if findings:
@@ -2029,7 +2066,13 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
     state["stop_results"] = results
     _atomic_json(config.last_run_path, state)
     config.state_path.unlink(missing_ok=True)
-    return {"state": "DEMO_STOPPED", "already_stopped": False, "results": results}
+    identity_state_reset = _reset_ephemeral_demo_identity(config)
+    return {
+        "state": "DEMO_STOPPED",
+        "already_stopped": False,
+        "identity_state_reset": identity_state_reset,
+        "results": results,
+    }
 
 
 def restart(config: DemoConfig) -> dict[str, Any]:

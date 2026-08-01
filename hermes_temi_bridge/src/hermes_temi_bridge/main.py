@@ -76,6 +76,7 @@ FALLBACKS = {
     "empty_asr_text": "我沒有聽清楚，請再說一次。",
     "invalid_hermes_json": "抱歉，我剛剛沒有理解清楚，請再說一次。",
     "unsafe_action": "我目前無法執行這個要求，但可以用安全的方式繼續協助你。",
+    "missing_reminder_id": "我找不到對應的提醒。請告訴我是哪一項提醒已經完成了嗎？",
     "unknown_resident_memory": "我先關心您：您現在還好嗎？如果感到不舒服或需要身邊的人協助，請直接告訴我。",
     "hermes_timeout": "我還在思考，但目前需要多一點時間。請稍後再試一次。",
     "generic": "抱歉，我剛剛沒有理解清楚，請再說一次。",
@@ -87,6 +88,36 @@ def _memory_action_failure_fallback_text(reason: str) -> str:
     if reason == "unknown_resident_memory_forbidden":
         return FALLBACKS["unknown_resident_memory"]
     return FALLBACKS["generic"]
+
+
+def _action_validation_fallback_text(reason: str, *, care_context: dict[str, Any] | None = None) -> str:
+    """Keep contract failures private while giving reminder requests a useful reply."""
+    if reason == "missing_reminder_id":
+        return FALLBACKS["missing_reminder_id"]
+    if reason in {"missing_event_type", "reminder_without_active_match"} and care_context is not None and not care_context.get("active_reminders"):
+        return FALLBACKS["missing_reminder_id"]
+    return FALLBACKS["unsafe_action"]
+
+
+def _reminder_without_active_match(
+    asr_text: str,
+    care_context: dict[str, Any] | None,
+    memory_actions: list[dict[str, Any]],
+) -> bool:
+    """Reject reminder completion writes when the resident has no active reminder."""
+    active_reminders = care_context.get("active_reminders") if care_context else None
+    if not isinstance(active_reminders, list) or active_reminders:
+        return False
+    action_types = {str(action.get("type")) for action in memory_actions}
+    active_resident = care_context.get("active_resident") if care_context else None
+    if not isinstance(active_resident, dict) or active_resident.get("resident_id") not in {"father", "mother"}:
+        return False
+    if "mark_reminder_done" in action_types:
+        return True
+    reminder_terms = ("藥", "用藥", "服藥", "medication", "reminder")
+    completion_terms = ("吃完", "完成", "記錄", "taken", "completed")
+    normalized = asr_text.casefold()
+    return "log_event" in action_types and any(term in normalized for term in reminder_terms) and any(term in normalized for term in completion_terms)
 
 
 class HermesTemiBridgeService:
@@ -476,7 +507,6 @@ class HermesTemiBridgeService:
                     "care_context_available": care_context is not None,
                 },
             )
-
             stage_started = time.monotonic()
             failed_stage = "hermes_invocation_finished"
             hermes_response = self.hermes_client.invoke(hermes_request)
@@ -513,6 +543,13 @@ class HermesTemiBridgeService:
                 duration_ms=_duration_ms(stage_started),
                 payload=_validated_output_trace_payload(validated_output),
             )
+
+            if _reminder_without_active_match(
+                event.asr_text,
+                care_context,
+                validated_output.memory_actions,
+            ):
+                raise ActionValidationError("reminder_without_active_match", {"active_reminder_count": 0})
 
             stage_started = time.monotonic()
             failed_stage = "memory_actions_completed"
@@ -642,7 +679,7 @@ class HermesTemiBridgeService:
                 event_id,
                 robot_id,
                 exc.reason,
-                FALLBACKS["unsafe_action"],
+                _action_validation_fallback_text(exc.reason, care_context=care_context),
                 exc.details,
                 failed_stage=failed_stage,
                 source_type=source_type,
@@ -1586,7 +1623,7 @@ class HermesTemiBridgeService:
                 event_id,
                 robot_id,
                 exc.reason,
-                FALLBACKS["unsafe_action"],
+                _action_validation_fallback_text(exc.reason, care_context=care_context),
                 exc.details,
                 failed_stage=failed_stage,
                 source_type=source_type,

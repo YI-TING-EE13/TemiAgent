@@ -88,6 +88,8 @@ Temi Action Viewer / Video Action Tester
 - Action validator 會強制檢查 `cognitive_state.home_esi_level` 與 `cognitive_state.risk_reason`。
 - Robot-facing actions：`speak`、`ask_clarification`、`turn`、`navigate`、`stop`、`noop`。
 - Bridge-internal memory/demo actions：`log_event`、`mark_reminder_done`、`generate_summary`、`notify_caregiver_mock`。
+- `mark_reminder_done` 必須帶有 structured memory 中的 exact non-empty `reminder_id`；Bridge 不會從自然語言猜 ID，也不會接受缺少 ID 的 action。
+- 沒有唯一匹配的 active reminder 時，Bridge 會保留 memory 不變並發出住民可理解的 clarification speak fallback；內部 `missing_reminder_id` 不會直接說給住民聽。
 - 只有 robot-facing actions 會 publish 到 `temi/{robot_id}/cmd/request`；memory/demo actions 只寫入 `MEMORY_DIR`。
 - Canonical abnormal events include `event_type`, `observation`, `evidence.frame_paths`, and
   `context.source`. Formal test events additionally require `test`, `resident_id`, `request_id`,

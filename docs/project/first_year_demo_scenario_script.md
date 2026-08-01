@@ -29,9 +29,12 @@
 
 ### 情境背景
 
-- 王先生早上有一筆 active reminder：早餐後服藥。
+- 王先生早上有一筆 isolated synthetic active reminder：早餐後服藥；演示前必須先
+  seed 到已確認的 father private partition，不能假設空的 production memory 已經存在這筆資料。
 - 這是低風險日常照護情境，Home-ESI 應為 `L3`。
 - 主要 action 是 `speak`、`mark_reminder_done`、`log_event`。
+- `CARE_CONTEXT_ENABLED=true` 是 production acceptance 前置條件；Bridge 只接受 exact
+  `reminder_id`，沒有唯一匹配時要 clarification，不可任意挑選 reminder。
 
 ### 現場演法
 

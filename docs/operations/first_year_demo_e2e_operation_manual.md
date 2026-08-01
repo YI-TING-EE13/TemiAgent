@@ -505,6 +505,12 @@ ABNORMAL_COOLDOWN_SECONDS=300 ./restart_action_viewer_8010.sh
 救命，我跌倒了，站不起來。
 ```
 
+第一句只在提醒前置條件成立時才宣稱 completion：先在已確認 resident 的
+private partition 建立一筆 isolated synthetic active reminder（早餐後服藥），並確認
+production config 的 `CARE_CONTEXT_ENABLED=true`。Bridge 只接受 Hermes 回傳的 exact
+`reminder_id`；沒有 active reminder、住民不符或多筆可能匹配時，應收到 clarification
+speak/result，且 `reminders.json` 不得被修改。未 seed 就測第一句的結果是
+`INVALID_ACCEPTANCE_PRECONDITION`，不是 Android 或 MQTT failure。
 預期 topic 順序：
 
 ```text

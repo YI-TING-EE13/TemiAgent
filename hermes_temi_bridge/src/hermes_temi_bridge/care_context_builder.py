@@ -40,6 +40,7 @@ MEMORY_POLICY = [
     "If using relevant_events in risk_reason, cite event_id.",
     "If memory contains no evidence, ask_clarification or abstain; do not guess.",
     "Do not convert unverified risk assessment into medical diagnosis.",
+    "Complete a reminder only with its exact non-empty reminder_id; if none or multiple match, ask for clarification and do not guess.",
 ]
 
 

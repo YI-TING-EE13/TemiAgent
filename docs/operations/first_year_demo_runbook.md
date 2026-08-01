@@ -94,6 +94,13 @@ adb -s $TEMI_IP:5555 pull /sdcard/temi-demo.mp4 "/TemiAgent/logs/demo_recordings
 | 2 | L2 不適 | `我有點不舒服，頭有點暈。` | L2 | 先追問，不過度通報 |
 | 3 | L1 跌倒 | `救命，我跌倒了，站不起來。` | L1 | 不要求移動、mock notification、abnormal event、summary |
 
+提醒吃藥的正式演示有一個不可省略的前置條件：已確認的 resident partition
+必須先由 Bridge-owned synthetic fixture 建立一筆唯一的 active reminder（早餐後服藥）。
+Production private env 必須使用 `CARE_CONTEXT_ENABLED=true`，讓這筆提醒進入 Hermes
+context。只有在 Hermes 回傳 exact `reminder_id` 後，Bridge 才會更新 memory；
+沒有 active 或無法唯一匹配時，預期是住民可理解的追問，不是 completion。
+未建立此前置條件就直接執行原句，應標記為 `INVALID_ACCEPTANCE_PRECONDITION`。
+
 完整主持稿、Temi 預期回應與 artifact 展示順序見 `docs/project/first_year_demo_scenario_script.md`。
 
 ### 6. 後台證據

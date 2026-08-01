@@ -111,6 +111,17 @@ action defense. A second `start` must report reused ownership. `restart` must
 archive pre-restart evidence and reuse the same exact-PID ownership rules;
 `stop` must leave every configured mock port without a listener.
 
+### Production reminder acceptance precondition
+
+The production reminder phrase is valid only after the operator seeds one isolated synthetic active reminder in the confirmed resident partition and confirms `CARE_CONTEXT_ENABLED=true`.
+The authoritative action contract still requires the exact non-empty `reminder_id`; the Bridge never resolves an arbitrary ID from speech.
+
+Focused cases:
+
+- R2: one matching active reminder. Expect `mark_reminder_done` with that exact ID, one `log_event`, a speak command/result, and status `completed`.
+- R3: no active reminder, or multiple possible matches. Expect a resident-friendly clarification speak command/result and no memory mutation.
+- A run without the R2 seed is `INVALID_ACCEPTANCE_PRECONDITION`, not a reminder-contract or Android transport failure.
+
 ### Viewer lifecycle failure fixture
 
 Run this fixture only in a disposable `newcomer_mock` acceptance root after the
