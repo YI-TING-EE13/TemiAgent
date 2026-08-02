@@ -25,6 +25,59 @@ git status --short
 
 Do not edit the mounted repository from the host, use another container, or present host-side tests as official evidence. Host work is allowed only when the user explicitly requests it or when the operation inherently manages or repairs the container itself. Report every host-side exception.
 
+## Efficient Orchestration and Token Control
+
+### Event-driven reporting
+
+Do not poll delegated agents solely to produce progress messages. Remain silent while a delegated task is running unless one of the following occurs:
+
+- a meaningful implementation milestone completes;
+- a reproducible failure or blocker is found;
+- authorization or user input is genuinely required;
+- scope, safety boundary, repository state, or acceptance status changes;
+- a stop condition is triggered; or
+- final evidence is ready.
+
+Progress messages MUST contain at least one new fact, such as changed files, a test command and result, a newly identified defect, a resolved review finding, a commit or artifact identifier, a changed authorization state, or the next concrete gate. Combine related results into one report. Do not send messages solely to indicate continued activity. Messages such as "still waiting," "no ADB used," "no side effect," or "tests are still running" are not progress reports unless they also state a new decision or state change.
+
+### Polling
+
+Prefer a blocking wait or task join over repeated status checks. When blocking wait is unavailable, use the longest practical wait interval, suppress user-facing messages for unchanged state, avoid inspecting the same state repeatedly without a new event, and stop polling after completion, failure, or a required decision is detected.
+
+### Test reruns and evidence reuse
+
+Do not rerun an unchanged test suite unless relevant source, tests, build configuration, dependencies, or generated inputs changed; the previous run was incomplete or nondeterministic; clean-build or release provenance requires a rerun; or an acceptance requirement explicitly requires independent repetition. Record the source digest or commit associated with every material test result and reuse valid evidence when relevant inputs are unchanged.
+
+### Long-running task checkpoints
+
+For a long-running task, maintain a concise machine-readable checkpoint in a task-local ignored location. The checkpoint MUST record:
+
+- baseline commit;
+- current phase;
+- completed gates;
+- unresolved findings;
+- the last relevant source digest;
+- valid test evidence;
+- current permissions and prohibitions; and
+- the exact next action.
+
+Read the checkpoint before rereading broad project documentation or repeating completed analysis.
+
+### Safety-state reporting
+
+Safety restrictions remain in force until explicitly changed. Do not repeat unchanged restrictions in every update. Report ADB ownership, service state, APK installation permission, broker permission, or another operational boundary only when the state changes, a violation is detected, the next action depends on that boundary, or the final handoff requires the state.
+
+### Review convergence
+
+After fixing a finding:
+
+1. Run the smallest deterministic test that proves the fix.
+2. Run the required affected regression matrix once.
+3. Review the final diff.
+4. Proceed to the next gate.
+
+Do not repeatedly reopen an approved design or rerun a valid matrix unless relevant inputs changed.
+
 ## Required Reading Before Modification
 
 Read the following before changing project-wide behavior or documentation:
