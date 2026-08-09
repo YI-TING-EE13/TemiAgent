@@ -133,6 +133,17 @@ The current wake word listener is implemented with Android `SpeechRecognizer`. I
    .\gradlew.bat :app:assembleDebug
    ```
 
+   To benchmark the CPU-side 1280x720 YUV copy that runs before H.264 encoding:
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\benchmark_yuv_copy.ps1 `
+     -JavaHomePath 'C:\path\to\jdk-21'
+   ```
+
+   The benchmark verifies byte-for-byte output equality and reports median and
+   p95 milliseconds per frame. Recorded results and measurement limits are in
+   [`docs/performance/yuv-copy-optimization-2026-08-09.md`](docs/performance/yuv-copy-optimization-2026-08-09.md).
+
 3. Connect to Temi:
 
    ```powershell

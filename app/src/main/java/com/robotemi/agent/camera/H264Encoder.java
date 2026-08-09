@@ -191,20 +191,20 @@ public class H264Encoder {
         ByteBuffer buffer = plane.getBuffer();
         int rowStride = plane.getRowStride();
         int pixelStride = plane.getPixelStride();
-        int limit = buffer.limit();
-        byte[] rowBuffer = getReusableRowBuffer(rowStride);
-
-        for (int row = 0; row < planeHeight; row++) {
-            int rowStart = row * rowStride;
-            int readLength = Math.min(rowStride, limit - rowStart);
-            if (readLength <= 0) break;
-            buffer.position(rowStart);
-            buffer.get(rowBuffer, 0, readLength);
-            for (int col = 0; col < planeWidth; col++) {
-                out[outOffset + row * outRowStride + col * outPixelStride] =
-                        rowBuffer[col * pixelStride];
-            }
-        }
+        byte[] rowBuffer = pixelStride == 1 && outPixelStride == 1
+                ? null
+                : getReusableRowBuffer(rowStride);
+        Yuv420PlaneCopier.copy(
+                buffer,
+                rowStride,
+                pixelStride,
+                planeWidth,
+                planeHeight,
+                out,
+                outOffset,
+                outRowStride,
+                outPixelStride,
+                rowBuffer);
     }
 
     private byte[] getReusableRowBuffer(int rowStride) {
