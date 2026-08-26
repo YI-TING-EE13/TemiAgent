@@ -1,5 +1,8 @@
 # TemiAgent Demo 快速參考
 
+狀態：CURRENT companion；完整 lifecycle 只以 [Demo 操作入口](DEMO_OPERATOR_GUIDE.md) 為準。
+最後審查日期：2026-08-26
+
 完整說明請看 [Demo 新手操作手冊](DEMO_OPERATOR_GUIDE.md)、
 [設定參考](demo_configuration_reference.md)與
 [troubleshooting](demo_troubleshooting.md)。所有 `<...>` 都是 operator 自行提供的
@@ -13,6 +16,7 @@ cd <project-root>
 ./scripts/demo --config <private-demo-config> doctor
 ./scripts/demo --config <private-demo-config> start
 ./scripts/demo --config <private-demo-config> status
+./scripts/demo --config <private-demo-config> restart
 ./scripts/demo --config <private-demo-config> stop
 ```
 
@@ -27,11 +31,14 @@ Android session 時才是 `DEMO_READY`。
 | `doctor` | 唯讀診斷 source、config、artifact、live evidence、service、Care、port 與 PID。 | `PASS`／`PENDING`／`WARNING`／`FAIL` 加 recovery。 |
 | `start` | 以 recorded ownership 啟動 managed services，並執行 health gates。 | `DEMO_READY` 或 `BACKEND_READY_WAITING_ANDROID`。 |
 | `restart` | 先保存 pre-restart evidence，再只停止並重啟已驗證的 Demo processes。 | 同 `start`；不處理 unknown listener。 |
-| `status` | 唯讀 ownership／health／artifact／live summary。 | 不輸出 private host 或 path。 |
+| `status` | 唯讀 ownership／health／artifact／live summary。 | 不輸出 credential；owner-only paths remain private。 |
 | `trace-export` | 匯出既有 de-identified trace summary。 | 不發布 MQTT event。 |
 | `stop` | 停止 active run 的 owned process。 | `DEMO_STOPPED`；external services preserved。 |
-| `up`、`down`、`deploy` | Compatibility aliases；不作為 current operator instructions。 | 與 canonical command 相同或較窄的 legacy behavior。 |
 | `identity`、`seed`、`verify` | 已明確啟用的 synthetic identity/care Demo helper。 | 只在正式 guide 的 feature gates 都成立時使用。 |
+
+Compatibility parser names and historical lifecycle terminology are documented only in the
+[legacy operations reference](demo_operations_runbook.md); do not copy them into a current
+operator command sequence.
 
 JSON output：
 
@@ -44,18 +51,18 @@ JSON output：
 
 - static canonical artifact：驗證 APK、exact canonical text、fingerprint、endpoint／robot／topic
   contract；其 `observed_at` 不決定 freshness。
-- live runtime evidence：每個 `deploy`／`ready` 都必須是新 snapshot，驗證 connected、實際
+- live runtime evidence：每次授權的 `start`／`restart` 都必須是新 snapshot，驗證 connected、實際
   subscriptions active、identity `unknown`、null media session、兩個空 outbox、fatal `0` 與
   `RejectedExecutionException` count `0`。
 - `canonical.normalized.subscriptions` 是 canonical endpoint topic contract，不是 Paho
   subscribe 清單。
-- branch／HEAD 需在 private config pin，才可作完整 `DEMO_READY` claim。
+- branch／HEAD 需在 private config pin，才可作完整 `DEMO_READY` claim；目前沒有 live claim。
 
 ## 失敗時先做什麼
 
 | Output | First action |
 |---|---|
-| `NOT_READY` | 執行 `doctor`，只處理列出的 `FAIL`／`PENDING`。 |
+| `BACKEND_NOT_READY` | 執行 `doctor`，只處理列出的 `FAIL`／`PENDING`。 |
 | Android live `PENDING` | 由 Android 匯出 fresh owner-only runtime snapshot。 |
 | Android live `FAIL` | 修正 schema／fingerprint／contract；不要重用 static JSON。 |
 | Broker／PID `FAIL` | 不要 broad-kill；確認 selected ownership mode。 |

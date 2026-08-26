@@ -1,5 +1,9 @@
 # Temi Streaming Local Runbook
 
+> Historical / legacy reference. Do not use as the current canonical Demo lifecycle.
+> This machine-specific ADB/MQTT/WebSocket evidence is retained for reference; use the
+> [current Demo operator guide](DEMO_OPERATOR_GUIDE.md) for lifecycle commands.
+
 This is the local version of `docs/operations/temi_streaming_manual.md` for this machine.
 
 Set the current values in the container shell. Keep actual private addresses in ignored local configuration:

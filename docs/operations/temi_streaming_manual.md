@@ -1,5 +1,9 @@
 # TemiAgent 開發與部署手冊 (Multicast Edition)
 
+> Historical / legacy reference. Do not use as the current canonical Demo lifecycle.
+> This external-Android build and streaming procedure is retained for reference; use the
+> [current Demo operator guide](DEMO_OPERATOR_GUIDE.md) for lifecycle commands.
+
 本手冊提供 TemiAgent 專案的完整操作指南，包含環境設定、編譯、部署、多點廣播 (Multicast) 設定，以及電腦端大腦 (VLM / Hermes) 的接收與測試流程。
 
 ---

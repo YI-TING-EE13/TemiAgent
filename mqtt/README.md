@@ -1,6 +1,6 @@
 # MQTT 模組 README
 
-最後更新日期：2026-06-01
+最後更新日期：2026-08-26
 
 ## 本文件維護規則
 
@@ -64,6 +64,10 @@ temi/action/wakeup
 | `tools/` | 提供 publish/subscribe smoke test scripts。 |
 
 ## 啟動方式
+
+`docker-compose.yml` 是 optional secondary/development configuration。它不是
+`./scripts/demo` 會呼叫的 canonical lifecycle，也不是平行的 production entrypoint；
+canonical lifecycle ownership 在 `tools/demo_lifecycle.py`。
 
 Docker Compose：
 

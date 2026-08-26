@@ -1,6 +1,6 @@
 # Cross-Module Contract Traceability
 
-最後審查日期：2026-07-31
+最後審查日期：2026-08-26
 
 This document identifies the authoritative source, producers, consumers, validation owner, tests and synchronization rule for TemiAgent cross-module contracts. It does not replace runtime code or schemas.
 
@@ -9,6 +9,16 @@ This document identifies the authoritative source, producers, consumers, validat
 The executable runtime definition is authoritative. A README or file under `docs/schemas/` explains that definition but MUST NOT introduce behavior independently.
 
 When no single generated contract package exists, the producer and consumer implementations jointly define current behavior. Such duplication is a governance risk and requires cross-module review.
+
+## Canonical V1 boundary
+
+The matrix below is limited to the current TemiAgent V1 cross-service contracts. The canonical
+runtime flow is `Temi Android ASR/camera -> tools/temi_overview_adapter.py -> canonical events
+-> HermesTemiBridge -> resident Hermes JSON -> HermesTemiBridge command request -> Temi Android
+executor`. The Bridge owns schema, robot-ID, shared-path, Hermes-output, action and dispatch
+validation. Resident Hermes, perception viewers and skills do not publish MQTT or control hardware
+directly. Optional perception remains an event producer behind the same Bridge boundary; it is not
+a general hardware dispatcher.
 
 For current lifecycle, private configuration and acceptance evidence, use the
 [Demo operator guide](../operations/DEMO_OPERATOR_GUIDE.md),
@@ -121,6 +131,16 @@ The filenames differ for three reader copies. Compare the mapped files by conten
 
 `8766` may be used for an explicitly selected alternate resident instance, but it is not the current integration default.
 
+## Experimental / non-canonical references
+
+The loopback `1235` endpoint and `local_inference/` DeepSeek/llama.cpp experiment are outside
+the canonical V1 contract matrix and are not required by `./scripts/demo`. They do not replace
+the canonical LM Studio `1234` endpoint, the action-viewer llama.cpp pin, the Bridge route, or
+any Temi Android contract. These paths may be physically present in a local checkout because
+development mounts are broader than the publication boundary; physical presence does not create
+contract ownership. The experiment remains local-only and its model/build/runtime assets are not
+publication evidence.
+
 ## Capability Classification
 
 - **Implemented and verified without hardware:** Bridge validators and unit tests, backend unit tests, local mock E2E, and feature-gated media v1.1 with fake Android.
@@ -139,9 +159,10 @@ Do not rewrite a planned or experimental item as an implemented, verified or reg
 1. No abnormal perception contract gap is currently known: the runtime schema and reader copy are checked together. Real device, real recipient, and care outcome validation remain external acceptance work.
 2. Topic strings and some service defaults are duplicated across modules.
 3. `.env.example` does not list every `BridgeConfig` setting.
-4. Runtime synthetic memory output and a model checkpoint are already tracked by Git.
-   Ignoring or removing them requires a separately reviewed repository-artifact
-   change; `.gitignore` alone would not untrack existing files.
+4. Runtime synthetic memory output remains tracked as reviewed fixture data. The historical HEAD
+   also contains a pose checkpoint; the Gate 1A publication change stages its removal from the
+   current index. Runtime output, real care data and external model weights remain outside the
+   publication boundary.
 5. `tools/check_temi_connection.sh`, `tools/validate_temi_e2e_stack.sh`,
    `tools/start_temi_pc_services.sh`, `tools/start_temi_pc_services_background.sh`
    and `tools/temi_overview_adapter.py` contain machine-specific private-network

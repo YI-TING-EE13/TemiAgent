@@ -1,23 +1,23 @@
 {
   "schema_version": "1.0",
-  "user_id": "elder_demo_001",
+  "user_id": "synthetic-resident-001",
   "reminders": [
     {
-      "reminder_id": "rem_morning_medication",
-      "type": "medication",
-      "title": "早餐後服藥",
+      "reminder_id": "synthetic-reminder-001",
+      "type": "demo_prompt",
+      "title": "Synthetic reminder A",
       "time": "08:30",
-      "instruction": "早餐後服用高血壓藥",
+      "instruction": "Synthetic fixture instruction; no real-world action.",
       "status": "active",
       "requires_confirmation": true,
       "last_completed_at": null
     },
     {
-      "reminder_id": "rem_hydration",
-      "type": "hydration",
-      "title": "補充水分",
+      "reminder_id": "synthetic-reminder-002",
+      "type": "demo_prompt",
+      "title": "Synthetic reminder B",
       "time": "10:30",
-      "instruction": "提醒王先生喝水",
+      "instruction": "Synthetic fixture instruction; no real-world action.",
       "status": "active",
       "requires_confirmation": true,
       "last_completed_at": null

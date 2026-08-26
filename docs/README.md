@@ -1,6 +1,6 @@
 # TemiAgent Documentation Index
 
-最後審查日期：2026-07-31
+最後審查日期：2026-08-26
 
 `docs/` 保存跨模組架構、契約、操作流程、專案範圍與 reader-facing schema。模組自己的執行、設定與測試方式應留在該模組 README。
 
@@ -17,6 +17,32 @@ docs/
 
 Runtime-owned schemas under `hermes_temi_bridge/schemas/` remain authoritative. `docs/schemas/` is not an independent contract source.
 
+## Reading order and status labels
+
+New maintainers should read these documents in order: root [`README.md`](../README.md),
+[`CURRENT_STATUS.md`](CURRENT_STATUS.md), [project overview](architecture/project_overview.md),
+[contract traceability](architecture/contract_traceability.md), bootstrap and configuration
+references, the [Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md), verification and
+troubleshooting, module READMEs, then legacy or experimental references.
+
+`CURRENT` is the maintained source for a topic. `HARDWARE_FREE_VERIFIED` means that the
+specified unit, mock or fake path actually passed; it does not prove a live device or
+external service. `LIVE_NOT_VERIFIED` means that no current live claim is made. `LEGACY`
+means retained for history or compatibility and not a current procedure. `EXPERIMENTAL`
+means opt-in, non-canonical work.
+
+## Authority hierarchy
+
+1. **Current entrypoint:** root `README.md` and the five-command `scripts/demo` lifecycle.
+2. **Current authoritative detail:** runtime schemas, executable validators, lifecycle code
+   and owning service configuration; prose cannot override them.
+3. **Current module references:** module READMEs, `CURRENT_STATUS.md`, `REPOSITORY_MAP.md`
+   and the current operator/integration supplements.
+4. **Historical / legacy references:** dated, direct-service, machine-specific runbooks and
+   handovers retained for evidence with the exact legacy notice; they are not current commands.
+5. **Experimental / non-canonical references:** opt-in local inference, optional perception
+   and research material; physical presence does not create canonical ownership.
+
 ## Canonical coverage map
 
 Use this table to find the current source of explanation before consulting a dated
@@ -26,6 +52,8 @@ authoritative when any prose conflicts with them.
 | Surface | Current document | Owner / verification boundary |
 |---|---|---|
 | Repository entry, scope, module map | [`README.md`](../README.md) | Root maintainers; hardware-free checks only unless recorded otherwise. |
+| Current implementation, verification and release blockers | [CURRENT_STATUS.md](CURRENT_STATUS.md) | Maintainer snapshot; update when verification or publication state changes. |
+| Repository layout and publication boundary | [REPOSITORY_MAP.md](REPOSITORY_MAP.md) | Maintainer map; physical presence is not canonical ownership. |
 | Data flow, module boundary and capability classification | [project overview](architecture/project_overview.md) | Architecture; sections 6–13 are historical planning material. |
 | Cross-module topic, schema and update-together rule | [contract traceability](architecture/contract_traceability.md) | Bridge and contract owners; runtime schemas are authoritative. |
 | Demo lifecycle and operator workflow | [Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md) | Demo operator; `scripts/demo` is the only current lifecycle. |
@@ -34,7 +62,7 @@ authoritative when any prose conflicts with them.
 | Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes the Bridge-backed software-only newcomer acceptance. Hardware, Android, GPU and Discord remain external gates. |
 | Bridge-owned abnormal alert, follow-up, and Demo injection | [Immediate abnormal-care flow](operations/immediate_abnormal_care_flow.md) | Bridge owner; formal injector is synthetic-only and real Discord remains an authorization-gated external path. |
 | Module commands and artifacts | Each module README in the root module index | Owning module; do not infer contracts from a README alone. |
-| External source bootstrap | [`third_party/hermes/`](../third_party/hermes/README.md), [`third_party/llama_cpp/`](../third_party/llama_cpp/README.md), and reconstructed `hermes-agent/README.TemiAgent.md` | Tracked pins and Hermes patches; generated checkouts are ignored, not gitlinks. |
+| External source bootstrap | [`third_party/hermes/`](../third_party/hermes/README.md) and [`third_party/llama_cpp/`](../third_party/llama_cpp/README.md) | Hermes and llama.cpp are external/generated dependencies reconstructed from manifests; neither is root source or a current root submodule. |
 | Final Demo release reconciliation | [2026-07-31 consolidation record](project/final_demo_release_consolidation_20260731.md) | Release owner; retained worktree commits, owner disposition, and clean-clone delivery boundary. |
 
 ## Architecture
@@ -48,31 +76,32 @@ authoritative when any prose conflicts with them.
 
 ## Operations
 
-> `DEMO_QUICK_REFERENCE.md` 與 `demo_operations_runbook.md` 是
-> `codex/demo-operations-v1` 的 reference mirror。current branch 的唯一 lifecycle 是
-> `./scripts/demo`；請使用 `DEMO_OPERATOR_GUIDE.md` 與
-> `demo_warm_start_runbook.md`，不要套用 reference mirror 的舊 config contract。
+> `DEMO_OPERATOR_GUIDE.md` is the sole current Demo lifecycle authority.
+> `DEMO_QUICK_REFERENCE.md` is its compact companion. The warm-start and
+> integration runbooks are supplemental procedures, not second lifecycle
+> contracts. Direct-service, dated and machine-specific documents retain
+> historical evidence and must not be used as the current operator workflow.
 
 | Document | Status | Owner | Purpose |
 |---|---|---|---|
 | [safe_service_operations.md](operations/safe_service_operations.md) | Maintained policy | All service owners | Exact PID/port targeting, rollback, restore, retention and incident evidence. |
-| [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md) | Maintained, Demo-only | Demo operator | Canonical `scripts/demo` lifecycle, Media capability boundary and live observers. |
+| [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md) | CURRENT; Demo-only | Demo operator | Sole canonical `scripts/demo` lifecycle, bootstrap/check, logs, failures, Media boundary and live observers. |
 | [demo_configuration_reference.md](operations/demo_configuration_reference.md) | Maintained, Demo-only | Demo operator | Complete non-secret `config/demo.env.example` key groups, ownership and feature gates. |
 | [demo_troubleshooting.md](operations/demo_troubleshooting.md) | Maintained, Demo-only | Demo operator | Symptom-to-evidence troubleshooting without unowned process or runtime-data changes. |
 | [verification_and_acceptance.md](operations/verification_and_acceptance.md) | Maintained | Maintainers | Hardware-free checks, external acceptance gates and evidence vocabulary. |
 | [demo_deployment_handover.md](operations/demo_deployment_handover.md) | Maintained, Demo-only | Demo operator | Bootstrap, private configuration, managed/external ownership, resource manifest and handover limits. |
 | [demo_temporary_content_inventory_20260730.md](operations/demo_temporary_content_inventory_20260730.md) | Dated integration inventory | Demo maintainer | Retention-only classification of `/tmp/temiagent*` Demo artifacts and local archive policy. |
-| [DEMO_QUICK_REFERENCE.md](operations/DEMO_QUICK_REFERENCE.md) | Maintained compact reference; Demo-only | Demo operator | Current canonical commands, status meanings and recovery first actions. |
-| [demo_operations_runbook.md](operations/demo_operations_runbook.md) | Retained expert reference; Demo-only | Demo operator | Historical expert aliases and Android-evidence background; not the newcomer procedure. |
-| [temi_integration_runbook.md](operations/temi_integration_runbook.md) | Maintained | Integration | Hardware-free through real-device integration sequence. |
+| [DEMO_QUICK_REFERENCE.md](operations/DEMO_QUICK_REFERENCE.md) | CURRENT companion; Demo-only | Demo operator | Compact copy of current commands, status meanings and recovery first actions; not a second authority. |
+| [demo_operations_runbook.md](operations/demo_operations_runbook.md) | LEGACY reference; Demo-only | Demo operator | Retained expert aliases and Android-evidence background; explicit legacy notice, not a current procedure. |
+| [temi_integration_runbook.md](operations/temi_integration_runbook.md) | CURRENT supplemental | Integration | Hardware-free integration checks and external acceptance boundaries; no lifecycle ownership. |
 | [lmstudio_headless_3gpu_hdd_manual.md](operations/lmstudio_headless_3gpu_hdd_manual.md) | Maintained, machine-dependent | LM Studio runtime | Headless model service startup, health and recovery. |
 | [lmstudio_gpu_selection.md](operations/lmstudio_gpu_selection.md) | Experimental evidence | ML runtime | GPU selection observations; not a portable default. |
-| [temi_streaming_manual.md](operations/temi_streaming_manual.md) | Maintained, environment-dependent | Temi streaming | Android/PC streaming deployment. |
-| [temi_streaming_local_runbook.md](operations/temi_streaming_local_runbook.md) | Machine-specific evidence | Temi streaming | Local ADB, MQTT and WebSocket observations. |
-| [temi_e2e_stack_validation_manual.md](operations/temi_e2e_stack_validation_manual.md) | Maintained, environment-dependent | Integration | Full-stack validation and evidence collection. |
-| [demo_warm_start_runbook.md](operations/demo_warm_start_runbook.md) | Maintained, Demo-only | Demo operator | External runtime layout, exact-PID restart, health gates and real Temi Media evidence. |
-| [first_year_demo_runbook.md](operations/first_year_demo_runbook.md) | Demo-only | Demo operator | Cross-module Demo startup and fallback. |
-| [first_year_demo_e2e_operation_manual.md](operations/first_year_demo_e2e_operation_manual.md) | Demo-only | Demo operator | Detailed Demo and recording procedure. |
+| [temi_streaming_manual.md](operations/temi_streaming_manual.md) | LEGACY external-Android reference | Temi streaming | Historical Android build, ADB and streaming procedure; not the current lifecycle. |
+| [temi_streaming_local_runbook.md](operations/temi_streaming_local_runbook.md) | LEGACY machine-specific reference | Temi streaming | Local ADB, MQTT and WebSocket observations; historical evidence only. |
+| [temi_e2e_stack_validation_manual.md](operations/temi_e2e_stack_validation_manual.md) | LEGACY direct-service reference | Integration | Superseded full-stack restart script and manual service commands. |
+| [demo_warm_start_runbook.md](operations/demo_warm_start_runbook.md) | CURRENT supplemental; Demo-only | Demo operator | External runtime layout, exact-PID restart, health gates and real Temi Media evidence; not a second lifecycle authority. |
+| [first_year_demo_runbook.md](operations/first_year_demo_runbook.md) | LEGACY Demo reference | Demo operator | Dated first-year scenario startup and fallback. |
+| [first_year_demo_e2e_operation_manual.md](operations/first_year_demo_e2e_operation_manual.md) | LEGACY Demo reference | Demo operator | Dated detailed Demo and recording procedure. |
 
 Machine-specific documents may record historical observations. New reusable commands SHOULD use environment variables or placeholders rather than private addresses and user-specific host paths.
 
@@ -87,10 +116,25 @@ Machine-specific documents may record historical observations. New reusable comm
 | [first_year_demo_system_design_20260601.md](project/first_year_demo_system_design_20260601.md) | Dated design snapshot | Demo owner | Implemented state and decisions at the stated date. |
 | [first_year_demo_scenario_script.md](project/first_year_demo_scenario_script.md) | Demo-only | Demo operator | Scenario narration and evidence mapping. |
 | [first_year_demo_acceptance_checklist.md](project/first_year_demo_acceptance_checklist.md) | Demo-only checklist | Demo operator | Pre-Demo acceptance evidence. |
-| [system_handover.md](project/system_handover.md) | Legacy handoff; verify against current module docs | Project | Broad historical handoff. |
+| [system_handover.md](project/system_handover.md) | LEGACY handoff; verify against current module docs | Project | Broad historical handoff; current handover starts from `CURRENT_STATUS.md` and the current operator guide. |
 | [p2_structured_memory_phase1_report_materials.md](project/p2_structured_memory_phase1_report_materials.md) | Dated report material | Care memory | Phase evidence. |
 | [phase1_care_context_builder_read_path.md](project/phase1_care_context_builder_read_path.md) | Dated implementation note | Care memory | Context-builder read path. |
 | [phase1_care_context_demo_package.md](project/phase1_care_context_demo_package.md) | Demo package | Care memory | Phase 1 Demo evidence. |
+
+## Repository and publication boundary
+
+[`REPOSITORY_MAP.md`](REPOSITORY_MAP.md) is the high-density source and ownership map;
+[`CURRENT_STATUS.md`](CURRENT_STATUS.md) is the dated implementation, verification and
+release-blocker snapshot. Together they explain what belongs to canonical V1, what is
+external or generated, and what is local runtime state.
+
+The publication boundary includes reviewed source, contracts, tests, configuration
+templates and synthetic fixtures. It excludes real care or user data, runtime logs and
+images, credentials, model caches, downloaded weights, recordings, and owner-only
+`.runtime/` state. Models are not implied by a clean clone. `third_party/hermes/` and
+`third_party/llama_cpp/` describe external/generated source reconstruction; neither is
+TemiAgent root source or a current root submodule. `計劃書/` is research/reference
+material, not runtime source.
 
 ## Schemas
 

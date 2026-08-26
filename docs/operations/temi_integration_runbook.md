@@ -1,5 +1,10 @@
 # Temi + Hermes Integration Runbook
 
+Status: CURRENT supplemental verification. The canonical operator lifecycle remains
+the five `scripts/demo` commands in [DEMO_OPERATOR_GUIDE.md](DEMO_OPERATOR_GUIDE.md).
+The direct service commands in the component sections below are controlled integration
+checks only; they do not establish live readiness or replace lifecycle ownership.
+
 This runbook follows `docs/architecture/project_overview.md`: validate each layer first, then connect the full system.
 
 ## 1. Unit Tests

@@ -4,6 +4,13 @@ Status: maintained, Demo-only. This document describes the canonical software
 stack in `<TEMIAGENT_ROOT>` and does not authorize real care, emergency, or
 Discord notification tests.
 
+Use [DEMO_OPERATOR_GUIDE.md](DEMO_OPERATOR_GUIDE.md) as the sole current
+lifecycle authority. This handover explains source reconstruction, ownership and
+deployment boundaries; its lifecycle snippets are supplemental and do not define
+another command vocabulary.
+deployment boundaries; its lifecycle snippets are supplemental and do not define
+another command vocabulary.
+
 ## Canonical source and bootstrap
 
 Run every project operation in the designated container, from `/TemiAgent`.

@@ -18,6 +18,24 @@
       "sha256": null,
       "consumer": "Resident Hermes and managed Hermes gateway",
       "validation": "Lifecycle checks the canonical resident skill path before start."
+    },
+    {
+      "id": "anomaly_pose_model",
+      "relative_path": "anomaly_detection/yolo26x-pose.pt",
+      "expected_path": "anomaly_detection/yolo26x-pose.pt",
+      "filename": "yolo26x-pose.pt",
+      "type": "optional_external_model_weight",
+      "required": false,
+      "size_bytes": 126242553,
+      "sha256": "08ed9e01d22a6f248b04f2f9992016aca9a32250b9ab57057d886a09d026700d",
+      "version": "VERSION_REQUIRES_MAINTAINER_CONFIRMATION",
+      "source": "SOURCE_REQUIRES_MAINTAINER_CONFIRMATION",
+      "acquisition_status": "LOCAL_COPY_PRESENT_NOT_PUBLISHED",
+      "license": "LICENSE_REQUIRES_MAINTAINER_CONFIRMATION",
+      "restriction_status": "RESTRICTIONS_REQUIRE_MAINTAINER_CONFIRMATION",
+      "publication_status": "EXTERNAL_ARTIFACT_NOT_IN_CANONICAL_V1",
+      "consumer": "Optional anomaly_detection/temi_action_viewer.py pose preprocessing when the Demo action viewer is explicitly enabled",
+      "validation": "Gate 1A records the local file size and SHA-256; the optional consumer remains dependent on maintainer-confirmed source, version, license and restrictions, and the weight is not committed."
     }
   ]
 }

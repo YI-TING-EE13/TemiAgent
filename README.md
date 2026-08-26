@@ -8,13 +8,19 @@ TemiAgent 是以 Temi robot 為實體載具、Hermes Agent 為認知核心的 em
 
 | Capability | State | Evidence and limits |
 |---|---|---|
-| Legacy live route | Verified Demo route | `temi_backend/` 已用於 Temi ASR、影像、local VLM 與 MQTT action 閉環；保留作相容路線。 |
-| Canonical ASR route | Implemented; hardware-free path verified | Overview adapter 產生 canonical ASR event，Bridge 驗證 Hermes output 後發布 command。 |
-| Canonical media v1.1 Bridge route | Feature-gated; fake Android verified | Bridge 可建立 play/control request、消費 session lifecycle/result 並寫 trace；預設關閉，Android、Hermes video entry 與真機尚未驗證。 |
-| Resident Hermes HTTP mode | Implemented; Demo route verified | `tools/hermes_resident_server.py` 提供 `/health` 與 `/invoke`；預設整合 port 為 `8765`。 |
-| Structured care memory | Demo-only | `memory/` 只應保存合成 Demo 資料；不是病歷或正式個資儲存系統。 |
-| Continuous abnormal perception | Experimental Demo | `anomaly_detection/` 可產生 abnormal event；模型結果未經醫療或安全認證。 |
-| Immediate abnormal-care flow | Demo-only; hardware-free and isolated mock E2E verified | Bridge validates an abnormal event, records one notification-stage receipt, invokes Resident Hermes, validates the resulting speak command, and persists a bounded follow-up episode. Real recipient delivery still requires a separately authorized credential and real-device evidence. |
+| Legacy live route | LEGACY; LIVE_NOT_VERIFIED | `temi_backend/` 保留 legacy ASR、影像、local VLM 與 MQTT 相容路線；目前 Gate snapshot 只有硬體無關測試，歷史真機紀錄不是目前 live evidence。 |
+| Canonical ASR route | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | Overview adapter 產生 canonical ASR event，Bridge 驗證事件、路徑與 Hermes output 後發布 command；Temi Android live path 尚未驗證。 |
+| Canonical media v1.1 Bridge route | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | Bridge 與 fake Android 已驗證 play/control lifecycle；Android、Hermes video entry 與真機播放仍是外部驗收。 |
+| Resident Hermes HTTP mode | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | `tools/hermes_resident_server.py` 提供 `/health` 與 `/invoke`；wrapper 與 mock route 可測，live provider/model 尚未驗證。 |
+| Structured care memory | DEMO_ONLY; HARDWARE_FREE_VERIFIED | `memory/` 只保存已去識別的合成 fixture；runtime memory、production data 與正式病歷不在 publication scope。 |
+| Continuous abnormal perception | EXPERIMENTAL; LIVE_NOT_VERIFIED | `anomaly_detection/` 可產生 abnormal event；模型結果未經醫療或安全認證，且 viewer 不得 dispatch hardware command。 |
+| Immediate abnormal-care flow | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | Bridge validates an abnormal event, records one notification-stage receipt, invokes Resident Hermes, validates the resulting speak command, and persists a bounded follow-up episode. Real recipient delivery and real-device execution remain unverified. |
+
+狀態標籤的意思是：`IMPLEMENTED` 代表程式已存在；`HARDWARE_FREE_VERIFIED` 只代表指定的
+unit、mock 或 fake 路徑實際通過；`LIVE_NOT_VERIFIED` 代表本文件沒有宣稱目前有 live
+listener、真機、GPU/model、Discord 或真實 perception evidence；`LEGACY` 與
+`EXPERIMENTAL` 不屬於 canonical V1 主線。最新治理 snapshot 見
+[`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md)。
 
 異常 perception 的 notification、care-first TTS、timeout 與 escalation 都由 Bridge 擁有；
 action viewer 不再直接發布 `cmd/request`、`cmd/result` 或 Discord webhook。Demo mock
@@ -25,16 +31,15 @@ receipt 不會聯絡任何收件者；真實 Discord 只有 HTTP 204 receipt 才
 ## Architecture
 
 ```text
-Temi Android ASR and camera
-  -> legacy MQTT and WebSocket input
+Temi Android ASR/camera
   -> tools/temi_overview_adapter.py
-  -> canonical ASR event plus allowlisted image paths
+  -> canonical ASR/perception events plus allowlisted paths
   -> HermesTemiBridge validation
-  -> Hermes JSON-only reasoning
-  -> HermesTemiBridge action validation
-  -> canonical MQTT command
-  -> Temi Android hardware execution
-  -> command result and trace
+  -> resident Hermes JSON-only reasoning
+  -> HermesTemiBridge action validation and dispatch
+  -> canonical MQTT command request
+  -> Temi Android executor
+  -> command result and Bridge trace
 ```
 
 Dependency and safety rules:
@@ -53,7 +58,7 @@ The detailed module map and payload narrative are in [project_overview.md](docs/
 | Module | Responsibility | Entry point | README | Verification |
 |---|---|---|---|---|
 | `hermes_temi_bridge/` | Canonical safety boundary and command dispatcher | `hermes-temi-bridge` | [README](hermes_temi_bridge/README.md) | `uv run python -m unittest discover -s tests` |
-| `hermes-agent/` | Hermes runtime and upstream code | `tools/hermes_resident_server.py` for Temi Demo | [Bootstrap overlay](third_party/hermes/README.md) | Bridge/resident integration checks |
+| `hermes-agent/` | External nested Hermes runtime reconstructed from public base plus tracked patches | `tools/hermes_resident_server.py` for Temi Demo | [Bootstrap overlay](third_party/hermes/README.md) | Bootstrap and Bridge/resident integration checks |
 | `hermes-skills/` | Reviewable mirror of Temi-specific Hermes skills | `SKILL.md` files | [README](hermes-skills/README.md) | Mirror diff and skill validators |
 | `temi_backend/` | Verified legacy ASR, video and VLM route | `uv run temi-backend` | [README](temi_backend/README.md) | `uv run pytest` |
 | `anomaly_detection/` | Experimental stream viewer and abnormal-event producer | `temi_action_viewer.py` | [README](anomaly_detection/README.md) | Module tests or documented manual QA |
@@ -63,6 +68,24 @@ The detailed module map and payload narrative are in [project_overview.md](docs/
 | `docs/` | Maintained architecture, operations, project and schema documents | `docs/README.md` | [Documentation index](docs/README.md) | Link, path and consistency checks |
 
 `memory/` and `logs/` are runtime or Demo-data areas rather than independently deployed services. Their README files define data restrictions.
+
+## Experimental and local-only areas
+
+`local_inference/` and `sub2/` may exist in a development checkout, but they are
+excluded from canonical V1 publication and are not required by `./scripts/demo`.
+`local_inference/` is an opt-in DeepSeek/llama.cpp experiment on loopback port
+`1235`; it is not part of the Temi/Hermes request path. `sub2/` is an isolated
+emotion-recognition experiment and does not own the canonical MQTT or Bridge route.
+Physical presence in a mounted workspace does not make either directory a canonical
+module. Their local README, weights, caches and build products are not publication
+evidence.
+
+`.runtime/`, `logs/`, `temi_shared/`, model caches, downloaded weights, checkpoints
+and recordings are runtime or external artifact boundaries. The generated
+`anomaly_detection/third_party/llama.cpp/` checkout is reconstructed from its
+manifest and is not root source. The optional `yolo26x-pose.pt` weight is an
+external model asset with expected path/hash metadata only; its source, version,
+license and redistribution restrictions still require maintainer confirmation.
 
 ## Container and Working Directory
 
@@ -107,18 +130,19 @@ Hardware, GPU, Discord and live-stream acceptance require their documented exter
 ## Operations
 
 The canonical Demo entry point is `./scripts/demo`. Its one default private
-configuration is Git-ignored at `/TemiAgent/.runtime/demo/demo.env` (the host
-bind-mount path is `/home/yiting/TemiAgent/.runtime/demo/demo.env`) and its
+configuration is Git-ignored at `/TemiAgent/.runtime/demo/demo.env` and its
 runtime root is `/TemiAgent/.runtime/demo`. The initializer creates both with
 owner-only permissions and never asks for a Discord credential.
 
 ```bash
 cd /TemiAgent
 ./scripts/bootstrap --sources
+./scripts/bootstrap --check
 ./scripts/demo init-config
 ./scripts/demo doctor
 ./scripts/demo start
 ./scripts/demo status
+./scripts/demo restart
 ./scripts/demo stop
 ```
 
@@ -144,9 +168,13 @@ the logical media and skill assets. From a clean clone, run
 and the pinned optional llama.cpp source checkout from public upstream. Run
 `./scripts/bootstrap --check` only after the documented dependency environments
 have been provisioned. Neither command starts services or creates credentials.
+`docker-compose.yml` is an optional secondary/development configuration; it is
+not a parallel production entrypoint and is not the canonical lifecycle.
 
 - Cross-module startup, health checks and debugging: [Temi integration runbook](docs/operations/temi_integration_runbook.md)
 - Canonical current Demo lifecycle and real-device Media checks: [Demo operator guide](docs/operations/DEMO_OPERATOR_GUIDE.md)
+- Current implementation, verification and blocker snapshot: [CURRENT_STATUS.md](docs/CURRENT_STATUS.md)
+- High-density source and publication boundary: [REPOSITORY_MAP.md](docs/REPOSITORY_MAP.md)
 - Private configuration keys, ownership modes and feature-gate invariants: [Demo configuration reference](docs/operations/demo_configuration_reference.md)
 - Symptom-driven diagnosis that preserves protected services: [Demo troubleshooting](docs/operations/demo_troubleshooting.md)
 - Hardware-free and external acceptance boundaries: [Verification and acceptance guide](docs/operations/verification_and_acceptance.md)
@@ -172,5 +200,5 @@ Runbooks may contain environment-specific placeholders. Supply private IP addres
 - The Android App source is not maintained in this workspace; Android behavior requires separate source and real-device verification.
 - The canonical topic strings are repeated across producer and consumer code rather than generated from one contract package.
 - Several runbooks capture machine-specific Demo history. Treat observed values as evidence snapshots, not portable defaults.
-- The repository currently tracks some synthetic memory outputs and a model checkpoint. Removing or relocating tracked artifacts requires a separately reviewed migration.
+- The root publication boundary retains only reviewed synthetic memory fixtures; runtime memory must remain outside Git. The historical HEAD contains a pose checkpoint, while the Gate 1A publication change removes that weight from the current index; source, version, license and redistribution status remain unresolved.
 - No capability in this repository establishes medical-grade accuracy, guaranteed fall detection, real emergency notification or autonomous unsupervised care.

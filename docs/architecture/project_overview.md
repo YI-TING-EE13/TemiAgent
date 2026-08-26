@@ -1,6 +1,6 @@
 # Temi + Hermes Agent 整合專案總覽文件
 
-> 文件狀態：Maintained architecture narrative，最後治理審查日期為 2026-07-26。
+> 文件狀態：CURRENT architecture narrative，最後治理審查日期為 2026-08-26。
 >
 > 本文件包含初期驗證計畫、里程碑與 Coding Agent 任務。第 7–13 節是歷史規劃與
 > 驗收設計，不代表所有項目目前均已實作或驗證。現況能力以根目錄 `README.md`、
@@ -18,9 +18,51 @@
 Architecture narrative 不得取代 runtime validator、schema 或 owning module config。
 若本文與 executable source 不一致，先保留 runtime 行為並把差異列入治理修正。
 
+## Canonical V1 boundary
+
+The canonical flow is:
+
+```text
+Temi Android ASR/camera
+  -> tools/temi_overview_adapter.py
+  -> canonical ASR/perception events plus allowlisted paths
+  -> HermesTemiBridge validation
+  -> resident Hermes JSON-only reasoning
+  -> HermesTemiBridge action validation and command request
+  -> Temi Android executor
+  -> command result and Bridge trace
+```
+
+`hermes_temi_bridge/` is the safety and dispatch boundary. It validates robot IDs,
+schemas, shared paths, Hermes JSON output and actions before publishing a canonical
+command request. Hermes returns JSON-only plans and never publishes MQTT or controls
+hardware. The optional anomaly viewer produces perception events only; it is not a
+general hardware dispatcher. Temi Android is an external consumer, and the current
+Gate snapshot classifies real Android, MQTT, model/GPU and live perception behavior as
+`LIVE_NOT_VERIFIED`.
+
+Canonical V1 includes the root scripts/tools, Bridge, legacy backend compatibility
+route, canonical configuration and schemas, MQTT configuration, reviewable skills,
+source manifests/patches, and documentation. The nested `hermes-agent/` checkout
+and generated `anomaly_detection/third_party/llama.cpp/` checkout are external
+dependencies reconstructed by bootstrap; neither is root source, vendored source or
+a current root submodule. `memory/` contains only reviewed synthetic fixtures;
+runtime state, real care data, images, logs and checkpoints are not publication data.
+
+## Experimental / non-canonical local inference
+
+`local_inference/` and `sub2/` may be physically present in a development mount, but
+they are excluded from canonical V1 and are not required by `./scripts/demo`.
+`local_inference/` is an opt-in DeepSeek/llama.cpp service on loopback `1235`;
+`sub2/` is an isolated emotion-recognition experiment. Neither owns the canonical
+MQTT topic, Bridge validation or Temi hardware route. The optional `yolo26x-pose.pt`
+weight is an external model asset with expected path/hash metadata only; source,
+version, license and redistribution restrictions require maintainer confirmation.
+
 ## Current reading order
 
 Read the root [`README.md`](../../README.md),
+[`CURRENT_STATUS.md`](../CURRENT_STATUS.md), [`REPOSITORY_MAP.md`](../REPOSITORY_MAP.md),
 [contract traceability](contract_traceability.md), and the owning module README
 before operating or changing the system. The current Demo lifecycle, private
 configuration and incident boundaries are in
@@ -70,9 +112,9 @@ publish a robot command directly. See the executable operator boundary in
 
 ## 0. 文件目的
 
-本文件用於說明目前分散的專案模組如何整合成一套完整的 Embodied AI 系統。
+本文件整理目前已落地與仍待驗證的模組邊界；它不是對 live、醫療或完整照護能力的保證。
 
-系統目標是讓 Temi robot 成為一個具備語音理解、視覺感知、Agent 推理與行動能力的 embodied AI robot。
+系統目標是讓 Temi robot 成為具備語音理解、視覺感知、Agent 推理與受驗證行動邊界的 embodied AI research/demo platform。
 
 當使用者對 Temi 說話時，系統應能完成以下流程：
 
@@ -319,7 +361,7 @@ Hermes container 中看到：
 ## 2.4 HermesTemiBridge
 
 **目錄位置**：`hermes_temi_bridge/`
-**目前狀態**：已完成 hardware-free unit/mock E2E 驗證、resident Hermes route、manual Discord action dispatcher，以及實機 canonical command path。2026-06-01 起 Overview adapter 僅負責 ASR/camera，不再轉發 command；Temi app 直接執行 `temi/{robot_id}/cmd/request`，避免重複 TTS。
+**目前狀態**：已完成 hardware-free unit/mock E2E 驗證、resident Hermes wrapper 與 Bridge-validated Demo helper；目前 Gate snapshot 沒有 real Temi/Android live evidence。2026-06-01 起 Overview adapter 僅負責 ASR/camera，不再轉發 command；Temi app 直接執行 `temi/{robot_id}/cmd/request`，避免重複 TTS。
 
 ### 角色
 
@@ -369,7 +411,7 @@ Bridge 不應該：
 ## 2.5 Hermes Agent
 
 **目錄位置**：`hermes-agent/`
-**目前狀態**：環境已設定完畢，能正常呼叫 LMStudio 的 Local model。
+**目前狀態**：Resident wrapper、mock path 與 Bridge integration tests 已存在；live Hermes provider、LM Studio/model 與 GPU path 在目前 Gate snapshot 為 `LIVE_NOT_VERIFIED`。
 
 ### 角色
 
@@ -438,7 +480,7 @@ Hermes 應只輸出 JSON。
 ## 2.7 舊版測試環境：Temi Backend
 
 **目錄位置**：`temi_backend/`
-**目前狀態與用途**：包含先前在另外一台電腦測試 Temi APP 的程式碼，初次測試時可先用其驗證目前環境是否能與 Temi 成功建立 MQTT 通訊。
+**目前狀態與用途**：LEGACY route。保留早期 Temi App 的 ASR、camera、VLM 與 MQTT 相容程式；目前只以 module tests 與歷史紀錄作為背景，不把歷史 live 結果當成目前驗收證據。
 
 ***
 
@@ -686,6 +728,10 @@ Temi publish：
 > Historical architecture example. Do not use this section to choose a current
 > lifecycle, private path, service ownership or configuration value; use the
 > maintained Demo operations documents instead.
+>
+> `docker-compose.yml` is an optional secondary/development example. It is not
+> invoked by `./scripts/demo` and must not be treated as a parallel production
+> lifecycle or source of current ownership.
 
 ## 6.1 真實運行時需要啟動的服務
 

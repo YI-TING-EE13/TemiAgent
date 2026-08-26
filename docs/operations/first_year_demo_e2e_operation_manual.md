@@ -1,5 +1,8 @@
 # 第一年度 Demo 端到端串接操作手冊
 
+> Historical / legacy reference. Do not use as the current canonical Demo lifecycle.
+> Use the [current Demo operator guide](DEMO_OPERATOR_GUIDE.md) for lifecycle commands.
+
 最後更新日期：2026-06-12
 
 ## 文件目的與分工

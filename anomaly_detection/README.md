@@ -1,5 +1,9 @@
 # Temi 異常偵測串流 Viewer
 
+狀態：EXPERIMENTAL；viewer 與 abnormal perception event producer 可用於 Demo/研究，
+但目前沒有真機、GPU、外部模型服務或 production perception 的 live verification claim。
+viewer 只產生受 Bridge 驗證的 perception event，不擁有 canonical hardware dispatch。
+
 這個資料夾是一個獨立的 `uv` 專案，用來測試 Temi camera 的持續影像接收。
 
 viewer 會在 `8000` port 提供瀏覽器頁面。
@@ -102,6 +106,12 @@ YOLO pose 前處理由以下參數控制：
 
 `auto` 會在 `ultralytics` 和 pose model 檔案都可用時套用 skeleton overlay。`on` 會在 dependency 或模型檔缺失時 fail fast。`off` 會送原始 frames。
 `--pose-device 0` 會強制 YOLO pose inference 使用 GPU 0；只有 debug 時才建議用 `cpu`。
+
+`yolo26x-pose.pt` 是 optional external model asset，預期位置與 size/hash 只由
+`config/demo_resources.json` 記錄；它不是 Git 依賴，也沒有在本文件發明下載 URL。
+目前 source、version、license 與 redistribution restrictions 尚待 maintainer confirmation。
+`--pose-mode off` 不需要 pose weight；`auto` 可在缺少 weight 時略過 skeleton，`on` 則會
+對缺少的 dependency 或模型明確失敗。模型結果本身不是醫療、安全或跌倒保證。
 
 managed llama.cpp server 可以指定到特定實體 GPU，而不影響整個 viewer process：
 

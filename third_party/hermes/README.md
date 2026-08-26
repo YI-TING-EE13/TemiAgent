@@ -5,6 +5,14 @@ does not vendor Hermes, alter the public upstream remote, or push a Temi branch
 to that remote. Instead, this directory records the reviewed public upstream
 base and the small Temi-specific patch series required by the canonical Demo.
 
+`hermes-agent/` is an external generated dependency, not TemiAgent root source,
+not vendored source, and not a current root Git submodule. The root repository
+publishes the upstream URL, base commit, patch files and target-tree metadata;
+bootstrap reconstructs the nested checkout when the local environment permits it.
+Current local reconstruction evidence is branch `temiagent/integration` at
+`126aa304cda027679fc84212925bbd5329ada20b`; this local commit is not a promise
+of a team-accessible fork or an independently reproducible public root checkout.
+
 From a clean TemiAgent clone, run:
 
 ```bash

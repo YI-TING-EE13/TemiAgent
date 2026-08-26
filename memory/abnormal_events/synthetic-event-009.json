@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "event_id": "synthetic-event-009",
+  "timestamp": "2099-01-01T00:00:09Z",
+  "home_esi_level": "L1",
+  "risk_reason": "Synthetic fixture risk label; not a clinical assessment.",
+  "evidence": {
+    "asr_text": "synthetic utterance 008",
+    "image_paths": [
+      "synthetic-fixtures/frames/synthetic-event-009/frame-t-minus-1000.jpg",
+      "synthetic-fixtures/frames/synthetic-event-009/frame-t-minus-500.jpg",
+      "synthetic-fixtures/frames/synthetic-event-009/frame-t.jpg"
+    ]
+  },
+  "actions_taken": [
+    "speak",
+    "notify_caregiver_mock",
+    "log_event"
+  ],
+  "notification": {
+    "type": "demo_mock",
+    "target": "synthetic-caregiver-001",
+    "message": "Synthetic fixture notification; no real-world notification was sent.",
+    "status": "mock_sent"
+  }
+}

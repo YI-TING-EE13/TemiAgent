@@ -1,32 +1,32 @@
 {
   "schema_version": "1.0",
-  "user_id": "elder_demo_001",
+  "user_id": "synthetic-resident-001",
   "persona_type": "demo_synthetic",
-  "preferred_name": "王先生",
-  "gender": "male",
+  "preferred_name": "Synthetic Resident",
+  "gender": "unspecified",
   "language": "zh-TW",
-  "display_age_group": "older_adult",
+  "display_age_group": "synthetic_demo_group",
   "demo_notes": {
-    "actor": "male_student",
+    "actor": "synthetic_fixture_actor",
     "privacy": "synthetic_profile_no_real_personal_data"
   },
   "care_preferences": {
-    "speak_style": "溫和、簡短、清楚",
-    "confirmation_style": "需要口頭確認",
-    "risk_escalation_style": "先確認狀況，再進行 mock notification"
+    "speak_style": "synthetic_demo_brief",
+    "confirmation_style": "synthetic_demo_confirmation",
+    "risk_escalation_style": "synthetic_demo_mock_escalation"
   },
   "known_conditions": [
     {
-      "condition": "高血壓",
-      "source": "demo_profile",
-      "severity": "background_context"
+      "condition": "synthetic_demo_context",
+      "source": "synthetic_fixture",
+      "severity": "non_clinical_placeholder"
     }
   ],
   "caregiver_contacts": [
     {
-      "contact_id": "caregiver_demo_primary",
-      "name": "家屬",
-      "role": "primary",
+      "contact_id": "synthetic-caregiver-001",
+      "name": "Synthetic Caregiver",
+      "role": "synthetic_primary",
       "channel": "demo_mock"
     }
   ]

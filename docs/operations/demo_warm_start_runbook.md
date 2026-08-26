@@ -5,6 +5,12 @@
 狀態：Maintained Demo-only runbook。適用於 LM Studio 已載入模型且 MQTT broker 已可用的
 AI6 Demo。這份手冊不重啟 LM Studio；健康且 endpoint 未變的 broker 也會保留。
 
+Canonical lifecycle vocabulary and ownership remain in the
+[current Demo operator guide](DEMO_OPERATOR_GUIDE.md). This is a supplemental
+warm-start and real-Temi Media evidence procedure, not a second lifecycle authority.
+[current Demo operator guide](DEMO_OPERATOR_GUIDE.md). This is a supplemental
+warm-start and real-Temi Media evidence procedure, not a second lifecycle authority.
+
 ## 事前條件
 
 在指定 container 中執行：

@@ -1,5 +1,9 @@
 # TemiAgent 智慧居家照護系統交接文件
 
+> Historical / legacy reference. Do not use as the current canonical Demo lifecycle.
+> Current handover starts with [`CURRENT_STATUS.md`](../CURRENT_STATUS.md),
+> [`REPOSITORY_MAP.md`](../REPOSITORY_MAP.md), and the [current Demo operator guide](../operations/DEMO_OPERATOR_GUIDE.md).
+
 > Status: legacy handover snapshot dated 2026-07-22. Its branch names, worktree
 > paths, historical acceptance claims and command examples are not the current
 > source of truth. Start with the root [`README.md`](../../README.md), the

@@ -1,6 +1,6 @@
 # Demo Structured Memory
 
-最後更新日期：2026-05-31
+最後更新日期：2026-08-26
 
 ## 定位
 
@@ -18,7 +18,7 @@
 
 ```text
 memory/
-  profile.json          # Demo 長者 persona；目前設定為男性王先生
+  profile.json          # Demo persona；目前使用 synthetic-resident-001
   daily_state.json      # 今日狀態、active reminders、recent event ids
   reminders.json        # Demo reminders 與完成狀態
   event_log.jsonl       # 追加式事件紀錄；一行一個 JSON object
@@ -30,9 +30,20 @@ memory/
 
 - 所有資料皆為合成資料，不代表真實個案。
 - 不存真實身份資訊、電話、地址或可識別個資。
-- 影像不直接複製到 memory；只在 event log 中保存 `temi_shared/` path。
+- 影像不直接複製到 memory；fixture 只使用相對的 synthetic placeholder path，不指向 `temi_shared/` 或真實影像。
 - Hermes 可讀取 memory 摘要與輸出 memory actions。
 - 實際寫入 JSON / JSONL 由 Bridge 或後續 memory tool 負責。
+
+## Provenance and publication boundary
+
+- `provenance_status`: `SYNTHETIC_FIXTURE_GENERATED_FOR_GATE1A`
+- `data_origin`: newly generated synthetic placeholders for Gate 1A publication-boundary verification.
+- `real_person_data`: `NO`.
+- `consent_or_source_record`: `NOT_APPLICABLE_SYNTHETIC`.
+- `production_runtime_data`: `MUST_NOT_BE_COMMITTED`.
+- This declaration applies to the current tracked fixtures only; it does not make a provenance claim about any prior fixture contents.
+- Regenerate or edit these files only with clearly synthetic identifiers, narratives, paths and contact targets. Do not copy logs, care records, credentials, media or production state into this directory.
+- Runtime state remains outside the publication boundary in `.runtime/`, `logs/`, `temi_shared/`, caches and other ignored locations.
 
 ## 對應 Demo
 

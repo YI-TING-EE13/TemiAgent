@@ -1,8 +1,8 @@
 # TemiAgent Demo 操作入口
 
-最後更新日期：2026-07-31
+最後更新日期：2026-08-26
 
-狀態：Demo-only。`scripts/demo` 是目前 checkout 的唯一 lifecycle。private env 為每個
+狀態：CURRENT；Demo-only。`scripts/demo` 是目前 checkout 唯一的 canonical lifecycle。private env 為每個
 service 明確宣告 `managed`、`external` 或 `disabled` ownership；`managed` 服務會由同一
 lifecycle 啟動、記錄 exact PID identity、health-check 與停止，`external` 服務只 health-check
 且永不由 lifecycle 停止。正式 software-only profile 可管理 LM Studio、Mosquitto、Overview
@@ -25,30 +25,49 @@ to classify a result. `DEMO_QUICK_REFERENCE.md` is a compact companion;
 `demo_operations_runbook.md`, dated project handovers, and temporary-content
 inventories are reference material, not substitute lifecycle contracts.
 
-## 唯一操作指令
+## Current canonical lifecycle
 
 Canonical config is the ignored, owner-only `/TemiAgent/.runtime/demo/demo.env`;
 `./scripts/demo init-config` creates it and the paired runtime root without a
 credential. It defaults to the safe `newcomer_mock` profile. Use an explicit
 absolute `--config` only for a separately owned custom deployment.
 
+From a clean source checkout, reconstruct only the reviewed external source pins.
+This does not install dependencies or start a service:
+
 ```bash
 ./scripts/bootstrap --sources
 ```
 
+After the documented Hermes and module environments exist, check those pins and
+runtime prerequisites:
+
 ```bash
-./scripts/demo init-config
-./scripts/demo doctor
-./scripts/demo start
-./scripts/demo restart
-./scripts/demo status
-./scripts/demo stop
-./scripts/demo trace-export
+./scripts/bootstrap --check
 ```
 
-相容 alias `up`、`down` 與 `deploy --backend-only` 存在，但操作文件只使用上述六個指令。
+Create or select the private configuration:
+
+```bash
+./scripts/demo init-config
+./scripts/demo init-config --profile production --force
+```
+
+The canonical lifecycle vocabulary is exactly these five commands:
+
+```bash
+./scripts/demo doctor
+./scripts/demo start
+./scripts/demo status
+./scripts/demo restart
+./scripts/demo stop
+```
+
 `doctor` 與 `status` 不啟停 service，也不發布 MQTT。`restart` 只會採用已記錄、或在此明確
 restart 中以 cwd、command line、PID start identity 與 listener 驗證過的既有 Demo process。
+`init-config` is setup, and `trace-export` is an evidence-export helper; neither is a lifecycle
+state transition. The parser retains older compatibility names for historical evidence, but they
+do not belong in a current operator procedure.
 
 ## Private runtime layout
 
@@ -69,6 +88,31 @@ every Git worktree. Lifecycle writes only below the selected root:
 `HERMES_MEDIA_CALLBACK_SOCKET` 都必須在該 root 之下。adapter 產生的 ASR keyframe 與
 metadata 會寫到 private `data/shared`；lifecycle 不寫入 repository 的 `temi_shared/`、`logs/`
 或 `memory/`。
+
+## Status, logs and common failures
+
+`status` is the read-only lifecycle summary. It reports readiness, ownership, listeners,
+callback sockets, latest trace and the private log paths; it is not a service log viewer.
+Use the trace viewer for a bounded, de-identified timeline:
+
+```bash
+./scripts/demo --config <private-demo-env> --json status
+python3 tools/show_temi_trace.py --log-dir <bridge-log-dir> --latest --json
+python3 tools/show_temi_trace.py --log-dir <bridge-log-dir> --latest --full
+```
+
+Do not copy raw logs, images, full prompts, credentials or production care data into the
+repository. Keep `DEBUG_TRACE_FULL=false` for normal Demo operation.
+
+| Result or failure code | First safe check |
+|---|---|
+| `BACKEND_NOT_READY` | Run `doctor`, inspect the first required `FAIL` or unavailable managed endpoint, then preserve the evidence. |
+| `BACKEND_READY_WAITING_ANDROID` | Check the fresh Android MQTT session and `cmd/result`; backend health is not device playback evidence. |
+| `CONFIG_INVALID` | Check private env mode `0600`, runtime-root containment and the accepted profile values. |
+| `PORT_IN_USE_EXTERNAL` or `BROKER_START_FAILED` | Inspect the exact listener and configured ownership; do not adopt or kill by name. |
+| `SERVICE_HEALTH_FAILED` or `MODEL_LOAD_FAILED` | Read the named service health response and its private log path; do not relabel a missing model as ready. |
+| `PID_IDENTITY_MISMATCH` or `STOP_INCOMPLETE_OWNERSHIP` | Preserve state, verify PID/cwd/executable/command line, and follow [safe service operations](safe_service_operations.md). |
+| `STOP_TIMEOUT` | Recheck the same verified PID and protected listeners; do not use `pkill` or `killall`. |
 
 受控 Media Demo 的 effective flags 必須都是 `true`：
 

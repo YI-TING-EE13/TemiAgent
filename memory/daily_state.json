@@ -1,27 +1,27 @@
 {
   "schema_version": "1.0",
-  "date": "2026-05-31",
-  "user_id": "elder_demo_001",
+  "date": "2099-01-01",
+  "user_id": "synthetic-resident-001",
   "risk_state": "normal",
-  "last_seen_location": "living_room",
+  "last_seen_location": "synthetic_demo_location",
   "last_interaction": null,
   "active_reminders": [
-    "rem_morning_medication",
-    "rem_hydration"
+    "synthetic-reminder-001",
+    "synthetic-reminder-002"
   ],
   "recent_event_ids": [
-    "evt_temi_1780235475889",
-    "evt_temi_1780235628516",
-    "evt_temi_1780235787688",
-    "evt_temi_1780236488874",
-    "evt_second_e2e_1780237376",
-    "evt_temi_1780237529928",
-    "evt_temi_1780238770043",
-    "evt_1780321771305_5b1d1443",
-    "evt_1780324192224_251f56fe",
-    "evt_1780365744644_5019e8cc",
-    "evt_1780365879480_4a61493d",
-    "evt_1780365927671_f9368e4d"
+    "synthetic-event-001",
+    "synthetic-event-002",
+    "synthetic-event-003",
+    "synthetic-event-004",
+    "synthetic-event-005",
+    "synthetic-event-006",
+    "synthetic-event-007",
+    "synthetic-event-008",
+    "synthetic-event-009",
+    "synthetic-event-010",
+    "synthetic-event-011",
+    "synthetic-event-012"
   ],
   "demo_flags": {
     "home_esi_level": "Normal",

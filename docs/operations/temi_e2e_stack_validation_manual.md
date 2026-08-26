@@ -1,5 +1,9 @@
 # TemiAgent 服務重啟與端到端驗證操作手冊
 
+> Historical / legacy reference. Do not use as the current canonical Demo lifecycle.
+> Its direct-service restart script and live acceptance sequence are retained as evidence; use
+> the [current Demo operator guide](DEMO_OPERATOR_GUIDE.md) for lifecycle commands.
+
 最後更新日期：2026-06-04
 
 ## 1. 測試目的與適用情境

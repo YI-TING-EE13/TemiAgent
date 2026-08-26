@@ -24,6 +24,10 @@ venv/
 # Local-only integration archives, private migration records and acceptance evidence
 .local/
 
+# Local experimental projects excluded from canonical V1 publication
+/local_inference/
+/sub2/
+
 # Runtime logs and process files
 logs/*
 !logs/README.md

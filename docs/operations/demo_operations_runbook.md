@@ -1,5 +1,8 @@
 # AI6 Demo Operations Runbook
 
+> Historical / legacy reference. Do not use as the current canonical Demo lifecycle.
+> Use the [current Demo operator guide](DEMO_OPERATOR_GUIDE.md) for all lifecycle commands.
+
 Status: retained expert reference, Demo-only. This compact runbook preserves
 historical expert terminology and Android-evidence background. The authoritative
 current procedure is the [Demo 新手操作手冊](DEMO_OPERATOR_GUIDE.md), with the
