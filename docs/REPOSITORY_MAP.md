@@ -1,11 +1,17 @@
 # TemiAgent Repository Map
 
-狀態：CURRENT；high-density source and publication map：2026-08-26。
+狀態：CURRENT；high-density source and publication map：2026-08-27。
 
 Use this map with [CURRENT_STATUS.md](CURRENT_STATUS.md) and the
 [documentation index](README.md). A directory can be physically present in a
 development mount without being canonical V1 source, a current contract owner or
 publication material.
+
+For handover navigation, use [developer setup](operations/developer_setup.md),
+[STUDENT_HANDOVER](project/STUDENT_HANDOVER.md) and the complete
+[DOCUMENT_AUTHORITY_MAP](DOCUMENT_AUTHORITY_MAP.md). This map describes
+repository ownership; it is not a substitute for runtime schemas or lifecycle
+source.
 
 ## Canonical V1 source and runtime boundaries
 
@@ -62,6 +68,11 @@ local-checkout, file-URL or alternate-object fallback is allowed.
 | Legacy runbooks and handovers | Historical/reference documents | Retained with the exact legacy notice; do not use as the current Demo lifecycle. |
 
 ## Contract navigation
+
+- New-student setup and environment: [developer setup](operations/developer_setup.md).
+- Handover questions and release routing: [STUDENT_HANDOVER](project/STUDENT_HANDOVER.md).
+- Complete document authority inventory: [DOCUMENT_AUTHORITY_MAP](DOCUMENT_AUTHORITY_MAP.md).
+- Host/service responsibility: [deployment handover](operations/demo_deployment_handover.md).
 
 - Lifecycle: [Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md).
 - Architecture: [project overview](architecture/project_overview.md).

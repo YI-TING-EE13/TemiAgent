@@ -1,5 +1,8 @@
 # Phase 1 CareContext Demo Package
 
+> Status: HISTORICAL Demo package. It contains no current production readiness
+> or live device/provider evidence.
+
 ## Purpose
 
 This demo package validates the Phase 1 structured care memory read path for TemiAgent / Hermes care assistant. It focuses on memory continuity and Bridge-controlled state handling: Hermes receives compact `care_context`, proposes a JSON action plan, and the Bridge validates and executes robot / memory actions.

@@ -1,5 +1,8 @@
 # 第一年度 Demo 驗收 Checklist
 
+> Status: HISTORICAL dated checklist. Re-run the current verification matrix
+> before treating any item as present acceptance evidence.
+
 最後更新日期：2026-06-12
 
 ## 驗收狀態摘要

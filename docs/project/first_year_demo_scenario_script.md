@@ -1,5 +1,8 @@
 # 第一年度 Demo 情境腳本
 
+> Status: HISTORICAL Demo narration. It is not a runtime command, acceptance
+> proof or current capability claim.
+
 最後更新日期：2026-06-12
 
 ## 角色與 Demo 基調

@@ -1,5 +1,8 @@
 # 第一年度 Demo 階段任務規劃
 
+> Status: HISTORICAL planning record. Planned work is not current
+> implementation or deployment evidence.
+
 最後更新日期：2026-05-31
 
 ## 文件目的

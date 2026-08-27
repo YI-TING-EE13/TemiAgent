@@ -7,21 +7,31 @@ runtime honesty and publication blockers. It is not a runtime health endpoint an
 does not replace the runtime schemas, module READMEs or the
 [canonical Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md).
 
+## Gate 4 handover candidate
+
+Gate 4 documentation work is isolated in
+<code>/tmp/temiagent-worktrees/github-v1-handover-freeze</code> on branch
+<code>codex/github-v1-handover-freeze</code>, derived from
+<code>release/github-v1@d66a046395aed21712b00cba43d4ea1b2d9f23de</code>.
+The candidate changes documentation and documentation validation only. It does
+not advance <code>release/github-v1</code>, modify canonical <code>main</code>,
+operate services, publish MQTT or push.
+
 ## Snapshot
 
 | Item | Snapshot | Meaning |
 |---|---|---|
 | Project root | `/TemiAgent` in `yiting.TemiAgent_gpu_all` | Canonical project command boundary. |
 | Root branch | `main` | Canonical root branch; Gate 3.4 work runs in an isolated candidate worktree. |
-| Root HEAD | `12aff3bfdfe526c17a25a2681aea2afad7112b33` | Canonical HEAD is unchanged during Gate 3.4. |
+| Root HEAD | `12aff3bfdfe526c17a25a2681aea2afad7112b33` | Canonical HEAD is unchanged during Gate 4. |
 | Configured root remotes | None in the canonical local snapshot | Root publication push was not performed; the separate Hermes team remote was independently verified. |
 | Lifecycle status | `RUNNING`; `reason=READY` | Read-only `./scripts/demo --json mqtt status` found the canonical MQTT broker healthy at `0.0.0.0:1883`. |
-| Canonical listeners | One listener on `0.0.0.0:1883` | This is a read-only runtime observation, not a Gate 3.4 service operation. |
-| Service operation | No service was started, stopped or restarted for Gate 3.4. | Hardware and external-service state was left unchanged. |
+| Canonical listeners | One listener on `0.0.0.0:1883` | This is a read-only runtime observation, not a Gate 4 service operation. |
+| Service operation | No service was started, stopped or restarted for Gate 4. | Hardware and external-service state was left unchanged. |
 
 The canonical worktree contains pre-existing Gate 1A, synthetic-fixture and
-documentation changes. Gate 3.4 changes are isolated in
-`/tmp/temiagent-worktrees/github-v1-hermes-submodule`; the candidate does not
+documentation changes. Gate 4 changes are isolated in
+`/tmp/temiagent-worktrees/github-v1-handover-freeze`; the candidate does not
 modify the canonical runtime or publication branch. A running MQTT status is
 reported only as the read-only Phase 0 observation.
 
@@ -118,9 +128,11 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
    unresolved; do not publish or redistribute the local weight until confirmed.
 4. Local credential-bearing environment files are owner-only and excluded from Git;
    owner handling/rotation remains outside this documentation gate.
-5. The Hermes team remote and formal submodule contract are verified in the
-   Gate 3.4 candidate. Root publication remains a separate maintainer decision;
-   `release/github-v1` was not fast-forwarded and no root push was performed.
+5. The Hermes team remote and formal submodule contract are verified from Gate
+   3.4. <code>release/github-v1</code> already contains the adopted Gate 3
+   dependency chain at <code>d66a046395aed21712b00cba43d4ea1b2d9f23de</code>.
+   Gate 4 adds a separate documentation candidate; no root publication push is
+   performed here.
 
 ## Documentation authority
 
@@ -131,6 +143,13 @@ Use the root [README](../README.md), this status page, the
 [quick reference](operations/DEMO_QUICK_REFERENCE.md) is a compact companion, not
 a second lifecycle authority. Dated, machine-specific and direct-service material
 is explicitly marked legacy in the documentation index and retained only as evidence.
+
+For the current handover, start with [developer setup](operations/developer_setup.md),
+[deployment handover](operations/demo_deployment_handover.md), [configuration
+reference](operations/demo_configuration_reference.md), [verification and
+acceptance](operations/verification_and_acceptance.md) and
+[student handover](project/STUDENT_HANDOVER.md). The complete document
+classification is in [DOCUMENT_AUTHORITY_MAP](DOCUMENT_AUTHORITY_MAP.md).
 
 ## Verification snapshot
 
@@ -214,9 +233,11 @@ carried forward because Gate 3.4 changed no llama reconstruction path or shared
 bootstrap helper; no runtime service, MQTT publish/subscribe, model inference,
 Android operation or hardware operation was performed.
 
-## Next gate
+## Gate 4 disposition
 
-Gate 3.4 stops at this clean publication candidate. A separate maintainer review
-may adopt the Gate 3.1 + Gate 3.3 + Gate 3.4 chain; `release/github-v1` remains
-unchanged. Real Android, Temi, broker, model/GPU, Discord and perception
-verification require their own authorized operational gate.
+Gate 3 external dependency reproducibility is closed PASS and its adopted chain
+is at <code>release/github-v1=d66a046395aed21712b00cba43d4ea1b2d9f23de</code>.
+Gate 4 leaves that ref unchanged and leaves the handover documentation in the
+isolated candidate for maintainer review. Real Android, Temi, broker, model/GPU,
+Discord and perception verification require their own authorized operational
+gate. Gate 4 performed no service operation, MQTT publication or root push.

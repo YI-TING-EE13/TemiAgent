@@ -1,8 +1,11 @@
 # Temi 異常偵測串流 Viewer
 
-狀態：EXPERIMENTAL；viewer 與 abnormal perception event producer 可用於 Demo/研究，
+狀態：<code>CURRENT_AUTHORITY</code> for this module; <code>EXPERIMENTAL</code>；
+viewer 與 abnormal perception event producer 可用於 Demo/研究，
 但目前沒有真機、GPU、外部模型服務或 production perception 的 live verification claim。
 viewer 只產生受 Bridge 驗證的 perception event，不擁有 canonical hardware dispatch。
+The canonical managed viewer lifecycle is [scripts/demo](../docs/operations/DEMO_OPERATOR_GUIDE.md);
+the direct commands in this README are module-local development/reference commands.
 
 這個資料夾是一個獨立的 `uv` 專案，用來測試 Temi camera 的持續影像接收。
 

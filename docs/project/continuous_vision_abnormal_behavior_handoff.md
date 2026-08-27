@@ -1,5 +1,8 @@
 # 持續影像串流與異常行為辨識交接文件
 
+> Status: SUPPLEMENTAL EXPERIMENTAL handoff. It describes a research path, not
+> a current medical, emergency or hardware-dispatch capability.
+
 最後更新日期：2026-06-01
 
 ## 1. 文件目的

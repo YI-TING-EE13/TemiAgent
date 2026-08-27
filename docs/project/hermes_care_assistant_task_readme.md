@@ -1,5 +1,8 @@
 # Hermes 居家照護助理大腦任務 README
 
+> Status: SUPPLEMENTAL task context. It does not define a second lifecycle,
+> dependency or production-care contract.
+
 最後更新日期：2026-06-10
 
 ## 本文件維護規則

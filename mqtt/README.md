@@ -1,6 +1,14 @@
 # MQTT 模組 README
 
-最後更新日期：2026-08-26
+最後更新日期：2026-08-27
+
+Status: <code>CURRENT_AUTHORITY</code> for the local transport reference
+only. The managed broker lifecycle is owned by
+[scripts/demo](../docs/operations/DEMO_OPERATOR_GUIDE.md), which is the sole
+current start/stop authority. Direct Mosquitto, publish and subscribe examples
+in this module are transport smoke/reference procedures; they do not authorize
+an operator to bypass exact ownership, Bridge validation or the Gate 4 safety
+boundary.
 
 ## 本文件維護規則
 
@@ -11,6 +19,11 @@
 `mqtt/` 保存本專案本地開發用 Mosquitto broker 設定。MQTT 是 Temi、Bridge、Backend 與 adapter 之間的事件匯流排，只傳遞輕量 JSON event 和 command，不傳圖片 binary。
 
 ## Topic contract
+
+Runtime topic payload validation and command ownership remain in
+<code>hermes_temi_bridge/</code>. The accepted Android-facing command/result
+contract is QoS 1 with <code>retain=false</code>; verify the runtime client and
+schemas before changing this README.
 
 Canonical implemented routes：
 

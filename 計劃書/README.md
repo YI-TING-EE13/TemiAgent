@@ -1,5 +1,8 @@
 # 計劃書模組 README
 
+> Status: HISTORICAL research/reference material. This directory is not
+> runtime source, deployment input or contract authority.
+
 最後更新日期：2026-05-31
 
 ## 本文件維護規則

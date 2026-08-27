@@ -1,6 +1,6 @@
 # TemiAgent Demo 操作入口
 
-最後更新日期：2026-08-26
+最後更新日期：2026-08-27
 
 狀態：CURRENT；Demo-only。`scripts/demo` 是目前 checkout 唯一的 canonical lifecycle。private env 為每個
 service 明確宣告 `managed`、`external` 或 `disabled` ownership；`managed` 服務會由同一
@@ -24,6 +24,12 @@ evidence path, and [verification and acceptance guide](verification_and_acceptan
 to classify a result. `DEMO_QUICK_REFERENCE.md` is a compact companion;
 `demo_operations_runbook.md`, dated project handovers, and temporary-content
 inventories are reference material, not substitute lifecycle contracts.
+
+For new maintainers, use the [developer setup](developer_setup.md) first and
+the [deployment handover](demo_deployment_handover.md) for the host/service
+matrix. The [configuration reference](demo_configuration_reference.md) is the
+single key and secret inventory. This guide owns lifecycle actions; it does
+not authorize them during Gate 4 documentation work.
 
 ## Current canonical lifecycle
 
@@ -58,7 +64,7 @@ Create or select the private configuration:
 ./scripts/demo init-config --profile production --force
 ```
 
-The full-stack canonical lifecycle vocabulary is exactly these five commands:
+The five primary full-stack lifecycle operations are:
 
 ```bash
 ./scripts/demo doctor
@@ -75,6 +81,27 @@ For a broker-only transition, use the separate MQTT command group:
 ./scripts/demo mqtt status
 ./scripts/demo mqtt stop
 ```
+
+The parser also exposes the following supported setup, compatibility and
+feature selectors. They are not a second operator sequence:
+
+| Selector | Purpose and boundary |
+|---|---|
+| <code>init-config [--force] [--profile newcomer_mock\|production]</code> | Setup of the ignored private config; <code>--force</code> can replace that private file and is not a routine check. |
+| <code>doctor</code> | Read-only source, config, artifact, port, ownership and health diagnostics. |
+| <code>start</code>, <code>restart</code>, <code>stop [--dry-run]</code> | Full lifecycle transitions; only exact recorded/validated identities may be operated. |
+| <code>status</code> | Read-only lifecycle summary. |
+| <code>mqtt {start|status|stop}</code> | The only service-specific lifecycle selector; MQTT-only start/stop is not a full-stack transition and there is no <code>mqtt restart</code>. |
+| <code>trace-export</code> | Writes a bounded owner-only evidence bundle; it is not a service transition. |
+| <code>up</code>, <code>down</code> | Compatibility aliases for full start/stop retained by the parser; use the five primary names in new procedures. |
+| <code>deploy [--backend-only]</code> | Specialized compatibility/deployment helper; use only with a separately reviewed deployment plan. |
+| <code>identity {father|mother|unknown|status}</code> | Controlled Demo identity callback helper; it can change private Demo state and is not visual identity. |
+| <code>seed repeated-discomfort</code>, <code>verify repeated-discomfort</code> | Synthetic private care fixture helper and read-only verification; Demo-only and not a live care claim. |
+
+The exact grammar is implemented by <code>tools/demo_lifecycle.py</code>.
+Global <code>--config</code> and <code>--json</code> options appear before the
+selector, for example
+<code>./scripts/demo --config &lt;private-demo-env&gt; --json doctor</code>.
 
 The MQTT-only commands use the primary worktree's canonical private config and
 `/TemiAgent/.runtime/demo` owner-only runtime root. They operate only the

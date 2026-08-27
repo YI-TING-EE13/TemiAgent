@@ -1,6 +1,11 @@
 # HermesTemiBridge 模組 README
 
-最後更新日期：2026-07-31
+最後更新日期：2026-08-27
+
+Status: <code>CURRENT_AUTHORITY</code> for the Bridge module contract.
+Managed Demo startup and shutdown remain owned by
+[DEMO_OPERATOR_GUIDE.md](../docs/operations/DEMO_OPERATOR_GUIDE.md); direct
+module commands in this README do not create a parallel lifecycle.
 
 ## 本文件維護規則
 

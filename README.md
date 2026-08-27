@@ -28,6 +28,16 @@ receipt 不會聯絡任何收件者；真實 Discord 只有 HTTP 204 receipt 才
 [immediate abnormal-care flow](docs/operations/immediate_abnormal_care_flow.md) 與
 [contract traceability](docs/architecture/contract_traceability.md)。
 
+For a new maintainer, continue through
+[CURRENT_STATUS](docs/CURRENT_STATUS.md),
+[REPOSITORY_MAP](docs/REPOSITORY_MAP.md),
+[developer setup](docs/operations/developer_setup.md) and
+[STUDENT_HANDOVER](docs/project/STUDENT_HANDOVER.md). The complete document
+authority inventory is [DOCUMENT_AUTHORITY_MAP](docs/DOCUMENT_AUTHORITY_MAP.md).
+The current lifecycle and host responsibility contracts are the
+[Demo operator guide](docs/operations/DEMO_OPERATOR_GUIDE.md) and
+[deployment handover](docs/operations/demo_deployment_handover.md).
+
 ## Architecture
 
 ```text
@@ -189,6 +199,9 @@ not a parallel production entrypoint and is not the canonical lifecycle.
 - Hardware-free and external acceptance boundaries: [Verification and acceptance guide](docs/operations/verification_and_acceptance.md)
 - Fresh-clone, software-only newcomer acceptance: [Verification and acceptance guide](docs/operations/verification_and_acceptance.md#software-only-newcomer-acceptance)
 - Deployment, configuration, ownership and handover: [Demo deployment handover](docs/operations/demo_deployment_handover.md)
+- New-student setup and environment contract: [Developer setup](docs/operations/developer_setup.md)
+- Forty-question student handover and release routing: [STUDENT_HANDOVER](docs/project/STUDENT_HANDOVER.md)
+- Complete document authority inventory: [DOCUMENT_AUTHORITY_MAP](docs/DOCUMENT_AUTHORITY_MAP.md)
 - LM Studio headless operation: [LM Studio runbook](docs/operations/lmstudio_headless_3gpu_hdd_manual.md)
 - Safe service targeting, rollback and incident evidence: [Safe service operations](docs/operations/safe_service_operations.md)
 - First-year Demo execution: [Demo runbook](docs/operations/first_year_demo_runbook.md)

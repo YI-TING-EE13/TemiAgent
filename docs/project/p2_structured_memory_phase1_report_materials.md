@@ -1,5 +1,8 @@
 # P2 Structured Memory Phase 1 Report Materials
 
+> Status: HISTORICAL report material. It is retained as phase evidence, not a
+> current data, care or deployment contract.
+
 ## 1. Architecture Diagram Specification
 
 Suggested diagram title:

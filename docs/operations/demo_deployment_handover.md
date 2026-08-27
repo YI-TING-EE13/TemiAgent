@@ -1,13 +1,12 @@
 # Demo Deployment and Handover
 
-Status: maintained, Demo-only. This document describes the canonical software
+Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 4:
+2026-08-27. This document describes the canonical software
 stack in `<TEMIAGENT_ROOT>` and does not authorize real care, emergency, or
 Discord notification tests.
 
 Use [DEMO_OPERATOR_GUIDE.md](DEMO_OPERATOR_GUIDE.md) as the sole current
 lifecycle authority. This handover explains source reconstruction, ownership and
-deployment boundaries; its lifecycle snippets are supplemental and do not define
-another command vocabulary.
 deployment boundaries; its lifecycle snippets are supplemental and do not define
 another command vocabulary.
 
@@ -54,6 +53,48 @@ local state; a post-bootstrap ` m hermes-agent` status line is expected. The
 llama.cpp checkout remains ignored. If the team remote cannot be reached, retain
 the submodule failure and stop; no original-upstream, local-checkout, file-URL,
 cache or alternate-object fallback is allowed.
+
+## Responsibility topology
+
+| Boundary | Owns | Does not own |
+|---|---|---|
+| AI6 host | Docker engine, the designated container, source mount and host-level resource availability. | Bridge validation, MQTT payloads, Android execution or care decisions. |
+| AI6 container | TemiAgent source, locked Python environments, lifecycle supervisors, MQTT broker, adapter, resident wrapper, Bridge, optional gateway and viewer. | The Android APK, physical robot motion, unprovisioned model bytes or external provider policy. |
+| Temi robot / Android App | Device-side MQTT connection, command/result parser, allowlists, media asset mapping, player state and physical execution. | AI6 process ownership, Bridge validation source or AI6 private runtime state. |
+| LAB606 development host | Human development/control surface and, where approved, the Docker invocation that enters the AI6 container. | A required product data path. LAB606 TCP-to-AI6-MQTT is not a product requirement. |
+| External services and owners | Team Hermes remote, public llama.cpp source, LM Studio/model cache, optional Discord provider and Android source/device credentials. | A guarantee that an external service is reachable or that a published command was physically executed. |
+
+The product path is Temi Android to the deployment-configured AI6 MQTT broker.
+The AI6 client defaults remain loopback and the tracked broker configuration
+does not contain a developer-specific private LAN address. A deployment-specific
+endpoint belongs in the Android owner’s private configuration and must never be
+copied into a tracked template.
+
+## Service responsibility matrix
+
+The command column names the canonical lifecycle entry, not a permission to
+operate it during documentation work. The Gate 4 candidate did not start or
+stop these services. A status of <code>LIVE_NOT_VERIFIED</code> means that no
+current real-device/provider claim is made.
+
+| Service | Runs on | Started by | Canonical command | Port / interface | Health check | Log location | Stop command | Dependencies | Current status |
+|---|---|---|---|---|---|---|---|---|---|
+| LM Studio | AI6 container, with external model/cache and GPU | <code>scripts/demo</code> LM Studio supervisor when ownership is managed | <code>./scripts/demo start</code> | <code>127.0.0.1:1234</code> | Lifecycle model endpoint <code>/v1/models</code>, <code>lms</code>, model identifier, context and GPU policy | <code>&lt;runtime-root&gt;/logs/lmstudio/lmstudio.log</code> | <code>./scripts/demo stop</code> | LM Studio, configured model/cache, external GPU/driver | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 4. |
+| Mosquitto MQTT broker | AI6 container | <code>scripts/demo start</code> or the MQTT-only selector | <code>./scripts/demo mqtt start</code> | Canonical broker config listener <code>0.0.0.0:1883</code> | <code>./scripts/demo --json mqtt status</code>: one listener, expected bind/port, TCP ready and valid supervisor/child lineage | <code>&lt;runtime-root&gt;/logs/mqtt/mosquitto.log</code> | <code>./scripts/demo mqtt stop</code> | Python supervisor, Mosquitto, tracked broker config and private ownership state | Canonical main snapshot <code>RUNNING/READY</code>; candidate not operated. |
+| Overview adapter | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>8080</code> vision; <code>8081</code> frame broadcast | Lifecycle listener count and adapter/Bridge evidence | <code>&lt;runtime-root&gt;/logs/asr/overview_adapter.log</code> | <code>./scripts/demo stop</code> | MQTT, legacy ASR/camera inputs, shared runtime root | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 4. |
+| Resident Hermes | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>127.0.0.1:8765</code>; <code>/health</code> and <code>/invoke</code> | HTTP health plus exact lifecycle identity | <code>&lt;runtime-root&gt;/logs/hermes/resident.log</code> | <code>./scripts/demo stop</code> | Patched Hermes runtime, required skills and Bridge contract | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 4. |
+| HermesTemiBridge | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | No public TCP listener; private callback Unix sockets | Exact process identity, callback socket and MQTT readiness | <code>&lt;runtime-root&gt;/logs/bridge/bridge.log</code> | <code>./scripts/demo stop</code> | MQTT, resident Hermes, schemas, validators and private shared root | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 4. |
+| Hermes gateway | AI6 container when enabled | <code>scripts/demo</code> | <code>./scripts/demo start</code> | No fixed AI6 service port in the lifecycle contract | <code>hermes gateway status</code> plus exact process identity | <code>&lt;runtime-root&gt;/logs/gateway/gateway.log</code> | <code>./scripts/demo stop</code> | Patched Hermes runtime and external provider credentials if used | Disabled in newcomer; real provider live-unverified. |
+| Action viewer | AI6 container when enabled | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>8010</code> HTTP; <code>8011</code> llama server in production | Viewer <code>/health</code> source/llama readiness and five redacted component objects | <code>&lt;runtime-root&gt;/logs/trace/action_viewer.log</code> | <code>./scripts/demo stop</code> | Adapter frame stream, external GGUF/mmproj, generated llama server and optional pose weight | Experimental and live-unverified; not operated by Gate 4. |
+| Newcomer mock LM/resident/viewer | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29134</code>, <code>29765</code>, <code>29010/29011</code> | Mock HTTP health and exact lifecycle identities | <code>&lt;runtime-root&gt;/logs/{lmstudio,hermes,trace}/</code> | <code>./scripts/demo stop</code> | Tracked mock servers and high-port profile | Not started by Gate 4; software-only path is hardware-free. |
+| Newcomer mock Android/Discord | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29012</code> Android health; <code>29013</code> Discord mock | Mock health and canonical fake event/result evidence | <code>&lt;runtime-root&gt;/logs/mock/</code> | <code>./scripts/demo stop</code> | MQTT, Bridge, isolated mock profile | Not started by Gate 4; no real device/provider contact. |
+| Temi Android App | Temi robot/device | Android owner, outside AI6 lifecycle | Android owner’s application procedure; none in AI6 | Deployment-configured broker endpoint; command/result topics | Fresh Android runtime snapshot, subscriptions, command/result evidence and physical observation | Android owner’s private evidence store | Android owner’s controlled app/device procedure | Android source/APK, device and broker reachability | External and live-unverified. |
+| Discord provider | External provider | Bridge notification path only when explicitly authorized | No AI6 direct start command | Provider HTTPS endpoint, not an AI6 listener | Bridge redacted receipt; real success requires provider HTTP 204 evidence | Bridge notification receipt under private runtime | External owner/provider procedure | Owner-only credential env and explicit authorization | Disabled by default; live-unverified. |
+
+<code>&lt;runtime-root&gt;</code> is a documentation placeholder. The canonical
+private root is <code>/TemiAgent/.runtime/demo</code>; custom roots must be
+absolute, owner-only and outside Git worktrees. The operator guide and
+configuration reference define the exact command grammar and validation rules.
 
 ## Private configuration and runtime data
 

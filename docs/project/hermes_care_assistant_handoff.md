@@ -1,5 +1,9 @@
 # Hermes 居家照護助理大腦交接文件
 
+> Status: SUPPLEMENTAL domain handoff. Current safety, capability and
+> deployment boundaries are owned by the current README, Bridge contracts and
+> operator documents.
+
 給接手 TemiAgent / Hermes 電腦上的 Codex：
 
 這份文件說明我們希望把現有 Hermes agent、Harness/MCP/Skills 機制，以及 Temi 機器人整合成符合國科會計畫子計畫三目標的「居家照護助理大腦」。目前先不追求完整產品化，而是要做出第一年度 Demo 可展示、可解釋、可繼續擴充的認知架構。

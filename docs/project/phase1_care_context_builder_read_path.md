@@ -1,5 +1,8 @@
 # Phase 1 Structured Care Memory Read Path
 
+> Status: HISTORICAL implementation note. Current runtime schemas, Bridge code
+> and configuration authority supersede this dated path description.
+
 Last updated: 2026-06-10
 
 ## Purpose

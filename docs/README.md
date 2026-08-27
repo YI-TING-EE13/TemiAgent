@@ -1,6 +1,25 @@
 # TemiAgent Documentation Index
 
-最後審查日期：2026-08-26
+最後審查日期：2026-08-27
+
+## Gate 4 handover entry points
+
+For a new student, use this short path rather than browsing the full document
+inventory:
+
+1. [CURRENT_STATUS](CURRENT_STATUS.md)
+2. [REPOSITORY_MAP](REPOSITORY_MAP.md)
+3. [Developer setup](operations/developer_setup.md)
+4. [Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md)
+5. [Deployment handover](operations/demo_deployment_handover.md)
+6. [Configuration reference](operations/demo_configuration_reference.md)
+7. [Verification and acceptance](operations/verification_and_acceptance.md)
+8. [Troubleshooting](operations/demo_troubleshooting.md)
+9. [Student handover](project/STUDENT_HANDOVER.md)
+
+[DOCUMENT_AUTHORITY_MAP.md](DOCUMENT_AUTHORITY_MAP.md) is the complete
+classification inventory. It records one current prose authority per major
+topic and identifies supplemental, historical and legacy material.
 
 `docs/` 保存跨模組架構、契約、操作流程、專案範圍與 reader-facing schema。模組自己的執行、設定與測試方式應留在該模組 README。
 
@@ -33,7 +52,7 @@ means opt-in, non-canonical work.
 
 ## Authority hierarchy
 
-1. **Current entrypoint:** root `README.md` and the five-command `scripts/demo` lifecycle.
+1. **Current entrypoint:** root `README.md` and the five primary `scripts/demo` lifecycle operations; the parser also exposes setup, compatibility and feature selectors documented in the operator guide.
 2. **Current authoritative detail:** runtime schemas, executable validators, lifecycle code
    and owning service configuration; prose cannot override them.
 3. **Current module references:** module READMEs, `CURRENT_STATUS.md`, `REPOSITORY_MAP.md`
@@ -84,6 +103,7 @@ authoritative when any prose conflicts with them.
 
 | Document | Status | Owner | Purpose |
 |---|---|---|---|
+| [developer_setup.md](operations/developer_setup.md) | CURRENT authority | Maintainers | Ordered clean-clone setup, environment matrix, external artifacts and pin gaps. |
 | [safe_service_operations.md](operations/safe_service_operations.md) | Maintained policy | All service owners | Exact PID/port targeting, rollback, restore, retention and incident evidence. |
 | [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md) | CURRENT; Demo-only | Demo operator | Sole canonical `scripts/demo` lifecycle, bootstrap/check, logs, failures, Media boundary and live observers. |
 | [demo_configuration_reference.md](operations/demo_configuration_reference.md) | Maintained, Demo-only | Demo operator | Complete non-secret `config/demo.env.example` key groups, ownership and feature gates. |
@@ -109,6 +129,7 @@ Machine-specific documents may record historical observations. New reusable comm
 
 | Document | Status | Owner | Purpose |
 |---|---|---|---|
+| [STUDENT_HANDOVER.md](project/STUDENT_HANDOVER.md) | CURRENT authority | Maintainers | New-student reading order, 40-question handover matrix and release handover. |
 | [hermes_care_assistant_task_readme.md](project/hermes_care_assistant_task_readme.md) | Maintained Demo scope | Care assistant | Task scope and acceptance boundaries. |
 | [hermes_care_assistant_handoff.md](project/hermes_care_assistant_handoff.md) | Handoff reference | Care assistant | Full cognitive-assistant context and limitations. |
 | [continuous_vision_abnormal_behavior_handoff.md](project/continuous_vision_abnormal_behavior_handoff.md) | Experimental handoff | Anomaly detection | Streaming perception design and known gaps. |

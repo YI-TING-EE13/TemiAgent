@@ -1,5 +1,8 @@
 # 第一年度 Demo 系統設計與本次調整說明
 
+> Status: HISTORICAL design snapshot. Check current source, schemas and status
+> before reusing any design or command detail.
+
 最後更新日期：2026-06-01
 
 ## 目的

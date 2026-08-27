@@ -10,6 +10,12 @@
 
 `tools/` 收納跨模組開發、測試與 Demo 操作用腳本。這些腳本不是核心服務本體，但負責把 MQTT、Bridge、Temi backend、shared volume、resident Hermes 串起來。
 
+For clean-clone setup, use [developer setup](../docs/operations/developer_setup.md).
+For service operation, [DEMO_OPERATOR_GUIDE.md](../docs/operations/DEMO_OPERATOR_GUIDE.md)
+is the sole current lifecycle authority; [demo deployment handover](../docs/operations/demo_deployment_handover.md)
+owns the host/service responsibility map. Direct helper scripts are module
+tools or historical references unless the operator guide names them.
+
 ## 腳本索引
 
 | Script | 用途 |
@@ -31,9 +37,9 @@
 | `inject_demo_event.py` / `scripts/inject_demo_event` | 以 owner-only config 建立 synthetic evidence 並發布 canonical Demo abnormal event；不發 command、result 或 Discord webhook。 |
 | `dispatch_hermes_action_output.py` | 將 Hermes skill action JSON 驗證、包成 `temi/{robot_id}/cmd/request`，並可 publish 到 MQTT，供 Discord/manual TTS 執行使用。 |
 | `capture_temi_live_snapshot.py` | 從 `8081` decoded JPEG broadcast 按需擷取目前畫面，存到 `temi_shared/live_snapshots/`，輸出 Hermes/Skills 可分析的 frame path JSON。 |
-| `start_temi_pc_services.sh` | 啟動 PC 端 Temi legacy services。 |
-| `start_temi_pc_services_background.sh` | 背景啟動 PC 端 services。 |
-| `check_temi_connection.sh` | 檢查 Temi ADB、MQTT、WebSocket 等連線狀態。 |
+| `start_temi_pc_services.sh` | LEGACY direct-service helper; not the current lifecycle owner. |
+| `start_temi_pc_services_background.sh` | LEGACY background direct-service helper; not the current lifecycle owner. |
+| `check_temi_connection.sh` | Legacy/manual ADB, MQTT and WebSocket observer; not a lifecycle health substitute. |
 | `validate_documentation.py` | 唯讀檢查 tracked Markdown links、fences 與 reader-schema copies；不啟動服務。 |
 | `bounded_process.py` | 將單一外部命令放入 task-owned process group，於逾時後以 TERM/KILL 和 bounded reap 清理。 |
 | `run_bounded_process.py` | `bounded_process.py` 的 CLI wrapper；將逾時映射為 `124` 並保留安全的 cleanup markers。 |

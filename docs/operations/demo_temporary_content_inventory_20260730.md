@@ -1,5 +1,9 @@
 # Demo temporary content inventory — 2026-07-30
 
+> Status: HISTORICAL retention record. This dated inventory is not a current
+> cleanup, startup, recovery or deployment instruction. Use the current
+> developer setup and deployment handover for present work.
+
 Status: dated retention inventory. This is a source-control handoff record, not
 an instruction to delete, restart, or replay a Demo. The complete machine-
 readable inventory (path, type, byte count, mtime, mode and regular-file

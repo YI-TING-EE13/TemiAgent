@@ -1,6 +1,13 @@
 # Temi Backend 模組 README
 
-最後更新日期：2026-06-01
+最後更新日期：2026-08-27
+
+Status: <code>CURRENT_AUTHORITY</code> for this legacy module reference;
+<code>LEGACY</code> for the product route. The canonical Hermes V1 Demo
+lifecycle is <code>scripts/demo</code> and is documented in
+[DEMO_OPERATOR_GUIDE.md](../docs/operations/DEMO_OPERATOR_GUIDE.md). The
+direct commands below are module-local compatibility/diagnostic procedures,
+not a second deployment or service-ownership contract.
 
 ## 本文件維護規則
 

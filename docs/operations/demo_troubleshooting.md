@@ -1,6 +1,7 @@
 # Demo Troubleshooting Guide
 
-Status: maintained, Demo-only. Last reviewed: 2026-07-31.
+Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 4:
+2026-08-27.
 
 This guide maps a symptom to read-only evidence and the smallest safe next
 decision. It does not authorize service restart, raw MQTT publication, Discord
@@ -25,6 +26,32 @@ python3 tools/show_temi_trace.py --log-dir <bridge-log-dir> --latest --json
 Record the returned `run_id`, `event_id`, error code, exact PID identity, and
 listener state. Do not print or attach private env values, credentials, raw
 care records, images, or full debug traces.
+
+## Required symptom contract
+
+The first response to every symptom is read-only evidence. The safe action
+never adopts an unknown process, weakens a validator, deletes runtime state,
+prints a credential or uses broad process control.
+
+| Symptom | Check | Likely cause | Safe action | Escalation / do not do |
+|---|---|---|---|---|
+| MQTT not running | <code>./scripts/demo --json mqtt status</code>; inspect expected port, listener count, TCP result and ownership state. | No managed owner, broker start failure, stale state or the wrong private config. | Preserve the JSON and broker log path; compare the config and source identity with the operator contract. | An authorized operator may plan exact-owner recovery. Do not start a full stack or infer readiness from a port alone. |
+| MQTT foreign listener | MQTT status plus <code>ss -ltnp</code> for the configured port and exact PID/cwd/cmdline evidence. | Another broker/process owns the port or the recorded child no longer matches. | Record the listener owner and return the foreign-listener failure unchanged. | Escalate the exact PID to the owner. Do not adopt, signal by name, or use broad process matching. |
+| Temi cannot connect | Verify broker bind/port in MQTT status, Android endpoint configuration, fresh Android snapshot and network reachability evidence. | Endpoint is not the deployment broker, firewall/routing is wrong, or Android is not running. | Keep AI6 client defaults loopback and request the Android owner to verify its private endpoint. | Android owner handles device/network changes. Do not add a lab address to tracked docs or reconfigure the broker in this gate. |
+| Temi connected but command/result is absent | Compare Bridge trace <code>command_request_published</code>, Android subscription/session evidence and <code>cmd/result</code>. | Bridge validation failed, Android did not subscribe, or device execution is outside AI6 evidence. | Classify publication, receipt and execution as separate events; preserve event/request IDs. | Do not claim execution from publish success and do not fabricate a result. Escalate with both AI6 and Android evidence. |
+| LM Studio unavailable | Run <code>doctor</code>; inspect <code>/v1/models</code> evidence, exact ownership and configured model identifier. | LM Studio is absent, model/cache is not provisioned, GPU policy differs or the external service is down. | Preserve the external dependency failure and check the model/cache owner’s runbook. | Do not change model ID/context/GPU policy or start LM Studio during Gate 4. |
+| Bridge unavailable | Run <code>doctor</code>; inspect exact Bridge PID, private callback sockets and bounded Bridge log. | Missing locked environment, MQTT dependency, invalid config or failed process health. | Check the named error stage and source/config identity without altering runtime state. | Do not bypass the Bridge with raw command publication or direct Android control. |
+| Hermes unavailable | Check required <code>hermes-agent/venv/bin/python3</code>, <code>hermes-agent/venv/bin/hermes</code>, resident health and the exact error. | External Hermes environment is not provisioned or the resident wrapper cannot load required skills. | Follow the external dependency README and preserve the failing check. | Do not substitute original upstream, local checkout, fallback CLI or direct Hermes MQTT publication. |
+| Hermes submodule/bootstrap failure | Run <code>git submodule status --recursive</code>, the manifest verifier and the bounded bootstrap output. | Team remote is unreachable, gitlink is not at the pinned base, patch hash/tree differs or an alternate source was used. | Stop source reconstruction at the named failure and retain the exact commit/tree evidence. | Do not use a file URL, Git alternate, local checkout or unreviewed patch. |
+| License verification failure | Run the Hermes or llama license verifier named by the manifest and record only hashes/status. | Declared license file, pinned object or checked-out content differs. | Treat the dependency as unavailable for publication until the owner resolves provenance. | Do not publish, redistribute or bypass the verifier. |
+| Adapter unavailable | Inspect lifecycle listener counts for ports <code>8080</code>/<code>8081</code>, adapter identity and private adapter log. | Legacy input source is absent, port is occupied or adapter process failed. | Preserve the first failing listener/identity result; the adapter is not a command dispatcher. | Do not route commands through the adapter or use a historical direct-service script as a fix. |
+| Resident unavailable | Check <code>GET /health</code> on the configured local resident endpoint, exact PID and log. | Hermes environment/skill preload or config/port failure. | Inspect the health payload and source/config evidence; keep the Bridge boundary intact. | Do not claim Hermes reasoning readiness from a process alone or alter prompts to hide a failure. |
+| Anomaly backend unavailable | Inspect viewer <code>/health</code>, source/frame/llama component fields, configured files and exact identity. | Optional viewer, frame stream, llama server or external model/pose weight is missing. | Disable or defer the optional experimental path and classify the main backend separately. | Do not call it a medical detector, hardware dispatcher or production readiness gate. |
+| Model or artifact missing | Compare the resource manifest, private config path, regular-file/executable check and external provenance. | Model/cache/weight/Android logical asset was not provisioned or lacks approved provenance. | Keep the feature unavailable and ask the named owner to provision it through an approved channel. | Do not download unreviewed weights, copy real data into Git or mark a placeholder as ready. |
+| Port occupied | Check the exact configured port with <code>ss -ltnp</code> and lifecycle/doctor evidence. | Foreign process, stale service, duplicate profile or a second test run. | Preserve PID/cwd/command evidence and choose an authorized isolated profile/run root. | Do not kill by process name, reuse a foreign listener or silently move production ports. |
+| Stale runtime ownership | Inspect owner-only state, recorded start identity, exact live PID and status code. | Interrupted startup/stop or state from a prior run. | Follow the exact-PID recovery policy and leave unresolved ownership visible. | Do not delete state to make <code>doctor</code> pass or adopt by port/name. |
+| Tests fail after a fresh clone | Run the failing command from [developer setup](developer_setup.md), verify submodule/tree/license and locked environments. | Missing source reconstruction, locked dependency, external binary or unsupported environment. | Preserve the first failure and classify it as source, dependency, environment or test defect. | Do not loosen lockfiles, replace pins, use a local checkout or claim clean-clone success. |
+| Discord/webhook unavailable | Check Bridge notification mode, redacted stage receipt and owner-only credential-file metadata; never print the value. | Disabled route, invalid credential file, provider error, timeout or no authorization. | Keep notification status as disabled/failed and continue only with an explicitly authorized provider plan. | Do not enable viewer-owned Discord flags, retry a real recipient blindly or call it emergency delivery. |
 
 ## Triage map
 

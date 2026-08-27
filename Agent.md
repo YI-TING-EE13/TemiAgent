@@ -1,5 +1,9 @@
 # TemiAgent Agent Brief
 
+> Status: SUPPLEMENTAL legacy brief. Use <code>AGENTS.md</code>, the root
+> <code>README.md</code> and <code>docs/project/STUDENT_HANDOVER.md</code> for
+> current governance and onboarding.
+
 TemiAgent is an embodied AI home-care assistant project for a Temi robot. The robot handles sensing and physical interaction, while Hermes Agent acts as the cognitive core for situation understanding, care memory reasoning, risk classification, and action planning.
 
 ## Core Architecture

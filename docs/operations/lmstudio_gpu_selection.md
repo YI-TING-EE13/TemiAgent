@@ -1,5 +1,9 @@
 # LM Studio (lms server) 指定可用 GPU：可能解法整理
 
+> Status: SUPPLEMENTAL machine-specific/experimental evidence. It does not
+> define a portable GPU pin or override the current managed Demo contract.
+> Use the developer setup and configuration reference for current values.
+
 ## 重點結論
 - 目前 LM Studio / `lms server` 沒有內建的「指定 GPU 編號」參數。
 - `lms load --gpu` 只是控制 GPU offload 比例，**不是**選哪一張卡。

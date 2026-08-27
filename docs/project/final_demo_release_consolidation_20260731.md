@@ -1,5 +1,8 @@
 # Final Demo release consolidation record — 2026-07-31
 
+> Status: HISTORICAL release record. Its dated worktree and evidence values do
+> not replace the current status page or release handover.
+
 Status: release-consolidation record. This is not real-device acceptance
 evidence and does not authorize a service start, Android/ADB operation, Discord
 delivery, or canonical-memory mutation.

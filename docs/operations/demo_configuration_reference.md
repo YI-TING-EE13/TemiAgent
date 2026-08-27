@@ -1,6 +1,7 @@
 # Demo Configuration Reference
 
-Status: maintained, Demo-only. Last reviewed: 2026-07-31.
+Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 4:
+2026-08-27.
 
 This is the non-secret reference for the complete key set in
 [`config/demo.env.example`](../../config/demo.env.example). The default private
@@ -42,6 +43,66 @@ action.
 | No implicit adoption | A listener or PID that is not an expected recorded identity fails closed; the lifecycle does not kill by process name. |
 | Defaults are not proof | A configured endpoint, gateway connection or webhook presence does not prove Android execution or notification delivery. |
 
+## Complete configuration inventory
+
+Each token in the Keys covered column is one audited configuration input. The
+classification is about where a value may come from:
+
+| Classification | Meaning |
+|---|---|
+| <code>PUBLIC_DEFAULT</code> | A safe value or behavior defined by tracked source. |
+| <code>PUBLIC_TEMPLATE</code> | A tracked non-secret template field that is intentionally replaced or resolved locally. |
+| <code>REQUIRED_USER_INPUT</code> | A deployment, owner or maintainer value that cannot be guessed by the repository. |
+| <code>PRIVATE_RUNTIME</code> | A value or path used only below the owner-only runtime root. |
+| <code>SECRET</code> | A credential or token that belongs only in a private owner-controlled file. |
+| <code>GENERATED_RUNTIME</code> | Set by lifecycle execution or written as state; not a template input. |
+| <code>DEPRECATED</code> | Retained only for compatibility and not a new configuration surface. |
+
+| Keys covered | Classification | Default or requirement | Tracked/example | Runtime location and validation |
+|---|---|---|---|---|
+| <code>DEMO_PROFILE</code>, <code>DEMO_GIT_BRANCH_POLICY</code>, <code>EXPECTED_GIT_BRANCH</code> | PUBLIC_TEMPLATE | Production, required branch policy and <code>main</code>; newcomer mock disables branch-name enforcement. | Tracked in both profile templates. | Private env resolution; lifecycle validates profile and branch policy. |
+| <code>TEMIAGENT_RUNTIME_ROOT</code>, <code>LOG_DIR</code>, <code>MEMORY_DIR</code>, <code>DEMO_CARE_MEMORY_ROOT</code> | PUBLIC_TEMPLATE / PRIVATE_RUNTIME | Template placeholders resolve below the owner-only runtime root. Care root is required only by the enabled care flow. | Placeholder paths only. | Private config and runtime root; lifecycle rejects relative, symlinked or out-of-root paths. |
+| <code>TEMI_SHARED_BRIDGE_PATH</code>, <code>TEMI_SHARED_HERMES_PATH</code> | PUBLIC_TEMPLATE / PRIVATE_RUNTIME | Shared metadata root; canonical profile resolves both to the same private root. | Placeholder paths only. | Runtime data; lifecycle requires absolute matching roots under the selected runtime root. |
+| <code>HERMES_MEDIA_CALLBACK_SOCKET</code>, <code>HERMES_DEMO_IDENTITY_CALLBACK_SOCKET</code>, <code>HERMES_DEMO_CARE_CALLBACK_SOCKET</code>, <code>DEMO_IDENTITY_STATE_DIR</code> | PRIVATE_RUNTIME | Private Unix sockets/state paths; identity/care paths are conditional. | Placeholder paths only. | Runtime state; required and checked when the corresponding feature gates are enabled. |
+| <code>LMSTUDIO_OWNERSHIP</code>, <code>MQTT_OWNERSHIP</code>, <code>HERMES_GATEWAY_OWNERSHIP</code>, <code>MANAGE_ANDROID</code> | PUBLIC_TEMPLATE | Ownership is <code>managed</code>, <code>external</code> or <code>disabled</code>; Android is <code>0</code>. | Tracked safe values. | Private env; lifecycle requires ownership/enablement agreement and rejects Android management. |
+| <code>LMSTUDIO_TARGET_DIR</code>, <code>LMSTUDIO_MODEL_ID</code>, <code>LMSTUDIO_API_IDENTIFIER</code>, <code>LMSTUDIO_SERVER_PORT</code> | REQUIRED_USER_INPUT / PUBLIC_DEFAULT | Production uses the external LM Studio location, canonical model ID, API identifier and port <code>1234</code>. | Identifier/default is tracked; local target is external/private. | LM Studio supervisor and health; model/cache must be provisioned externally. |
+| <code>CONTEXT_LENGTH</code>, <code>LMSTUDIO_CONTEXT_LENGTH</code>, <code>LMSTUDIO_VISIBLE_GPUS</code> | PUBLIC_DEFAULT | <code>64000</code>, matching context values and visible devices <code>0,1</code>. | Tracked defaults. | Lifecycle rejects drift; GPU/driver remains an external pin gap. |
+| <code>MQTT_BROKER_HOST</code>, <code>MQTT_BROKER_PORT</code>, <code>MQTT_CONFIG_PATH</code> | PUBLIC_DEFAULT / REQUIRED_USER_INPUT | Client default is loopback, port <code>1883</code>; managed production config must be an existing absolute broker config. | Host/port/config shape tracked; deployment endpoint is private. | Private env and broker supervisor; canonical MQTT-only mode additionally requires the tracked <code>mqtt/mosquitto.conf</code>. |
+| <code>HERMES_GATEWAY_ENABLED</code> | PUBLIC_DEFAULT | Disabled in newcomer; production may explicitly enable it. | Tracked. | Lifecycle derives service inclusion; health is not Discord delivery proof. |
+| <code>ROBOT_ID_ALLOWLIST</code>, <code>HERMES_INVOKE_MODE</code>, <code>HERMES_HTTP_URL</code>, <code>HERMES_TIMEOUT_SECONDS</code> | PUBLIC_TEMPLATE | Robot <code>temi-01</code>, HTTP invocation, resident loopback URL derived from port and bounded timeout. | Safe values/template. | Bridge/lifecycle config; robot allowlist and URL are validated before start. |
+| <code>TRACE_ENABLED</code>, <code>TRACE_INCLUDE_ASR_TEXT</code>, <code>DEBUG_TRACE_FULL</code>, <code>TRACE_MAX_FIELD_CHARS</code> | PUBLIC_DEFAULT / PRIVATE_RUNTIME | Trace on, ASR text off in production sample, full debug off and bounded field size. | Safe values only. | Private logs/traces; content is runtime data and must remain redacted/bounded. |
+| <code>ADAPTER_VISION_PORT</code>, <code>ADAPTER_FRAME_BROADCAST_PORT</code>, <code>RESIDENT_HTTP_PORT</code>, <code>VIEWER_HTTP_PORT</code>, <code>VIEWER_AUX_PORT</code> | PUBLIC_DEFAULT | Production <code>8080/8081/8765/8010/8011</code>; newcomer uses <code>29080/29081/29765/29010/29011</code>. | Safe port templates. | Lifecycle resolves and validates uniqueness/profile-specific ranges. |
+| <code>MOCK_ANDROID_HEALTH_PORT</code>, <code>MOCK_DISCORD_PORT</code> | PUBLIC_DEFAULT | Newcomer-only high ports <code>29012/29013</code>. | Mock template only. | Lifecycle mock services; rejected outside the newcomer profile. |
+| <code>MEDIA_V11_ENABLED</code>, <code>HERMES_MEDIA_TOOL_ENABLED</code>, <code>HERMES_MEDIA_FAST_PATH_ENABLED</code> | PUBLIC_TEMPLATE | All are true only in the reviewed media Demo templates. | Tracked safe defaults. | Bridge/runtime feature gates; native callback remains local and Android mapping is external. |
+| <code>DEMO_OPERATOR_IDENTITY_ENABLED</code>, <code>RESIDENT_IDENTITY_ENABLED</code>, <code>HERMES_DEMO_IDENTITY_TOOL_ENABLED</code>, <code>HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED</code> | PUBLIC_TEMPLATE | Disabled in newcomer; production sample enables the controlled Demo route. | Tracked flags. | Private identity state/callback; lifecycle requires compatible flags and never infers identity from speech. |
+| <code>CARE_MEMORY_V2_ENABLED</code>, <code>DEMO_REPEATED_DISCOMFORT_ENABLED</code>, <code>DEMO_CARE_SCENARIO_PROMPT_ENABLED</code>, <code>CARE_CONTEXT_ENABLED</code>, <code>DEMO_RESIDENT_VISUAL_ROUTING_ENABLED</code> | PUBLIC_TEMPLATE | Newcomer disables care; production sample enables bounded synthetic care and keeps visual routing disabled. | Tracked flags. | Bridge/private memory; partial combinations fail closed. |
+| <code>DEMO_IDENTITY_REFRESH_SECONDS</code>, <code>DEMO_IDENTITY_MAX_DURATION_SECONDS</code>, <code>DEMO_RESIDENT_CONTEXT_TTL_SECONDS</code>, <code>DEMO_RESIDENT_VISUAL_MINIMUM_CONFIDENCE</code> | PUBLIC_DEFAULT | Positive bounded identity/context values; confidence is not identity accuracy. | Safe defaults where present. | Bridge/runtime validation; no medical or recognition claim. |
+| <code>DEMO_ACTION_VIEWER_ENABLED</code>, <code>DEMO_ACTION_VIEWER_MODEL</code>, <code>DEMO_ACTION_VIEWER_GGUF_MODEL_PATH</code>, <code>DEMO_ACTION_VIEWER_MMPROJ_PATH</code>, <code>DEMO_ACTION_VIEWER_LLAMA_SERVER</code>, <code>DEMO_ACTION_VIEWER_LLAMA_SERVER_PORT</code> | REQUIRED_USER_INPUT / PRIVATE_RUNTIME | Viewer is optional; production paths must identify externally provisioned model files and server. | Identifiers/templates tracked; actual paths external/private. | Viewer lifecycle and health; regular-file/executable checks apply. |
+| <code>DEMO_ACTION_VIEWER_CUDA_VISIBLE_DEVICES</code>, <code>DEMO_ACTION_VIEWER_POSE_MODE</code>, <code>DEMO_ACTION_VIEWER_POSE_MODEL</code>, <code>DEMO_ACTION_VIEWER_POSE_DEVICE</code>, <code>DEMO_ACTION_VIEWER_MAX_OUTPUT_TOKENS</code> | PUBLIC_DEFAULT / REQUIRED_USER_INPUT | Viewer device/model settings are machine-dependent; output is bounded. | Safe shape only; pose provenance external. | Viewer process; GPU and optional weight remain external/pin-gap inputs. |
+| <code>DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH</code>, <code>DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK</code>, <code>DEMO_ACTION_VIEWER_ABNORMAL_COOLDOWN_SECONDS</code> | PUBLIC_DEFAULT / DEPRECATED | Abnormal publication and pre-alert are disabled unless explicitly authorized; cooldown is bounded. | Tracked flags/defaults. | Viewer config; Bridge still owns command and notification boundaries. |
+| <code>DEMO_ACTION_VIEWER_DISCORD_NOTIFY</code> | DEPRECATED | Must remain <code>disabled</code>; enabled is rejected. | Tracked retired switch. | Lifecycle validation; Bridge, not viewer, owns notification. |
+| <code>ABNORMAL_CARE_CONFIRMATION_ENABLED</code>, <code>ABNORMAL_CARE_CONFIRMATION_TTL_SECONDS</code>, <code>ABNORMAL_CARE_CONFIRMATION_MIN_ASR_CONFIDENCE</code> | PUBLIC_DEFAULT / PRIVATE_RUNTIME | Bounded confirmation record and threshold. | Module template values are safe. | Bridge private memory/state; confirmation is not caregiver notification. |
+| <code>ABNORMAL_CARE_EPISODE_ENABLED</code>, <code>ABNORMAL_CARE_FIRST_RESPONSE_TIMEOUT_SECONDS</code>, <code>ABNORMAL_CARE_SECOND_RESPONSE_TIMEOUT_SECONDS</code>, <code>ABNORMAL_CARE_TIMEOUT_POLL_SECONDS</code> | PUBLIC_TEMPLATE | Episode route and monotonic deadlines; disabled or enabled per profile. | Tracked values. | Bridge state machine; positive values are validated. |
+| <code>ABNORMAL_NOTIFICATION_MODE</code>, <code>ABNORMAL_NOTIFICATION_TIMEOUT_SECONDS</code>, <code>ABNORMAL_NOTIFICATION_TEST_RECIPIENT_AUTHORIZED</code> | PUBLIC_DEFAULT / REQUIRED_USER_INPUT | <code>disabled</code> by default; <code>demo_mock</code> or real webhook requires explicit owner authorization. | No secret value tracked. | Bridge validates mode and bounded timeout; delivery is never inferred from configuration. |
+| <code>DEMO_NOTIFICATION_MOCK_ENABLED</code>, <code>DEMO_NOTIFICATION_RECEIPT_ENABLED</code>, <code>DEMO_TEST_EVENT_INGRESS_ENABLED</code>, <code>DEMO_TEST_RESIDENT_ALLOWLIST</code> | PUBLIC_TEMPLATE | Mock receipt and formal test ingress are newcomer-only; real recipient is not used. | Tracked safe flags. | Bridge/lifecycle requires the complete mock combination and allowlist. |
+| <code>ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH</code> | SECRET / REQUIRED_USER_INPUT | Required only for real webhook mode; never a value-bearing path in public output. | Empty in tracked templates. | Owner-only absolute regular non-symlink file, mode <code>0600</code>, outside worktrees. |
+| <code>MQTT_USERNAME</code>, <code>MQTT_PASSWORD</code> | SECRET | Empty in examples; set only if the broker owner requires authentication. | Names only, no values. | Private env; never print or commit. |
+| <code>DISCORD_WEBHOOK_URL</code> | SECRET | No default and never in the lifecycle template. | Only the variable name may appear in examples. | Separate private Discord env, owner-only mode <code>0600</code>; Bridge reads it only for the authorized route. |
+| <code>TEMI_LM_API_KEY</code> | SECRET | Legacy local default may be a non-secret placeholder; any real provider key is private. | No real value tracked. | Legacy backend private environment only; never publish the placeholder as a credential. |
+| <code>DEMO_START_TIMEOUT_SECONDS</code>, <code>DEMO_TEST_FORCE_HEALTH_FAILURE_SERVICE</code> | PUBLIC_DEFAULT / DEPRECATED | Start wait is bounded; forced viewer failure is test-only newcomer configuration. | Safe test values only. | Lifecycle validates range/profile; not a production feature. |
+| <code>ABNORMAL_EVENT_PUBLISH_ENABLED</code>, <code>DISCORD_NOTIFY_ENABLED</code>, <code>DISCORD_ENV_FILE</code> | DEPRECATED | Legacy Bridge notification trio is accepted only for compatibility and maps to the new notification route. | Names may appear in module template; no credential value. | Bridge compatibility parser; use <code>ABNORMAL_NOTIFICATION_*</code> for new work. |
+| <code>HERMES_CLI_COMMAND</code>, <code>HERMES_MOCK_RESPONSE_TEXT</code>, <code>MAX_ACTIONS_PER_EVENT</code>, <code>MAX_IMAGE_SIZE_MB</code>, <code>EVENT_DEDUP_TTL_SECONDS</code>, <code>LOG_LEVEL</code> | PUBLIC_TEMPLATE / PRIVATE_RUNTIME | Direct Bridge module inputs; mock text is synthetic and limits are bounded. | Tracked module template. | Bridge config; direct-module values are not a second lifecycle orchestrator. |
+| <code>CARE_CONTEXT_MAX_CHARS</code>, <code>CARE_CONTEXT_MAX_EVENTS</code> | PUBLIC_TEMPLATE / PRIVATE_RUNTIME | Bounded Bridge context limits. | Names/defaults only. | Bridge config; values are bounded before context construction. |
+| <code>TEMI_MQTT_BROKER</code>, <code>TEMI_MQTT_PORT</code>, <code>TEMI_MQTT_CLIENT_ID</code>, <code>TEMI_VISION_HOST</code>, <code>TEMI_VISION_PORT</code> | PUBLIC_DEFAULT / DEPRECATED | Direct legacy backend route; defaults are local and not the canonical Demo lifecycle. | Declared in legacy module source. | <code>temi_backend</code> private/direct module environment; use only with its legacy README. |
+| <code>TEMI_ENABLE_FRAME_BROADCAST</code>, <code>TEMI_FRAME_BROADCAST_HOST</code>, <code>TEMI_FRAME_BROADCAST_PORT</code>, <code>TEMI_FRAME_BROADCAST_JPEG_QUALITY</code>, <code>TEMI_ENABLE_DEBUG_FRAMES</code>, <code>TEMI_DEBUG_FRAMES_DIR</code> | PUBLIC_DEFAULT / PRIVATE_RUNTIME / DEPRECATED | Legacy camera broadcast/debug controls; generated frames remain runtime data. | Source defaults; no private values. | Legacy backend runtime; paths must not point at tracked publication data. |
+| <code>TEMI_LM_BASE_URL</code>, <code>TEMI_LM_MODEL</code>, <code>TEMI_SKILLS_PROMPT_FILE</code> | PUBLIC_DEFAULT / REQUIRED_USER_INPUT / DEPRECATED | Legacy local VLM URL/model/prompt inputs; not canonical resident Hermes config. | Source defaults; local paths external. | Legacy backend only; do not treat as current production model authority. |
+| <code>HERMES_ACCEPT_HOOKS</code>, <code>LMSTUDIO_PROJECT_ROOT</code>, <code>TRACE_RUN_ID</code>, <code>PYTHONUNBUFFERED</code> | GENERATED_RUNTIME | Lifecycle-injected resolved values and run identity. | Not user templates. | Process environment/state; generated values must not be copied into public docs as private defaults. Resolved user keys are listed in their owning rows above. |
+
+This inventory intentionally distinguishes the tracked production and newcomer
+templates from direct Bridge/backend module inputs. The lifecycle may pass
+resolved values to those modules, but direct module READMEs do not create an
+alternate current deployment contract.
+
 ## Runtime paths
 
 | Key | Required form / purpose | Constraint |
@@ -58,6 +119,44 @@ action.
 The lifecycle creates its own `state/`, `logs/`, `data/`, and `tmp/sockets/`
 subdirectories. Repository `logs/`, `memory/`, and `temi_shared/` are not
 current runtime targets.
+
+## Secret management contract
+
+Allowed secret-bearing inputs are limited to credentials required by an
+explicitly owned external service: MQTT username/password when the broker
+requires authentication, a real LM Studio/provider API key for the legacy
+route, and <code>DISCORD_WEBHOOK_URL</code> for an explicitly authorized
+Bridge notification mode. Empty values and the local <code>lm-studio</code>
+placeholder in examples are not real credentials.
+
+| Secret material | Location | Permission and validation |
+|---|---|---|
+| Private lifecycle/config values | Ignored <code>/TemiAgent/.runtime/demo/demo.env</code> or an explicitly supplied absolute private env outside every worktree. | Lifecycle user owns the file, exact mode <code>0600</code>; parent/runtime directories are owner-only. |
+| MQTT username/password | Private lifecycle or broker-owner env only. | Never print, commit or place in a command-line argument; blank tracked examples are safe placeholders. |
+| Discord webhook | Separate private env named by <code>ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH</code>. | Regular non-symlink file, lifecycle-user-owned, exact mode <code>0600</code>, outside all Git worktrees, with the variable name <code>DISCORD_WEBHOOK_URL</code>. |
+| External model/provider keys | The external owner’s secret store or private env. | Do not add a token to a model path, URL, README, trace or fixture. |
+
+Create local configuration with <code>./scripts/demo init-config</code>. Do not
+copy a real private env into a tracked template. To audit whether a file has
+entered the index without printing its contents, use:
+
+~~~bash
+git status --short --ignored
+git ls-files --error-unmatch .runtime 2>/dev/null
+git ls-files --error-unmatch .env 2>/dev/null
+~~~
+
+The two <code>git ls-files</code> checks should fail for ignored runtime/env
+paths. If a secret-bearing path is tracked, stop publication review, preserve
+the evidence and ask a maintainer to remove it through the repository’s
+approved remediation process; do not paste the value into an issue or log.
+Before handover, run the repository secret/private-path scan and inspect only
+filenames, status and redacted diagnostics.
+
+Never commit credentials, webhook URLs, private LAN addresses, user-specific
+paths, raw care records, images, full prompts, runtime exports or payload-bearing
+logs. Never use a credential as a public default, and never claim notification
+delivery from the presence of a credential or a healthy viewer.
 
 ## Managed dependency profile
 

@@ -1,5 +1,8 @@
 # Immediate abnormal-care flow
 
+> Status: SUPPLEMENTAL Demo feature detail. The Bridge/runtime schemas and the
+> current configuration and troubleshooting authorities remain controlling.
+
 Status: Demo-only implementation. Last reviewed: 2026-07-31.
 
 The Bridge owns the abnormal-care workflow. It is not a medical diagnosis,

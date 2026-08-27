@@ -1,18 +1,22 @@
 # TemiAgent Demo 快速參考
 
 狀態：CURRENT companion；完整 lifecycle 只以 [Demo 操作入口](DEMO_OPERATOR_GUIDE.md) 為準。
-最後審查日期：2026-08-26
+最後審查日期：2026-08-27
 
 完整說明請看 [Demo 新手操作手冊](DEMO_OPERATOR_GUIDE.md)、
 [設定參考](demo_configuration_reference.md)與
 [troubleshooting](demo_troubleshooting.md)。所有 `<...>` 都是 operator 自行提供的
 placeholder；不要把真實 endpoint、path、hash 或 account 寫入 tracked file。
 
+新手的完整 clone/environment 順序見 [developer setup](developer_setup.md)，
+責任拓撲見 [deployment handover](demo_deployment_handover.md)；本頁只是
+companion，不是第二個 lifecycle authority。
+
 ## 最短流程
 
 ```bash
-docker exec -it <designated-container> bash
-cd <project-root>
+docker exec -it yiting.TemiAgent_gpu_all bash
+cd /TemiAgent
 ./scripts/demo --config <private-demo-config> doctor
 ./scripts/demo --config <private-demo-config> start
 ./scripts/demo --config <private-demo-config> status
