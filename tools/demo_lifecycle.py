@@ -13,6 +13,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -33,8 +34,45 @@ import uuid
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class DemoError(RuntimeError):
+    """Raised for a lifecycle precondition or ownership failure."""
+
+
+def _discover_primary_worktree_root(root: Path) -> Path:
+    """Resolve the repository primary worktree without following source symlinks."""
+
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), "worktree", "list", "--porcelain"],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise DemoError("unable to resolve the Git primary worktree") from exc
+    if completed.returncode:
+        detail = completed.stderr.strip() or "git worktree inspection failed"
+        raise DemoError(f"unable to resolve the Git primary worktree: {detail}")
+    for line in completed.stdout.splitlines():
+        if line.startswith("worktree "):
+            candidate = Path(line.removeprefix("worktree ")).resolve()
+            if candidate.is_dir():
+                return candidate
+    raise DemoError("Git worktree inspection returned no primary worktree")
+
+
+# Full-stack defaults remain relative to the executing checkout.  MQTT-only
+# commands use the repository primary worktree's ignored runtime root so a
+# linked operational checkout cannot create a second broker owner record.
 CANONICAL_RUNTIME_ROOT = ROOT / ".runtime" / "demo"
 CANONICAL_CONFIG_PATH = CANONICAL_RUNTIME_ROOT / "demo.env"
+CANONICAL_MQTT_SOURCE_ROOT = _discover_primary_worktree_root(ROOT)
+CANONICAL_MQTT_RUNTIME_ROOT = CANONICAL_MQTT_SOURCE_ROOT / ".runtime" / "demo"
+CANONICAL_MQTT_CONFIG_PATH = CANONICAL_MQTT_RUNTIME_ROOT / "demo.env"
 PRODUCTION_TEMPLATE_PATH = ROOT / "config" / "demo.env.example"
 NEWCOMER_MOCK_TEMPLATE_PATH = ROOT / "config" / "demo.mock.env.example"
 BRIDGE_SRC = ROOT / "hermes_temi_bridge" / "src"
@@ -49,6 +87,11 @@ ALLOWED_DIRTY_FILES = {
     "memory/event_log.jsonl",
     "memory/reminders.json",
 }
+MQTT_ONLY_RUNTIME_FILES = (
+    "scripts/demo",
+    "tools/demo_lifecycle.py",
+    "tools/managed_mosquitto_supervisor.py",
+)
 MEDIA_FLAGS = (
     "MEDIA_V11_ENABLED",
     "HERMES_MEDIA_TOOL_ENABLED",
@@ -95,12 +138,17 @@ STATE_HEALTHY = "HEALTHY"
 STATE_UNHEALTHY = "UNHEALTHY"
 STATE_START_FAILED = "START_FAILED"
 STATE_STOPPED = "STOPPED"
+MQTT_STATE_RUNNING = "RUNNING"
+MQTT_STATE_VALUES = {
+    STATE_STARTING,
+    MQTT_STATE_RUNNING,
+    STATE_UNHEALTHY,
+    STATE_START_FAILED,
+    STATE_STOPPED,
+}
+MQTT_CHILD_STATE_SCHEMA = "temiagent.mosquitto_child.v1"
 HEALTHY_STATE_VALUES = {STATE_HEALTHY, "running"}
 RECOVERABLE_STATE_VALUES = {STATE_STARTING, STATE_UNHEALTHY, STATE_START_FAILED}
-
-
-class DemoError(RuntimeError):
-    """Raised for a lifecycle precondition or ownership failure."""
 
 
 def canonical_runtime_root() -> Path:
@@ -113,6 +161,30 @@ def canonical_config_path() -> Path:
     """Return the only config path considered when --config is omitted."""
 
     return CANONICAL_CONFIG_PATH
+
+
+def canonical_mqtt_runtime_root() -> Path:
+    """Return the one repository-level runtime root used by MQTT-only commands."""
+
+    return CANONICAL_MQTT_RUNTIME_ROOT
+
+
+def canonical_mqtt_config_path() -> Path:
+    """Return the canonical private config shared by MQTT-only checkouts."""
+
+    return CANONICAL_MQTT_CONFIG_PATH
+
+
+def canonical_mqtt_broker_config_path() -> Path:
+    """Return the tracked broker config used by the canonical MQTT owner."""
+
+    return CANONICAL_MQTT_SOURCE_ROOT / "mqtt" / "mosquitto.conf"
+
+
+def _mqtt_child_state_path(config: DemoConfig) -> Path:
+    """Return the private path used for the supervisor's exact child contract."""
+
+    return config.mqtt_state_path.with_name("mqtt-child.json")
 
 
 def _same_path(left: Path, right: Path) -> bool:
@@ -129,10 +201,17 @@ def _is_canonical_runtime_root(path: Path) -> bool:
     return _same_path(path, canonical_runtime_root())
 
 
-def _validate_canonical_runtime_hierarchy() -> None:
-    """Reject symlink redirection before trusting the ignored local hierarchy."""
+def _is_canonical_mqtt_config_path(path: Path) -> bool:
+    return _same_path(path, canonical_mqtt_config_path())
 
-    runtime_root = canonical_runtime_root()
+
+def _is_canonical_mqtt_runtime_root(path: Path) -> bool:
+    return _same_path(path, canonical_mqtt_runtime_root())
+
+
+def _validate_runtime_hierarchy(runtime_root: Path) -> None:
+    """Reject symlink redirection before trusting an ignored runtime hierarchy."""
+
     runtime_parent = runtime_root.parent
     for candidate in (runtime_parent, runtime_root):
         if candidate.exists() or candidate.is_symlink():
@@ -140,11 +219,23 @@ def _validate_canonical_runtime_hierarchy() -> None:
                 raise DemoError(f"canonical runtime hierarchy must not contain symlinks: {candidate}")
 
 
-def _validate_private_location(path: Path, *, label: str, canonical: bool) -> None:
+def _validate_canonical_runtime_hierarchy() -> None:
+    """Reject symlink redirection for the executing checkout's full-stack root."""
+
+    _validate_runtime_hierarchy(canonical_runtime_root())
+
+
+def _validate_private_location(
+    path: Path,
+    *,
+    label: str,
+    canonical: bool,
+    canonical_runtime: Path | None = None,
+) -> None:
     """Allow the exact canonical ignored path or preserve external-config safety."""
 
     if canonical:
-        _validate_canonical_runtime_hierarchy()
+        _validate_runtime_hierarchy(canonical_runtime or canonical_runtime_root())
         return
     _outside_worktrees(path, label=label)
 
@@ -159,6 +250,20 @@ def resolve_config_path(raw_path: str | None) -> Path:
         raise DemoError(
             "Canonical Demo config not initialized. "
             f"Run: ./scripts/demo init-config. Expected path: {path}"
+        )
+    return path
+
+
+def resolve_mqtt_config_path(raw_path: str | None) -> Path:
+    """Resolve MQTT-only config from the repository primary worktree by default."""
+
+    if raw_path:
+        return Path(raw_path).expanduser()
+    path = canonical_mqtt_config_path()
+    if not path.is_file() or path.is_symlink():
+        raise DemoError(
+            "Canonical MQTT Demo config not initialized. "
+            f"Expected path: {path}"
         )
     return path
 
@@ -465,6 +570,21 @@ class DemoConfig:
         return self.runtime_root / "state" / "ownership" / "lifecycle.lock"
 
     @property
+    def mqtt_state_path(self) -> Path:
+        """Return the MQTT scope record in the shared ownership directory."""
+        return self.runtime_root / "state" / "ownership" / "mqtt.json"
+
+    @property
+    def mqtt_last_run_path(self) -> Path:
+        """Return the MQTT scope's archived lifecycle record."""
+        return self.runtime_root / "state" / "last-run" / "mqtt.json"
+
+    @property
+    def mqtt_log_path(self) -> Path:
+        """Return the broker log path below the selected owner-only root."""
+        return self.runtime_root / "logs" / "mqtt" / "mosquitto.log"
+
+    @property
     def flags(self) -> dict[str, str]:
         keys = (
             *MEDIA_FLAGS,
@@ -495,7 +615,7 @@ class DemoConfig:
         return tuple(sockets)
 
 
-def load_config(raw_path: str | Path) -> DemoConfig:
+def load_config(raw_path: str | Path, *, mqtt_only: bool = False) -> DemoConfig:
     """Validate a private env file and derive the fail-closed Demo configuration."""
 
     path = Path(raw_path).expanduser()
@@ -504,7 +624,13 @@ def load_config(raw_path: str | Path) -> DemoConfig:
     if path.is_symlink() or not path.is_file():
         raise DemoError("--config must be a regular private env file")
     is_canonical_config = _is_canonical_config_path(path)
-    _validate_private_location(path, label="private env", canonical=is_canonical_config)
+    is_canonical_mqtt_config = mqtt_only and _is_canonical_mqtt_config_path(path)
+    _validate_private_location(
+        path,
+        label="private env",
+        canonical=is_canonical_config or is_canonical_mqtt_config,
+        canonical_runtime=canonical_mqtt_runtime_root() if is_canonical_mqtt_config else None,
+    )
     mode = stat.S_IMODE(path.stat().st_mode)
     if mode != 0o600:
         raise DemoError(f"private env mode must be 0600, got {mode:03o}")
@@ -526,10 +652,20 @@ def load_config(raw_path: str | Path) -> DemoConfig:
     if not runtime_root.is_absolute():
         raise DemoError("TEMIAGENT_RUNTIME_ROOT must be absolute")
     is_canonical_runtime = _is_canonical_runtime_root(runtime_root)
+    is_canonical_mqtt_runtime = mqtt_only and _is_canonical_mqtt_runtime_root(runtime_root)
     if is_canonical_config and not is_canonical_runtime:
         raise DemoError("canonical Demo config must use the canonical runtime root")
+    if is_canonical_mqtt_config and not is_canonical_mqtt_runtime:
+        raise DemoError("canonical MQTT Demo config must use the canonical MQTT runtime root")
+    if mqtt_only and is_canonical_runtime and not is_canonical_mqtt_runtime:
+        raise DemoError(
+            "MQTT-only runtime must be the primary-worktree canonical runtime or an external runtime"
+        )
     _validate_private_location(
-        runtime_root, label="runtime root", canonical=is_canonical_runtime
+        runtime_root,
+        label="runtime root",
+        canonical=is_canonical_runtime or is_canonical_mqtt_runtime,
+        canonical_runtime=canonical_mqtt_runtime_root() if is_canonical_mqtt_runtime else None,
     )
     port_defaults = PRODUCTION_PORTS if profile == PROFILE_PRODUCTION else NEWCOMER_MOCK_PORTS
     lmstudio_server_port = _port(values, "LMSTUDIO_SERVER_PORT", default=port_defaults["lmstudio"])
@@ -596,6 +732,8 @@ def load_config(raw_path: str | Path) -> DemoConfig:
         raise DemoError(f"LMSTUDIO_VISIBLE_GPUS must be {CANONICAL_LMSTUDIO_VISIBLE_GPUS}")
     lmstudio_ownership = _ownership(values, "LMSTUDIO_OWNERSHIP", default="external")
     mqtt_ownership = _ownership(values, "MQTT_OWNERSHIP", default="external")
+    if mqtt_only and is_canonical_mqtt_runtime and profile != PROFILE_PRODUCTION:
+        raise DemoError("canonical MQTT-only operation requires the production profile")
     gateway_enabled = _truthy(values.get("HERMES_GATEWAY_ENABLED", "false"))
     gateway_ownership = _ownership(
         values,
@@ -631,6 +769,11 @@ def load_config(raw_path: str | Path) -> DemoConfig:
             mqtt_config_path = Path(_require(values, "MQTT_CONFIG_PATH"))
             if not mqtt_config_path.is_absolute() or not mqtt_config_path.is_file():
                 raise DemoError("MQTT_CONFIG_PATH must be an existing absolute file for managed MQTT")
+    if mqtt_only and is_canonical_mqtt_runtime and mqtt_ownership == "managed":
+        if not is_canonical_mqtt_config:
+            raise DemoError("canonical MQTT runtime requires the canonical MQTT private config")
+        if not _same_path(mqtt_config_path, canonical_mqtt_broker_config_path()):
+            raise DemoError("canonical MQTT private config must use the canonical broker config")
     robot_id = _require(values, "ROBOT_ID_ALLOWLIST").split(",", 1)[0].strip()
     if not robot_id:
         raise DemoError("ROBOT_ID_ALLOWLIST has no primary robot id")
@@ -978,6 +1121,29 @@ def _identity(pid: int) -> dict[str, Any]:
     }
 
 
+def _mqtt_limited_identity(pid: int) -> dict[str, Any]:
+    """Read PID fields available after Mosquitto drops to its runtime UID."""
+    proc = Path("/proc") / str(pid)
+    stat_text = (proc / "stat").read_text(encoding="utf-8")
+    end = stat_text.rfind(")")
+    if end < 0:
+        raise DemoError(f"PID {pid} has an invalid /proc stat record")
+    fields = stat_text[end + 2 :].split()
+    if len(fields) < 20:
+        raise DemoError(f"PID {pid} has an incomplete /proc stat record")
+    raw_cmdline = (proc / "cmdline").read_bytes()
+    argv = [part.decode("utf-8", "replace") for part in raw_cmdline.split(b"\0") if part]
+    if not argv:
+        raise DemoError(f"PID {pid} has an empty command line")
+    return {
+        "pid": pid,
+        "ppid": int(fields[1]),
+        "start_ticks": int(fields[19]),
+        "cmdline": argv,
+        "cmdline_sha256": hashlib.sha256(raw_cmdline).hexdigest(),
+    }
+
+
 def _identity_matches(record: dict[str, Any]) -> bool:
     try:
         current = _identity(int(record["pid"]))
@@ -1033,6 +1199,143 @@ def _listener_identities(port: int) -> list[dict[str, Any]]:
     return records
 
 
+def _split_ss_endpoint(value: str) -> tuple[str, int | None]:
+    """Split one Linux ``ss`` local endpoint, including bracketed IPv6."""
+
+    value = value.strip()
+    if value.startswith("["):
+        closing = value.rfind("]")
+        if closing < 0 or closing + 1 >= len(value) or value[closing + 1] != ":":
+            return value, None
+        host = value[1:closing]
+        port_text = value[closing + 2 :]
+    else:
+        host, separator, port_text = value.rpartition(":")
+        if not separator:
+            return value, None
+    return host or "*", int(port_text) if port_text.isdigit() else None
+
+
+def _ss_line_pids(line: str) -> set[int]:
+    """Extract process IDs exposed by ``ss -p`` without trusting names."""
+
+    pids: set[int] = set()
+    cursor = 0
+    while True:
+        marker = line.find("pid=", cursor)
+        if marker < 0:
+            break
+        candidate = line[marker + 4 :].split(",", 1)[0]
+        if candidate.isdigit():
+            pids.add(int(candidate))
+        cursor = marker + 4
+    return pids
+
+
+def _listener_endpoints(port: int) -> list[dict[str, Any]]:
+    """Return listener address, port and kernel-reported PID evidence."""
+
+    completed = subprocess.run(
+        ["ss", "-H", "-ltnp", f"sport = :{port}"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=5,
+    )
+    if completed.returncode:
+        raise DemoError(f"could not inspect port {port}")
+    listeners: list[dict[str, Any]] = []
+    for line in completed.stdout.splitlines():
+        fields = line.split()
+        if len(fields) < 4:
+            continue
+        address, listener_port = _split_ss_endpoint(fields[3])
+        if listener_port != port:
+            continue
+        listeners.append(
+            {
+                "address": address,
+                "port": listener_port,
+                "pids": sorted(_ss_line_pids(line)),
+            }
+        )
+    return listeners
+
+
+def _mqtt_expected_listener(config: DemoConfig) -> dict[str, Any]:
+    """Read the single expected Mosquitto listener from its canonical config."""
+
+    path = config.mqtt_config_path
+    if path is None or path.is_symlink() or not path.is_file():
+        raise DemoError("MQTT_CONFIG_PATH must be an existing regular file")
+    listeners: list[dict[str, Any]] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        fields = line.split()
+        if fields[0].lower() != "listener":
+            continue
+        if len(fields) < 2 or not fields[1].isdigit():
+            raise DemoError("MQTT_CONFIG_LISTENER_INVALID")
+        listeners.append(
+            {
+                "port": int(fields[1]),
+                "address": fields[2] if len(fields) >= 3 else "0.0.0.0",
+            }
+        )
+    if len(listeners) != 1:
+        raise DemoError("MQTT_CONFIG_LISTENER_AMBIGUOUS")
+    expected = listeners[0]
+    if expected["port"] != config.mqtt_port:
+        raise DemoError(
+            f"MQTT_CONFIG_PORT_MISMATCH: config={expected['port']} env={config.mqtt_port}"
+        )
+    return expected
+
+
+def _normalized_bind_address(value: str) -> str:
+    value = value.strip().strip("[]").lower()
+    if value in {"", "*", "0.0.0.0", "::"}:
+        return "*"
+    try:
+        return ipaddress.ip_address(value).compressed
+    except ValueError:
+        return value
+
+
+def _bind_address_matches(expected: str, actual: str) -> bool:
+    """Match wildcard and concrete Linux listener representations safely."""
+
+    expected_normalized = _normalized_bind_address(expected)
+    actual_normalized = _normalized_bind_address(actual)
+    if expected_normalized == "*":
+        return actual_normalized == "*"
+    if expected_normalized == "localhost":
+        return actual_normalized in {"127.0.0.1", "::1"}
+    return expected_normalized == actual_normalized
+
+
+def _mqtt_listener_evidence(config: DemoConfig) -> dict[str, Any]:
+    """Collect config-derived listener evidence without adopting a process."""
+
+    expected = _mqtt_expected_listener(config)
+    listeners = _listener_endpoints(config.mqtt_port)
+    bind_address_valid = len(listeners) == 1 and _bind_address_matches(
+        str(expected["address"]), str(listeners[0]["address"])
+    )
+    return {
+        "expected_address": expected["address"],
+        "expected_port": expected["port"],
+        "listeners": listeners,
+        "listener_count": len(listeners),
+        "bind_address_valid": bind_address_valid,
+        "port_valid": expected["port"] == config.mqtt_port
+        and all(item.get("port") == config.mqtt_port for item in listeners),
+    }
+
+
 def _matching_identities(*, cwd: Path, token: str) -> list[dict[str, Any]]:
     matches: list[dict[str, Any]] = []
     for proc in Path("/proc").iterdir():
@@ -1052,6 +1355,250 @@ def _parent_identity(identity: dict[str, Any]) -> dict[str, Any] | None:
         return _identity(int(identity["ppid"]))
     except (FileNotFoundError, PermissionError, ProcessLookupError, DemoError):
         return None
+
+
+def _read_mqtt_child_state(config: DemoConfig) -> dict[str, Any] | None:
+    """Read the supervisor-published child contract without mutating runtime state."""
+    path = _mqtt_child_state_path(config)
+    try:
+        if path.is_symlink() or not path.is_file():
+            return None
+        metadata = path.stat()
+        if metadata.st_uid != os.geteuid() or stat.S_IMODE(metadata.st_mode) != 0o600:
+            return None
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _mqtt_child_contract_shape(
+    config: DemoConfig,
+    candidate: object,
+    *,
+    supervisor_pid: int,
+    run_id: str | None = None,
+) -> bool:
+    """Validate the immutable fields in one supervisor-created child contract."""
+    if not isinstance(candidate, dict):
+        return False
+    if candidate.get("schema_version") != MQTT_CHILD_STATE_SCHEMA:
+        return False
+    candidate_run_id = candidate.get("run_id")
+    if not isinstance(candidate_run_id, str) or (run_id is not None and candidate_run_id != run_id):
+        return False
+    if candidate.get("supervisor_pid") != supervisor_pid or candidate.get("ppid") != supervisor_pid:
+        return False
+    child_pid = candidate.get("pid")
+    start_ticks = candidate.get("start_ticks")
+    if (
+        not isinstance(child_pid, int)
+        or child_pid <= 1
+        or child_pid == supervisor_pid
+        or not isinstance(start_ticks, int)
+        or start_ticks <= 0
+    ):
+        return False
+    expected_command = ["mosquitto", "-c", str(config.mqtt_config_path)]
+    if candidate.get("cmdline") != expected_command:
+        return False
+    executable = candidate.get("executable")
+    mosquitto_executable = shutil.which("mosquitto")
+    if (
+        not isinstance(executable, str)
+        or mosquitto_executable is None
+        or os.path.realpath(mosquitto_executable) != executable
+    ):
+        return False
+    return isinstance(candidate.get("cmdline_sha256"), str)
+
+
+def _mqtt_child_contract(config: DemoConfig, record: object) -> dict[str, Any] | None:
+    """Return a contract bound to the exact recorded supervisor, if one exists."""
+    if not isinstance(record, dict):
+        return None
+    leader = record.get("leader")
+    run_id = record.get("lifecycle_run_id")
+    if not isinstance(leader, dict) or not isinstance(leader.get("pid"), int):
+        return None
+    if not isinstance(run_id, str):
+        return None
+    candidates: list[object] = [_read_mqtt_child_state(config), record.get("mqtt_child")]
+    for candidate in candidates:
+        if _mqtt_child_contract_shape(
+            config,
+            candidate,
+            supervisor_pid=int(leader["pid"]),
+            run_id=run_id,
+        ):
+            return dict(candidate)
+    return None
+
+
+def _mqtt_child_contract_live(
+    config: DemoConfig,
+    contract: dict[str, Any],
+    *,
+    require_direct: bool,
+) -> bool:
+    """Check PID reuse and the live command without reading restricted proc paths."""
+    supervisor_pid = contract.get("supervisor_pid")
+    if not isinstance(supervisor_pid, int) or not _mqtt_child_contract_shape(
+        config,
+        contract,
+        supervisor_pid=supervisor_pid,
+    ):
+        return False
+    try:
+        current = _mqtt_limited_identity(int(contract["pid"]))
+    except (FileNotFoundError, PermissionError, ProcessLookupError, DemoError, ValueError):
+        return False
+    if require_direct and current.get("ppid") != contract.get("ppid"):
+        return False
+    return all(
+        current.get(key) == contract.get(key)
+        for key in ("pid", "start_ticks", "cmdline", "cmdline_sha256")
+    )
+
+
+def _mqtt_recorded_child_matches(config: DemoConfig, identity: dict[str, Any]) -> bool:
+    """Match either a legacy full identity or the restricted-proc child contract."""
+    if identity.get("schema_version") == MQTT_CHILD_STATE_SCHEMA:
+        return _mqtt_child_contract_live(config, identity, require_direct=False)
+    return _identity_matches(identity)
+
+
+def _mqtt_supervisor_valid(config: DemoConfig, record: object) -> bool:
+    """Validate the recorded supervisor identity and its exact broker config."""
+
+    if not isinstance(record, dict):
+        return False
+    leader = record.get("leader")
+    if not isinstance(leader, dict) or not _identity_matches(leader):
+        return False
+    command = leader.get("cmdline")
+    if not isinstance(command, list) or not all(isinstance(item, str) for item in command):
+        return False
+    supervisor_scripts = [
+        item for item in command if Path(item).name == "managed_mosquitto_supervisor.py"
+    ]
+    if len(supervisor_scripts) != 1:
+        return False
+    supervisor_script = Path(supervisor_scripts[0])
+    if supervisor_script.is_symlink() or not supervisor_script.is_file():
+        return False
+    leader_cwd = leader.get("cwd")
+    if not isinstance(leader_cwd, str) or not Path(leader_cwd).is_absolute():
+        return False
+    if not _same_path(
+        Path(supervisor_scripts[0]),
+        Path(leader_cwd) / "tools" / "managed_mosquitto_supervisor.py",
+    ):
+        return False
+    executable = leader.get("executable")
+    command_executable = command[0] if command else None
+    if (
+        not isinstance(executable, str)
+        or not isinstance(command_executable, str)
+        or not Path(command_executable).is_absolute()
+        or os.path.realpath(command_executable) != executable
+    ):
+        return False
+    process_start_identity = record.get("process_start_identity")
+    command_fingerprint = record.get("command_fingerprint")
+    lifecycle_run_id = record.get("lifecycle_run_id")
+    if process_start_identity != leader:
+        return False
+    if not isinstance(command_fingerprint, str) or not isinstance(lifecycle_run_id, str):
+        return False
+    expected_script = str(Path(leader_cwd) / "tools" / "managed_mosquitto_supervisor.py")
+    expected_command = [
+        command_executable,
+        expected_script,
+        "--config",
+        str(config.mqtt_config_path),
+        "--run-id",
+        lifecycle_run_id,
+    ]
+    expected_child_contract_command = [
+        *expected_command,
+        "--child-state-path",
+        str(_mqtt_child_state_path(config)),
+    ]
+    return (
+        tuple(command) in {tuple(expected_command), tuple(expected_child_contract_command)}
+        and command_fingerprint == _command_fingerprint(command)
+    )
+
+
+def _mqtt_child_command_valid(config: DemoConfig, identity: dict[str, Any]) -> bool:
+    """Validate the live Mosquitto executable and exact broker configuration."""
+
+    command = identity.get("cmdline")
+    if not isinstance(command, list) or not all(isinstance(item, str) for item in command):
+        return False
+    mosquitto_executable = shutil.which("mosquitto")
+    if (
+        not command
+        or command[0] != "mosquitto"
+        or mosquitto_executable is None
+        or os.path.realpath(mosquitto_executable) != identity.get("executable")
+    ):
+        return False
+    return command == ["mosquitto", "-c", str(config.mqtt_config_path)]
+
+
+def _mqtt_child_valid(config: DemoConfig, identity: dict[str, Any], leader: dict[str, Any]) -> bool:
+    """Require a direct live Mosquitto child of the exact lifecycle supervisor."""
+
+    return identity.get("ppid") == leader.get("pid") and _mqtt_child_command_valid(
+        config, identity
+    )
+
+
+def _mqtt_lineage_evidence(
+    config: DemoConfig,
+    record: object,
+    listener_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    """Prove that the expected listener belongs to the recorded supervisor tree."""
+
+    leader = record.get("leader") if isinstance(record, dict) else None
+    supervisor_valid = _mqtt_supervisor_valid(config, record)
+    listener_pids = sorted(
+        {
+            int(pid)
+            for listener in listener_evidence.get("listeners", [])
+            for pid in listener.get("pids", [])
+            if isinstance(pid, int)
+        }
+    )
+    child_contract = _mqtt_child_contract(config, record) if supervisor_valid else None
+    child_valid = bool(
+        child_contract is not None
+        and _mqtt_child_contract_live(config, child_contract, require_direct=True)
+    )
+    child_pid = child_contract.get("pid") if child_contract is not None else None
+    mosquitto_pids = [pid for pid in listener_pids if child_valid and pid == child_pid]
+    listener_pid_matches_child = child_valid and (
+        not listener_pids or listener_pids == [child_pid]
+    )
+    listener_lineage_valid = (
+        supervisor_valid
+        and listener_pid_matches_child
+        and listener_evidence.get("listener_count") == 1
+        and (not listener_pids or mosquitto_pids == listener_pids)
+    )
+    return {
+        "supervisor_valid": supervisor_valid,
+        "supervisor_pid": leader.get("pid") if isinstance(leader, dict) else None,
+        "listener_pids": listener_pids,
+        "mosquitto_pids": mosquitto_pids,
+        "child_contract_valid": child_valid,
+        "child_pid": child_pid,
+        "listener_pid_matches_child": listener_pid_matches_child,
+        "listener_lineage_valid": listener_lineage_valid,
+    }
 
 
 def _wait_for(predicate: Callable[[], bool], timeout_seconds: int) -> bool:
@@ -1098,6 +1645,31 @@ def _mqtt_tcp_ready(config: DemoConfig) -> bool:
             return True
     except OSError:
         return False
+
+
+def _mqtt_readiness_evidence(
+    config: DemoConfig,
+    record: object = None,
+) -> dict[str, Any]:
+    """Collect every evidence item required before MQTT becomes RUNNING."""
+
+    listener = _mqtt_listener_evidence(config)
+    tcp_ready = _mqtt_tcp_ready(config)
+    lineage = _mqtt_lineage_evidence(config, record, listener)
+    ready = bool(
+        lineage["supervisor_valid"]
+        and lineage["listener_lineage_valid"]
+        and listener["listener_count"] == 1
+        and listener["bind_address_valid"]
+        and listener["port_valid"]
+        and tcp_ready
+    )
+    return {
+        **listener,
+        **lineage,
+        "tcp_ready": tcp_ready,
+        "ready": ready,
+    }
 
 
 def _lmstudio_lms(config: DemoConfig, *args: str, timeout: int = 20) -> subprocess.CompletedProcess[str]:
@@ -1252,14 +1824,48 @@ def _specs(config: DemoConfig) -> dict[str, ServiceSpec]:
     return specs
 
 
-def _source_record() -> dict[str, Any]:
+def _source_record_at(root: Path) -> dict[str, Any]:
+    """Capture one repository source identity without changing the checkout."""
+
     return {
-        "root": str(ROOT),
-        "branch": _git("branch", "--show-current"),
-        "head": _git("rev-parse", "HEAD"),
-        "tree": _git("status", "--short", "--ignore-submodules=none").splitlines(),
+        "root": str(root),
+        "branch": _git("branch", "--show-current", cwd=root),
+        "head": _git("rev-parse", "HEAD", cwd=root),
+        "tree": _git("status", "--short", "--ignore-submodules=none", cwd=root).splitlines(),
         "recorded_at": _utc_now(),
     }
+
+
+def _source_record() -> dict[str, Any]:
+    """Capture the executing checkout source identity for the full lifecycle."""
+
+    return _source_record_at(ROOT)
+
+
+def _git_status_paths(root: Path) -> set[str]:
+    """Return all changed paths from one checkout, including rename endpoints."""
+
+    output = _git(
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "-z",
+        cwd=root,
+    )
+    paths: set[str] = set()
+    records = [record for record in output.split("\0") if record]
+    index = 0
+    while index < len(records):
+        record = records[index]
+        if len(record) >= 3:
+            status = record[:2]
+            paths.add(record[3:])
+            if "R" in status or "C" in status:
+                index += 1
+                if index < len(records):
+                    paths.add(records[index])
+        index += 1
+    return paths
 
 
 def _write_pre_restart_evidence(config: DemoConfig) -> Path:
@@ -1446,6 +2052,8 @@ def _persist_starting_record(
     name: str,
     record: dict[str, Any],
     argv: list[str],
+    *,
+    state_path: Path | None = None,
 ) -> None:
     """Persist verified process ownership before the service health wait begins."""
     leader = record.get("leader")
@@ -1458,7 +2066,7 @@ def _persist_starting_record(
     state["services"][name] = record
     state["status"] = STATE_STARTING
     state["updated_at"] = _utc_now()
-    _atomic_json(config.state_path, state)
+    _atomic_json(state_path or config.state_path, state)
 
 
 def _attach_listeners(record: dict[str, Any]) -> None:
@@ -1507,6 +2115,14 @@ def _attach_descendants(record: dict[str, Any]) -> None:
     record["members"] = members
 
 
+def _record_mqtt_child_contract(config: DemoConfig, record: dict[str, Any]) -> dict[str, Any] | None:
+    """Copy the supervisor's exact child contract into the durable MQTT record."""
+    contract = _mqtt_child_contract(config, record)
+    if contract is not None:
+        record["mqtt_child"] = contract
+    return contract
+
+
 def _stop_record(record: dict[str, Any], *, timeout_seconds: int) -> str:
     name = str(record.get("name", "unknown"))
     identities = [record.get("leader"), *(record.get("members") or [])]
@@ -1538,6 +2154,628 @@ def _stop_record(record: dict[str, Any], *, timeout_seconds: int) -> str:
         if not _wait_for(lambda port=int(port): _listener_count(port) == 0, min(5, timeout_seconds)):
             raise DemoError(f"{name} listener remains on {port} after exact-PID stop")
     return "stopped_term"
+
+
+def _mqtt_only_spec(config: DemoConfig) -> ServiceSpec:
+    """Return the one managed MQTT service specification."""
+
+    if config.mqtt_ownership != "managed" or config.mqtt_config_path is None:
+        raise DemoError("MQTT_ONLY_REQUIRES_MANAGED_OWNERSHIP")
+    return _specs(config)["mqtt"]
+
+
+def _read_mqtt_state(config: DemoConfig) -> dict[str, Any] | None:
+    """Read the MQTT scope record using the existing lifecycle state format."""
+
+    path = config.mqtt_state_path
+    if path.is_symlink():
+        raise DemoError("MQTT_STATE_SYMLINK")
+    if path.exists():
+        if not path.is_file():
+            raise DemoError("MQTT_STATE_NOT_A_FILE")
+        metadata = path.stat()
+        if metadata.st_uid != os.geteuid() or stat.S_IMODE(metadata.st_mode) != 0o600:
+            raise DemoError("MQTT_STATE_MODE_INVALID")
+    state = _read_json(path)
+    if state is None:
+        return None
+    if state.get("schema_version") != "temiagent.demo_lifecycle.v2":
+        raise DemoError("MQTT_STATE_SCHEMA_UNSUPPORTED")
+    if state.get("scope") != "mqtt":
+        raise DemoError("MQTT_STATE_SCOPE_UNSUPPORTED")
+    if state.get("status") not in MQTT_STATE_VALUES:
+        raise DemoError("MQTT_STATE_STATUS_UNSUPPORTED")
+    services = state.get("services")
+    if not isinstance(services, dict):
+        raise DemoError("MQTT_STATE_SERVICES_INVALID")
+    if any(name != "mqtt" for name in services):
+        raise DemoError("MQTT_STATE_SCOPE_AMBIGUOUS")
+    if "mqtt" in services and not isinstance(services["mqtt"], dict):
+        raise DemoError("MQTT_STATE_RECORD_INVALID")
+    return state
+
+
+def _mqtt_state_record(state: dict[str, Any] | None) -> dict[str, Any] | None:
+    if state is None:
+        return None
+    record = state.get("services", {}).get("mqtt")
+    return record if isinstance(record, dict) else None
+
+
+def _mqtt_unpersisted_startup_record(
+    config: DemoConfig,
+    state: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Recover one exact supervisor from a durable pre-PID startup intent."""
+
+    if not isinstance(state, dict) or state.get("status") not in {
+        STATE_STARTING,
+        STATE_UNHEALTHY,
+        STATE_START_FAILED,
+    }:
+        return None
+    startup = state.get("startup")
+    run_id = state.get("run_id")
+    if not isinstance(startup, dict) or not isinstance(run_id, str) or not run_id:
+        return None
+    if startup.get("run_id") != run_id:
+        return None
+    argv = startup.get("argv")
+    cwd = startup.get("cwd")
+    if (
+        not isinstance(argv, list)
+        or not argv
+        or not all(isinstance(item, str) for item in argv)
+        or not isinstance(cwd, str)
+        or not Path(cwd).is_absolute()
+    ):
+        return None
+    expected_script = str(Path(cwd) / "tools" / "managed_mosquitto_supervisor.py")
+    expected_args = ["--config", str(config.mqtt_config_path), "--run-id", run_id]
+    expected_child_args = [
+        *expected_args,
+        "--child-state-path",
+        str(_mqtt_child_state_path(config)),
+    ]
+    if (
+        len(argv) not in {6, 8}
+        or not Path(argv[0]).is_absolute()
+        or argv[1] != expected_script
+        or tuple(argv[2:]) not in {tuple(expected_args), tuple(expected_child_args)}
+    ):
+        return None
+    matches: list[dict[str, Any]] = []
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            identity = _identity(int(proc.name))
+        except (FileNotFoundError, PermissionError, ProcessLookupError, DemoError):
+            continue
+        if identity.get("cwd") == cwd and identity.get("cmdline") == argv:
+            matches.append(identity)
+    if len(matches) != 1:
+        return None
+    leader = matches[0]
+    return {
+        "name": "mqtt",
+        "ownership": "owned",
+        "leader": leader,
+        "members": [],
+        "ports": [config.mqtt_port],
+        "log_path": str(config.mqtt_log_path),
+        "process_start_identity": dict(leader),
+        "command_fingerprint": _command_fingerprint(argv),
+        "lifecycle_run_id": run_id,
+    }
+
+
+def _mqtt_record_shape(config: DemoConfig, record: object) -> bool:
+    """Accept only a record produced for the managed MQTT supervisor."""
+
+    if not isinstance(record, dict):
+        return False
+    return (
+        record.get("name") == "mqtt"
+        and record.get("ownership") == "owned"
+        and record.get("ports") == [config.mqtt_port]
+        and isinstance(record.get("leader"), dict)
+        and isinstance(record.get("process_start_identity"), dict)
+        and isinstance(record.get("command_fingerprint"), str)
+        and isinstance(record.get("lifecycle_run_id"), str)
+    )
+
+
+def _mqtt_observation(
+    config: DemoConfig,
+    state: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    record = _mqtt_state_record(state)
+    if record is None:
+        record = _mqtt_unpersisted_startup_record(config, state)
+    return record, _mqtt_readiness_evidence(config, record)
+
+
+def _mqtt_only_summary(
+    config: DemoConfig,
+    state: str,
+    evidence: dict[str, Any],
+    *,
+    ownership: str,
+    reason: str,
+    record: dict[str, Any] | None = None,
+    reused: bool = False,
+) -> dict[str, Any]:
+    """Expose broker-only evidence without exposing private command payloads."""
+
+    leader = record.get("leader") if isinstance(record, dict) else None
+    listeners = evidence.get("listeners", [])
+    return {
+        "state": state,
+        "scope": "mqtt",
+        "ownership": ownership,
+        "configured_ownership": config.mqtt_ownership,
+        "ownership_authority": (
+            "canonical"
+            if ownership == "managed" and _is_canonical_mqtt_runtime_root(config.runtime_root)
+            else "managed"
+            if ownership == "managed"
+            else "NONE"
+        ),
+        "reason": reason,
+        "reused": reused,
+        "runtime_root": str(config.runtime_root),
+        "state_path": str(config.mqtt_state_path),
+        "lock_path": str(config.lock_path),
+        "log_path": str(config.mqtt_log_path),
+        "canonical_runtime_root": str(canonical_mqtt_runtime_root()),
+        "canonical_runtime": _is_canonical_mqtt_runtime_root(config.runtime_root),
+        "broker_host": config.mqtt_host,
+        "expected_bind_address": evidence.get("expected_address"),
+        "expected_port": evidence.get("expected_port"),
+        "listener_count": evidence.get("listener_count", 0),
+        "listeners": listeners,
+        "bind_address_valid": bool(evidence.get("bind_address_valid")),
+        "port_valid": bool(evidence.get("port_valid")),
+        "tcp_ready": bool(evidence.get("tcp_ready")),
+        "supervisor_valid": bool(evidence.get("supervisor_valid")),
+        "listener_lineage_valid": bool(evidence.get("listener_lineage_valid")),
+        "listener_owned": bool(evidence.get("listener_lineage_valid")),
+        "ready": bool(evidence.get("ready")),
+        "supervisor_pid": leader.get("pid") if isinstance(leader, dict) else None,
+        "child_contract_valid": bool(evidence.get("child_contract_valid")),
+        "child_pid": evidence.get("child_pid"),
+        "listener_pids": evidence.get("listener_pids", []),
+        "mosquitto_pids": evidence.get("mosquitto_pids", []),
+        "listener_pid_matches_child": bool(evidence.get("listener_pid_matches_child")),
+    }
+
+
+def _mqtt_state_is_foreign(evidence: dict[str, Any]) -> bool:
+    """Return whether a listener exists without the recorded exact lineage."""
+
+    return bool(
+        evidence.get("listener_count", 0)
+        and not evidence.get("listener_lineage_valid", False)
+    )
+
+
+def _mqtt_state_has_live_recorded_process(config: DemoConfig, state: dict[str, Any]) -> bool:
+    """Refuse stale-state deletion while any recorded exact PID is still live."""
+
+    record = _mqtt_state_record(state)
+    if not isinstance(record, dict):
+        return False
+    identities = [record.get("leader"), *(record.get("members") or [])]
+    return any(
+        isinstance(identity, dict)
+        and identity.get("pid") is not None
+        and _identity_matches(identity)
+        for identity in identities
+    ) or (
+        isinstance(record.get("mqtt_child"), dict)
+        and _mqtt_recorded_child_matches(config, record["mqtt_child"])
+    )
+
+
+def _mqtt_record_members_have_live_lineage(record: dict[str, Any]) -> bool:
+    """Validate live recorded members before allowing exact-PID stop."""
+
+    leader = record.get("leader")
+    members = record.get("members")
+    if not isinstance(leader, dict) or not isinstance(members, list):
+        return False
+    leader_pid = leader.get("pid")
+    if not isinstance(leader_pid, int):
+        return False
+    for member in members:
+        if not isinstance(member, dict):
+            return False
+        if not _identity_matches(member):
+            continue
+        member_pid = member.get("pid")
+        if not isinstance(member_pid, int) or member_pid == leader_pid:
+            return False
+        current_pid = member_pid
+        visited: set[int] = set()
+        is_descendant = False
+        while current_pid not in visited and current_pid > 1:
+            if current_pid == leader_pid:
+                is_descendant = True
+                break
+            visited.add(current_pid)
+            try:
+                current_pid = int(_identity(current_pid)["ppid"])
+            except (FileNotFoundError, PermissionError, ProcessLookupError, DemoError, ValueError):
+                return False
+        if not is_descendant:
+            return False
+    return True
+
+
+def _mqtt_recorded_live_children(
+    config: DemoConfig,
+    record: object,
+) -> list[dict[str, Any]]:
+    """Return recorded children after supervisor loss without requiring live ppid."""
+
+    if not isinstance(record, dict):
+        return []
+    leader = record.get("leader")
+    members = record.get("members")
+    if not isinstance(leader, dict) or not isinstance(members, list):
+        return []
+    children: list[dict[str, Any]] = []
+    contract = _mqtt_child_contract(config, record)
+    if contract is not None and _mqtt_child_contract_live(config, contract, require_direct=False):
+        children.append(contract)
+    for member in members:
+        if not isinstance(member, dict) or not _identity_matches(member):
+            continue
+        # ``member`` is the persisted identity snapshot.  Its original ppid
+        # proves the recorded lineage; the live process may now be reparented
+        # after the supervisor exits, so the current ppid is intentionally not
+        # required to equal the dead supervisor PID.
+        if member.get("ppid") != leader.get("pid"):
+            continue
+        try:
+            current = _identity(int(member["pid"]))
+        except (FileNotFoundError, PermissionError, ProcessLookupError, DemoError, ValueError):
+            continue
+        if _mqtt_child_command_valid(config, current):
+            children.append(member)
+    return children
+
+
+def _stop_exact_mqtt_children(
+    config: DemoConfig,
+    children: list[dict[str, Any]],
+    *,
+    timeout_seconds: int,
+) -> str:
+    """Stop only recorded Mosquitto children after supervisor loss."""
+
+    for child in children:
+        if _mqtt_recorded_child_matches(config, child):
+            os.kill(int(child["pid"]), signal.SIGTERM)
+    if not _wait_for(
+        lambda: not any(_mqtt_recorded_child_matches(config, child) for child in children),
+        timeout_seconds,
+    ):
+        raise DemoError("mqtt exact recorded child did not stop after TERM; no KILL was sent")
+    if not _wait_for(lambda: _listener_count(config.mqtt_port) == 0, min(5, timeout_seconds)):
+        raise DemoError("mqtt listener remains after exact recorded-child stop")
+    return "stopped_recorded_child"
+
+
+def mqtt_only_status(config: DemoConfig) -> dict[str, Any]:
+    """Report MQTT-only ownership and readiness without changing any state."""
+
+    _mqtt_only_spec(config)
+    state_record = _read_mqtt_state(config)
+    record, evidence = _mqtt_observation(config, state_record)
+    raw_state = str(state_record.get("status")) if state_record else None
+    foreign = _mqtt_state_is_foreign(evidence)
+    if state_record is None:
+        result_state = STATE_STOPPED
+        ownership = "NONE"
+        reason = "FOREIGN_LISTENER" if foreign else "NO_CANONICAL_OWNERSHIP"
+    elif raw_state == STATE_STARTING:
+        if _mqtt_record_shape(config, record) and evidence["supervisor_valid"]:
+            result_state = STATE_STARTING
+            ownership = "managed"
+            reason = "READINESS_PENDING" if not evidence["ready"] else "READY_NOT_PROMOTED"
+        else:
+            result_state = STATE_STOPPED
+            ownership = "NONE"
+            reason = "FOREIGN_LISTENER" if foreign else "STALE_STARTING_NO_LIVE_OWNER"
+    elif raw_state == MQTT_STATE_RUNNING:
+        if _mqtt_record_shape(config, record) and evidence["ready"]:
+            result_state = MQTT_STATE_RUNNING
+            ownership = "managed"
+            reason = "READY"
+        elif _mqtt_record_shape(config, record) and evidence["supervisor_valid"]:
+            result_state = STATE_UNHEALTHY
+            ownership = "managed"
+            reason = "BROKER_READINESS_FAILED"
+        else:
+            result_state = STATE_STOPPED
+            ownership = "NONE"
+            reason = "FOREIGN_LISTENER" if foreign else "STALE_OWNERSHIP"
+    elif raw_state in {STATE_START_FAILED, STATE_UNHEALTHY}:
+        if _mqtt_record_shape(config, record) and evidence["supervisor_valid"]:
+            result_state = STATE_UNHEALTHY
+            ownership = "managed"
+            reason = "RECOVERY_REQUIRED"
+        else:
+            result_state = STATE_STOPPED
+            ownership = "NONE"
+            reason = "FOREIGN_LISTENER" if foreign else str(raw_state)
+    elif raw_state == STATE_STOPPED:
+        result_state = STATE_STOPPED
+        ownership = "NONE"
+        reason = "NO_CANONICAL_OWNERSHIP" if not foreign else "FOREIGN_LISTENER"
+    else:
+        raise DemoError(f"MQTT_STATE_STATUS_UNSUPPORTED: {raw_state or 'UNKNOWN'}")
+    payload = _mqtt_only_summary(
+        config,
+        result_state,
+        evidence,
+        ownership=ownership,
+        reason=reason,
+        record=record if ownership == "managed" else None,
+    )
+    payload["recorded_status"] = raw_state
+    payload["foreign_listener"] = foreign
+    payload["already_stopped"] = result_state == STATE_STOPPED and ownership == "NONE" and not foreign
+    return payload
+
+
+def _archive_mqtt_state(config: DemoConfig, state: dict[str, Any], *, reason: str) -> None:
+    """Archive a reconciled MQTT record before clearing active ownership."""
+
+    archived = dict(state)
+    archived["status"] = STATE_STOPPED
+    archived["reconciled_at"] = _utc_now()
+    archived["reconciliation_reason"] = reason
+    _atomic_json(config.mqtt_last_run_path, archived)
+    config.mqtt_state_path.unlink(missing_ok=True)
+
+
+def _remove_mqtt_child_state(config: DemoConfig) -> None:
+    """Remove only the owner-only child contract after exact MQTT stop."""
+    path = _mqtt_child_state_path(config)
+    if not path.exists():
+        return
+    if path.is_symlink() or not path.is_file():
+        raise DemoError("MQTT_CHILD_STATE_NOT_A_REGULAR_FILE")
+    metadata = path.stat()
+    if metadata.st_uid != os.geteuid() or stat.S_IMODE(metadata.st_mode) != 0o600:
+        raise DemoError("MQTT_CHILD_STATE_MODE_INVALID")
+    path.unlink()
+
+
+def mqtt_only_start(config: DemoConfig) -> dict[str, Any]:
+    """Start exactly the managed MQTT supervisor after durable STARTING intent."""
+
+    source_validation = _validate_mqtt_only_source(config)
+    spec = _mqtt_only_spec(config)
+    existing = _read_mqtt_state(config)
+    if existing is not None:
+        existing_record, existing_evidence = _mqtt_observation(config, existing)
+        if (
+            existing.get("status") == MQTT_STATE_RUNNING
+            and _mqtt_record_shape(config, existing_record)
+            and existing_evidence["ready"]
+        ):
+            return _mqtt_only_summary(
+                config,
+                MQTT_STATE_RUNNING,
+                existing_evidence,
+                ownership="managed",
+                reason="READY",
+                record=existing_record,
+                reused=True,
+            )
+        if _mqtt_record_shape(config, existing_record) and existing_evidence["supervisor_valid"]:
+            raise DemoError("MQTT_ONLY_OWNERSHIP_ACTIVE")
+        if _mqtt_state_is_foreign(existing_evidence):
+            raise DemoError("MQTT_ONLY_FOREIGN_LISTENER")
+        if _mqtt_state_has_live_recorded_process(config, existing):
+            raise DemoError("MQTT_ONLY_OWNERSHIP_UNRESOLVED")
+        _archive_mqtt_state(config, existing, reason="STALE_MQTT_OWNERSHIP")
+
+    preflight = _mqtt_readiness_evidence(config)
+    if preflight["listener_count"]:
+        raise DemoError("MQTT_ONLY_FOREIGN_LISTENER")
+    run_id = f"mqtt-only-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
+    argv = _service_argv(config, "mqtt", run_id=run_id)
+    state: dict[str, Any] = {
+        "schema_version": "temiagent.demo_lifecycle.v2",
+        "scope": "mqtt",
+        "status": STATE_STARTING,
+        "run_id": run_id,
+        "started_at": _utc_now(),
+        "updated_at": _utc_now(),
+        "source": source_validation,
+        "runtime_root": str(config.runtime_root),
+        "private_env": str(config.config_path),
+        "ownership": {"mqtt": "managed"},
+        "startup": {"run_id": run_id, "cwd": str(spec.cwd.resolve()), "argv": argv},
+        "services": {},
+    }
+    # This intent is durable before Popen can create a broker process.
+    _atomic_json(config.mqtt_state_path, state)
+    record: dict[str, Any] | None = None
+    try:
+        record = _start_process(spec, argv, _base_env(config, run_id))
+        record["config_sha256"] = _sha256(config.config_path)
+        record["started_at"] = _utc_now()
+        record["lifecycle_run_id"] = run_id
+        # Persist the exact supervisor immediately; readiness is not checked yet.
+        _persist_starting_record(
+            config,
+            state,
+            "mqtt",
+            record,
+            argv,
+            state_path=config.mqtt_state_path,
+        )
+        _attach_descendants(record)
+        _record_mqtt_child_contract(config, record)
+        state["updated_at"] = _utc_now()
+        _atomic_json(config.mqtt_state_path, state)
+        if not _wait_for(
+            lambda: _mqtt_readiness_evidence(config, record)["ready"],
+            30,
+        ):
+            raise DemoError("mqtt did not pass its readiness gate; inspect " + str(spec.log_path))
+        _record_mqtt_child_contract(config, record)
+        state["status"] = MQTT_STATE_RUNNING
+        state["ready_state"] = MQTT_STATE_RUNNING
+        state["updated_at"] = _utc_now()
+        _atomic_json(config.mqtt_state_path, state)
+        _, evidence = _mqtt_observation(config, state)
+        return _mqtt_only_summary(
+            config,
+            MQTT_STATE_RUNNING,
+            evidence,
+            ownership="managed",
+            reason="READY",
+            record=record,
+        )
+    except (Exception, KeyboardInterrupt) as exc:
+        # Persistence itself can be interrupted after Popen returned.  The
+        # durable startup intent remains the recovery anchor even when the
+        # in-memory record is only partially populated.
+        if record is None or not _mqtt_supervisor_valid(config, record):
+            recovered = _mqtt_unpersisted_startup_record(config, state)
+            if recovered is not None:
+                record = recovered
+        if record is not None:
+            _record_mqtt_child_contract(config, record)
+        if record is not None and not _mqtt_supervisor_valid(config, record):
+            record = None
+        state["status"] = STATE_UNHEALTHY
+        state["failure"] = {"code": _failure_code(str(exc)), "recorded_at": _utc_now()}
+        state["updated_at"] = _utc_now()
+        _atomic_json(config.mqtt_state_path, state)
+        rollback: list[dict[str, str]] = []
+        if record is not None:
+            try:
+                _attach_descendants(record)
+                rollback.append(
+                    {"service": "mqtt", "outcome": _stop_record(record, timeout_seconds=20)}
+                )
+            except Exception as rollback_error:
+                rollback.append(
+                    {
+                        "service": "mqtt",
+                        "outcome": "rollback_failed",
+                        "detail": str(rollback_error),
+                    }
+                )
+        state["rollback"] = rollback
+        state["status"] = (
+            STATE_UNHEALTHY
+            if any(item["outcome"] == "rollback_failed" for item in rollback)
+            else STATE_START_FAILED
+        )
+        state["updated_at"] = _utc_now()
+        _atomic_json(config.mqtt_state_path, state)
+        _atomic_json(config.mqtt_last_run_path, state)
+        if isinstance(exc, DemoError):
+            raise
+        raise DemoError(f"MQTT_ONLY_START_FAILED: {exc}") from exc
+
+
+def mqtt_only_stop(config: DemoConfig) -> dict[str, Any]:
+    """Stop only the exact supervisor and descendants recorded for MQTT."""
+
+    _mqtt_only_spec(config)
+    state = _read_mqtt_state(config)
+    record, evidence = _mqtt_observation(config, state)
+    foreign = _mqtt_state_is_foreign(evidence)
+    if state is None:
+        return _mqtt_only_summary(
+            config,
+            STATE_STOPPED,
+            evidence,
+            ownership="NONE",
+            reason="FOREIGN_LISTENER" if foreign else "NO_CANONICAL_OWNERSHIP",
+        ) | {"already_stopped": not foreign, "foreign_listener": foreign}
+    if _mqtt_record_shape(config, record) and evidence["supervisor_valid"]:
+        if not _mqtt_record_members_have_live_lineage(record):
+            raise DemoError("MQTT_ONLY_OWNERSHIP_UNRESOLVED")
+        _attach_descendants(record)
+        outcome = _stop_record(record, timeout_seconds=30)
+        archived = dict(state)
+        archived["status"] = STATE_STOPPED
+        archived["stopped_at"] = _utc_now()
+        archived["stop_results"] = [{"service": "mqtt", "outcome": outcome}]
+        _remove_mqtt_child_state(config)
+        _atomic_json(config.mqtt_last_run_path, archived)
+        config.mqtt_state_path.unlink(missing_ok=True)
+        final_evidence = _mqtt_readiness_evidence(config)
+        return _mqtt_only_summary(
+            config,
+            STATE_STOPPED,
+            final_evidence,
+            ownership="NONE",
+            reason="STOPPED",
+        ) | {"already_stopped": False, "stop_result": outcome}
+    recorded_children = _mqtt_recorded_live_children(config, record)
+    recorded_child_pids = {int(child["pid"]) for child in recorded_children}
+    listener_pids = set(int(pid) for pid in evidence.get("listener_pids", []))
+    if recorded_children and (not listener_pids or listener_pids == recorded_child_pids):
+        outcome = _stop_exact_mqtt_children(config, recorded_children, timeout_seconds=30)
+        archived = dict(state)
+        archived["status"] = STATE_STOPPED
+        archived["stopped_at"] = _utc_now()
+        archived["stop_results"] = [{"service": "mqtt", "outcome": outcome}]
+        _remove_mqtt_child_state(config)
+        _atomic_json(config.mqtt_last_run_path, archived)
+        config.mqtt_state_path.unlink(missing_ok=True)
+        final_evidence = _mqtt_readiness_evidence(config)
+        return _mqtt_only_summary(
+            config,
+            STATE_STOPPED,
+            final_evidence,
+            ownership="NONE",
+            reason="STOPPED",
+        ) | {"already_stopped": False, "stop_result": outcome}
+    if foreign:
+        return _mqtt_only_summary(
+            config,
+            STATE_STOPPED,
+            evidence,
+            ownership="NONE",
+            reason="FOREIGN_LISTENER",
+            record=None,
+        ) | {"already_stopped": False, "foreign_listener": True}
+    if _mqtt_state_has_live_recorded_process(config, state):
+        raise DemoError("MQTT_ONLY_OWNERSHIP_UNRESOLVED")
+    _archive_mqtt_state(config, state, reason="STALE_MQTT_OWNERSHIP")
+    final_evidence = _mqtt_readiness_evidence(config)
+    return _mqtt_only_summary(
+        config,
+        STATE_STOPPED,
+        final_evidence,
+        ownership="NONE",
+        reason="STALE_OWNERSHIP_RECONCILED",
+    ) | {"already_stopped": True}
+
+
+def mqtt_only_command(config: DemoConfig, operation: str) -> dict[str, Any]:
+    """Dispatch one MQTT-only lifecycle operation."""
+
+    if operation == "start":
+        return mqtt_only_start(config)
+    if operation == "status":
+        return mqtt_only_status(config)
+    if operation == "stop":
+        return mqtt_only_stop(config)
+    raise DemoError(f"unsupported MQTT-only operation: {operation}")
 
 
 def _remove_owned_callback_path(path: Path, record: dict[str, Any]) -> None:
@@ -1582,7 +2820,7 @@ def _viewer_notification_argv(config: DemoConfig) -> list[str]:
     return argv
 
 
-def _service_argv(config: DemoConfig, name: str) -> list[str]:
+def _service_argv(config: DemoConfig, name: str, *, run_id: str | None = None) -> list[str]:
     skills = ROOT / "hermes-agent" / "skills"
     if name == "lmstudio":
         if config.is_newcomer_mock:
@@ -1606,12 +2844,22 @@ def _service_argv(config: DemoConfig, name: str) -> list[str]:
     if name == "mqtt":
         if config.mqtt_config_path is None:
             raise DemoError("managed MQTT has no verified config path")
-        return [
+        argv = [
             sys.executable,
             str(ROOT / "tools" / "managed_mosquitto_supervisor.py"),
             "--config",
             str(config.mqtt_config_path),
         ]
+        if run_id is not None:
+            argv.extend(
+                [
+                    "--run-id",
+                    run_id,
+                    "--child-state-path",
+                    str(_mqtt_child_state_path(config)),
+                ]
+            )
+        return argv
     if name == "adapter":
         return [
             "uv", "run", "python", str(ROOT / "tools" / "temi_overview_adapter.py"),
@@ -1766,6 +3014,70 @@ def _validate_source(config: DemoConfig) -> dict[str, Any]:
     if nested:
         raise DemoError("nested hermes-agent checkout is dirty")
     return source
+
+
+def _mqtt_only_source_roots(config: DemoConfig) -> list[Path]:
+    """Return the executing checkout and any checkout owning the broker config."""
+
+    roots: list[Path] = [ROOT.resolve()]
+    if config.mqtt_config_path is not None:
+        for worktree in _worktrees():
+            if _under(worktree, config.mqtt_config_path) and worktree not in roots:
+                roots.append(worktree)
+    return roots
+
+
+def _mqtt_only_dependency_paths(root: Path, config: DemoConfig) -> set[str]:
+    """Derive the tracked files used by the MQTT-only command in one checkout."""
+
+    dependencies = set(MQTT_ONLY_RUNTIME_FILES) if root == ROOT.resolve() else set()
+    if config.mqtt_config_path is not None and _under(root, config.mqtt_config_path):
+        try:
+            dependencies.add(config.mqtt_config_path.resolve().relative_to(root).as_posix())
+        except ValueError:
+            pass
+    return dependencies
+
+
+def _validate_mqtt_only_source(config: DemoConfig) -> dict[str, Any]:
+    """Validate only the active MQTT lifecycle dependency closure.
+
+    Full-stack ``_validate_source`` intentionally retains its existing whole-
+    checkout policy.  This scoped gate checks every source checkout that can
+    provide the executing lifecycle or active broker config, while allowing
+    unrelated documentation and Demo-data changes.
+    """
+
+    snapshots: list[dict[str, Any]] = []
+    for root in _mqtt_only_source_roots(config):
+        source = _source_record_at(root)
+        if config.branch_policy == BRANCH_POLICY_REQUIRED:
+            if not source["branch"]:
+                raise DemoError(
+                    f"MQTT_ONLY_DETACHED_HEAD: {root} branch validation is required"
+                )
+            if source["branch"] != config.expected_git_branch:
+                raise DemoError(
+                    f"MQTT_ONLY_UNEXPECTED_BRANCH: {source['branch']} at {root}; "
+                    f"expected {config.expected_git_branch}"
+                )
+        dependencies = _mqtt_only_dependency_paths(root, config)
+        dirty = _git_status_paths(root)
+        critical = sorted(path for path in dirty if path in dependencies)
+        if critical:
+            raise DemoError(
+                "MQTT_ONLY_SOURCE_DIRTY: "
+                + ", ".join(f"{root}/{path}" for path in critical)
+            )
+        snapshots.append(
+            {
+                "root": str(root),
+                "branch": source["branch"],
+                "head": source["head"],
+                "checked_files": sorted(dependencies),
+            }
+        )
+    return {"executing_root": str(ROOT.resolve()), "checked_roots": snapshots}
 
 
 def _assert_start_ports_clear(config: DemoConfig, specs: dict[str, ServiceSpec]) -> None:
@@ -2580,6 +3892,8 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("trace-export")
     commands.add_parser("up")
     commands.add_parser("down")
+    mqtt_parser = commands.add_parser("mqtt")
+    mqtt_parser.add_argument("operation", choices=("start", "status", "stop"))
     deploy_parser = commands.add_parser("deploy")
     deploy_parser.add_argument("--backend-only", action="store_true")
     identity_parser = commands.add_parser("identity")
@@ -2596,12 +3910,23 @@ def main(argv: list[str] | None = None) -> int:
             payload = initialize_canonical_config(profile=args.profile, force=args.force)
             _print(payload, args.json)
             return 0
-        config = load_config(resolve_config_path(args.config))
+        mqtt_only = args.command == "mqtt"
+        config_path = (
+            resolve_mqtt_config_path(args.config)
+            if mqtt_only
+            else resolve_config_path(args.config)
+        )
+        config = load_config(config_path, mqtt_only=mqtt_only)
         mutating = args.command in {"start", "up", "deploy", "restart", "stop", "down", "identity", "seed"}
-        if mutating:
+        mqtt_mutating = mqtt_only and args.operation in {"start", "stop"}
+        if mqtt_mutating:
+            mutating = True
+        if mutating and not mqtt_mutating:
             ensure_runtime_layout(config)
         lock = _lifecycle_lock(config) if mutating else nullcontext()
         with lock:
+            if mqtt_mutating:
+                ensure_runtime_layout(config)
             if args.command == "doctor":
                 payload = doctor(config)
                 _print(payload, args.json)
@@ -2618,6 +3943,11 @@ def main(argv: list[str] | None = None) -> int:
             elif args.command == "status":
                 payload = runtime_health(config)
                 payload["state"] = payload.pop("readiness")
+            elif args.command == "mqtt":
+                payload = mqtt_only_command(config, args.operation)
+                if payload.get("foreign_listener"):
+                    _print(payload, args.json)
+                    return 2
             elif args.command == "identity":
                 payload = identity_command(config, args.operation)
             elif args.command == "seed":

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from contextlib import nullcontext
+from dataclasses import replace
 import importlib.util
 import json
 from pathlib import Path
@@ -31,6 +33,7 @@ class DemoLifecycleConfigTests(unittest.TestCase):
         flags: tuple[str, str, str] = ("true", "true", "true"),
         viewer_enabled: bool = False,
     ) -> Path:
+        root.mkdir(parents=True, exist_ok=True)
         runtime = root / "runtime"
         config = root / "demo.env"
         lines = [
@@ -79,6 +82,25 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             encoding="utf-8",
         )
         config.chmod(0o600)
+        return config
+
+    def make_managed_config(self, root: Path, *, broker_config: Path | None = None) -> Path:
+        """Create a production-shaped managed-broker config for unit tests."""
+        config = self.make_config(root)
+        broker = broker_config or (root / "mosquitto.conf")
+        broker.parent.mkdir(parents=True, exist_ok=True)
+        broker.write_text(
+            "listener 1883 127.0.0.1\n"
+            "allow_anonymous true\n"
+            "persistence false\n"
+            "log_dest stdout\n",
+            encoding="utf-8",
+        )
+        broker.chmod(0o600)
+        with config.open("a", encoding="utf-8") as handle:
+            handle.write("DEMO_GIT_BRANCH_POLICY=disabled\n")
+            handle.write("MQTT_OWNERSHIP=managed\n")
+            handle.write(f"MQTT_CONFIG_PATH={broker}\n")
         return config
 
     def test_default_discovery_never_selects_a_legacy_temporary_config(self) -> None:
@@ -680,6 +702,913 @@ class DemoLifecycleConfigTests(unittest.TestCase):
     def test_lifecycle_reset_is_noop_when_identity_is_disabled(self) -> None:
         config = mock.Mock(identity_state_dir=None, robot_id="temi-01")
         self.assertFalse(demo._reset_ephemeral_demo_identity(config))
+
+
+class MqttOnlyLifecycleTests(unittest.TestCase):
+    """No-broker tests for MQTT-only parser, ownership and readiness gates."""
+
+    config_tests = DemoLifecycleConfigTests()
+
+    def make_managed_config(self, root: Path, *, broker_config: Path | None = None) -> Path:
+        return self.config_tests.make_managed_config(root, broker_config=broker_config)
+
+    def make_record(self, config: demo.DemoConfig) -> dict[str, object]:
+        leader = {
+            "pid": 41001,
+            "ppid": 41000,
+            "start_ticks": 41,
+            "cwd": str(demo.ROOT),
+            "executable": "/usr/bin/python3.12",
+            "cmdline": [
+                "/usr/bin/python3",
+                str(demo.ROOT / "tools" / "managed_mosquitto_supervisor.py"),
+                "--config",
+                str(config.mqtt_config_path),
+                "--run-id",
+                "mqtt-test",
+            ],
+            "cmdline_sha256": "leader-digest",
+        }
+        return {
+            "name": "mqtt",
+            "ownership": "owned",
+            "leader": leader,
+            "members": [],
+            "ports": [config.mqtt_port],
+            "log_path": str(config.mqtt_log_path),
+            "process_start_identity": dict(leader),
+            "command_fingerprint": demo._command_fingerprint(leader["cmdline"]),
+            "lifecycle_run_id": "mqtt-test",
+        }
+
+    def make_evidence(
+        self,
+        config: demo.DemoConfig,
+        *,
+        listener_count: int = 0,
+        address: str = "127.0.0.1",
+        pids: list[int] | None = None,
+        tcp_ready: bool = False,
+        supervisor_valid: bool = False,
+        listener_lineage_valid: bool = False,
+        ready: bool = False,
+    ) -> dict[str, object]:
+        listeners = (
+            []
+            if listener_count == 0
+            else [{"address": address, "port": config.mqtt_port, "pids": pids or []}]
+        )
+        return {
+            "expected_address": address,
+            "expected_port": config.mqtt_port,
+            "listeners": listeners,
+            "listener_count": listener_count,
+            "bind_address_valid": listener_count == 1 and address == "127.0.0.1",
+            "port_valid": True,
+            "tcp_ready": tcp_ready,
+            "supervisor_valid": supervisor_valid,
+            "supervisor_pid": 41001 if supervisor_valid else None,
+            "listener_pids": pids or [],
+            "mosquitto_pids": pids or [] if listener_lineage_valid else [],
+            "listener_lineage_valid": listener_lineage_valid,
+            "ready": ready,
+        }
+
+    def write_state(
+        self,
+        config: demo.DemoConfig,
+        *,
+        status: str,
+        record: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        state: dict[str, object] = {
+            "schema_version": "temiagent.demo_lifecycle.v2",
+            "scope": "mqtt",
+            "status": status,
+            "run_id": "mqtt-test",
+            "services": {"mqtt": record} if record is not None else {},
+        }
+        demo._atomic_json(config.mqtt_state_path, state)
+        return state
+
+    def test_parser_accepts_mqtt_operations_and_rejects_unknown_operation(self) -> None:
+        with self.assertRaises(SystemExit):
+            demo.main(["mqtt", "invalid"])
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            evidence = self.make_evidence(config)
+            with mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=evidence):
+                for operation in ("start", "status", "stop"):
+                    if operation == "status":
+                        result = demo.mqtt_only_command(config, operation)
+                        self.assertEqual(result["state"], demo.STATE_STOPPED)
+                    else:
+                        self.assertTrue(callable(getattr(demo, f"mqtt_only_{operation}")))
+
+    def test_mqtt_status_is_read_only_and_never_dispatches_full_start(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config_path = self.make_managed_config(Path(temporary))
+            config = demo.load_config(config_path)
+            evidence = self.make_evidence(config)
+            with (
+                mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=evidence),
+                mock.patch.object(demo, "_start_process") as start_process,
+                mock.patch.object(demo, "start") as full_start,
+            ):
+                result = demo.main(["--config", str(config_path), "mqtt", "status"])
+        self.assertEqual(result, 0)
+        start_process.assert_not_called()
+        full_start.assert_not_called()
+
+    def test_mqtt_parser_dispatches_only_mqtt_start(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config_path = self.make_managed_config(Path(temporary))
+            config = demo.load_config(config_path)
+            with (
+                mock.patch.object(demo, "load_config", return_value=config),
+                mock.patch.object(demo, "ensure_runtime_layout"),
+                mock.patch.object(demo, "_lifecycle_lock", return_value=nullcontext()),
+                mock.patch.object(demo, "mqtt_only_command", return_value={"state": demo.MQTT_STATE_RUNNING}) as mqtt_command,
+                mock.patch.object(demo, "start") as full_start,
+            ):
+                result = demo.main(["--config", str(config_path), "mqtt", "start"])
+        self.assertEqual(result, 0)
+        mqtt_command.assert_called_once_with(config, "start")
+        full_start.assert_not_called()
+
+    def test_mqtt_parser_dispatches_only_mqtt_stop(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config_path = self.make_managed_config(Path(temporary))
+            config = demo.load_config(config_path)
+            with (
+                mock.patch.object(demo, "load_config", return_value=config),
+                mock.patch.object(demo, "ensure_runtime_layout"),
+                mock.patch.object(demo, "_lifecycle_lock", return_value=nullcontext()),
+                mock.patch.object(demo, "mqtt_only_command", return_value={"state": demo.STATE_STOPPED}) as mqtt_command,
+                mock.patch.object(demo, "stop") as full_stop,
+            ):
+                result = demo.main(["--config", str(config_path), "mqtt", "stop"])
+        self.assertEqual(result, 0)
+        mqtt_command.assert_called_once_with(config, "stop")
+        full_stop.assert_not_called()
+
+    def test_stopped_without_state_has_none_ownership(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            with mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=self.make_evidence(config)):
+                result = demo.mqtt_only_status(config)
+        self.assertEqual((result["state"], result["ownership"]), (demo.STATE_STOPPED, "NONE"))
+        self.assertEqual(result["reason"], "NO_CANONICAL_OWNERSHIP")
+        self.assertFalse(result["foreign_listener"])
+
+    def test_foreign_listener_is_stopped_none_and_never_adopted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            evidence = self.make_evidence(config, listener_count=1, pids=[49999], tcp_ready=True)
+            with (
+                mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=evidence),
+                mock.patch.object(demo, "_stop_record") as stop_record,
+            ):
+                result = demo.mqtt_only_status(config)
+                stopped = demo.mqtt_only_stop(config)
+        for payload in (result, stopped):
+            self.assertEqual((payload["state"], payload["ownership"]), (demo.STATE_STOPPED, "NONE"))
+            self.assertTrue(payload["foreign_listener"])
+        stop_record.assert_not_called()
+
+    def test_mqtt_start_refuses_foreign_listener_before_spawn(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            foreign = self.make_evidence(config, listener_count=1, pids=[49999], tcp_ready=True)
+            with (
+                mock.patch.object(demo, "_validate_mqtt_only_source", return_value={"root": "test"}),
+                mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=foreign),
+                mock.patch.object(demo, "_start_process") as start_process,
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "FOREIGN_LISTENER"):
+                    demo.mqtt_only_start(config)
+        start_process.assert_not_called()
+
+    def test_mqtt_start_refuses_unattributed_listener_before_spawn(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            foreign = self.make_evidence(config, listener_count=1, pids=[], tcp_ready=True)
+            with (
+                mock.patch.object(demo, "_validate_mqtt_only_source", return_value={"root": "test"}),
+                mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=foreign),
+                mock.patch.object(demo, "_start_process") as start_process,
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "FOREIGN_LISTENER"):
+                    demo.mqtt_only_start(config)
+        start_process.assert_not_called()
+
+    def test_valid_starting_state_is_degraded_until_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            self.write_state(config, status=demo.STATE_STARTING, record=record)
+            evidence = self.make_evidence(
+                config,
+                listener_count=0,
+                tcp_ready=False,
+                supervisor_valid=True,
+            )
+            with mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=evidence):
+                result = demo.mqtt_only_status(config)
+        self.assertEqual((result["state"], result["ownership"]), (demo.STATE_STARTING, "managed"))
+        self.assertFalse(result["ready"])
+        self.assertEqual(result["reason"], "READINESS_PENDING")
+        self.assertEqual(result["supervisor_pid"], 41001)
+
+    def test_stale_starting_without_live_pid_reconciles_to_stopped_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            self.write_state(config, status=demo.STATE_STARTING)
+            with mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=self.make_evidence(config)):
+                result = demo.mqtt_only_status(config)
+            state_remains = config.mqtt_state_path.exists()
+        self.assertEqual((result["state"], result["ownership"]), (demo.STATE_STOPPED, "NONE"))
+        self.assertEqual(result["reason"], "STALE_STARTING_NO_LIVE_OWNER")
+        self.assertTrue(state_remains)
+
+    def test_unpersisted_startup_intent_can_stop_exact_supervisor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            state = self.write_state(config, status=demo.STATE_STARTING)
+            state["startup"] = {
+                "run_id": "mqtt-test",
+                "cwd": "/tmp/reviewed-operational-checkout",
+                "argv": self.make_record(config)["leader"]["cmdline"],
+            }
+            demo._atomic_json(config.mqtt_state_path, state)
+            record = self.make_record(config)
+            owned = self.make_evidence(config, supervisor_valid=True)
+            stopped = self.make_evidence(config)
+            with (
+                mock.patch.object(demo, "_mqtt_unpersisted_startup_record", return_value=record),
+                mock.patch.object(demo, "_mqtt_readiness_evidence", side_effect=[owned, stopped]),
+                mock.patch.object(demo, "_attach_descendants"),
+                mock.patch.object(demo, "_stop_record", return_value="stopped_term") as stop_record,
+            ):
+                result = demo.mqtt_only_stop(config)
+        self.assertEqual(result["state"], demo.STATE_STOPPED)
+        stop_record.assert_called_once_with(record, timeout_seconds=30)
+        self.assertFalse(config.mqtt_state_path.exists())
+
+    def test_recorded_child_can_be_stopped_after_supervisor_loss(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            child = {
+                "pid": 41002,
+                "ppid": 41001,
+                "start_ticks": 42,
+                "cwd": "/tmp/reviewed-operational-checkout",
+                "executable": "/usr/sbin/mosquitto",
+                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
+                "cmdline_sha256": "child-digest",
+            }
+            record["members"] = [child]
+            self.write_state(config, status=demo.MQTT_STATE_RUNNING, record=record)
+            occupied = self.make_evidence(
+                config,
+                listener_count=1,
+                pids=[41002],
+                tcp_ready=True,
+                supervisor_valid=False,
+                listener_lineage_valid=False,
+            )
+            stopped = self.make_evidence(config)
+            with (
+                mock.patch.object(demo, "_mqtt_readiness_evidence", side_effect=[occupied, stopped]),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(
+                    demo,
+                    "_identity",
+                    return_value={
+                        **child,
+                        "ppid": 1,
+                    },
+                ),
+                mock.patch.object(demo, "_wait_for", return_value=True),
+                mock.patch.object(demo, "_listener_count", return_value=0),
+                mock.patch.object(demo.os, "kill") as kill,
+            ):
+                result = demo.mqtt_only_stop(config)
+        self.assertEqual(result["state"], demo.STATE_STOPPED)
+        kill.assert_called_once_with(41002, demo.signal.SIGTERM)
+        self.assertFalse(config.mqtt_state_path.exists())
+
+    def test_live_member_outside_supervisor_lineage_is_not_signalled(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            record["members"] = [{
+                "pid": 41002,
+                "ppid": 41000,
+                "start_ticks": 42,
+                "cwd": str(demo.ROOT),
+                "executable": "/usr/sbin/mosquitto",
+                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
+                "cmdline_sha256": "child-digest",
+            }]
+            self.write_state(config, status=demo.MQTT_STATE_RUNNING, record=record)
+            occupied = self.make_evidence(
+                config,
+                listener_count=1,
+                pids=[41002],
+                tcp_ready=True,
+                supervisor_valid=True,
+                listener_lineage_valid=True,
+                ready=True,
+            )
+            with (
+                mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=occupied),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_identity", return_value={"pid": 41002, "ppid": 1}),
+                mock.patch.object(demo, "_stop_record") as stop_record,
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "OWNERSHIP_UNRESOLVED"):
+                    demo.mqtt_only_stop(config)
+        stop_record.assert_not_called()
+
+    def test_running_state_requires_all_readiness_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            self.write_state(config, status=demo.MQTT_STATE_RUNNING, record=record)
+            evidence = self.make_evidence(
+                config,
+                listener_count=1,
+                pids=[41002],
+                tcp_ready=False,
+                supervisor_valid=True,
+                listener_lineage_valid=True,
+                ready=False,
+            )
+            with mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=evidence):
+                result = demo.mqtt_only_status(config)
+        self.assertEqual((result["state"], result["ownership"]), (demo.STATE_UNHEALTHY, "managed"))
+        self.assertFalse(result["tcp_ready"])
+        self.assertFalse(result["ready"])
+
+    def test_dead_running_pid_is_not_reported_as_running(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            self.write_state(config, status=demo.MQTT_STATE_RUNNING, record=self.make_record(config))
+            evidence = self.make_evidence(config, listener_count=0)
+            with mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=evidence):
+                result = demo.mqtt_only_status(config)
+        self.assertEqual((result["state"], result["ownership"]), (demo.STATE_STOPPED, "NONE"))
+        self.assertEqual(result["reason"], "STALE_OWNERSHIP")
+
+    def test_start_persists_intent_before_spawn_and_only_records_mqtt(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            no_listener = self.make_evidence(config)
+            ready = self.make_evidence(
+                config,
+                listener_count=1,
+                pids=[41002],
+                tcp_ready=True,
+                supervisor_valid=True,
+                listener_lineage_valid=True,
+                ready=True,
+            )
+            snapshots: list[dict[str, object]] = []
+            original_atomic = demo._atomic_json
+
+            def observe_atomic(path: Path, payload: object) -> None:
+                if path == config.mqtt_state_path:
+                    snapshots.append(deepcopy(payload))
+                original_atomic(path, payload)
+
+            def spawn(spec: object, argv: list[str], env: dict[str, str]) -> dict[str, object]:
+                state = demo._read_json(config.mqtt_state_path)
+                self.assertEqual(state["status"], demo.STATE_STARTING)
+                self.assertEqual(state["services"], {})
+                return record
+
+            with (
+                mock.patch.object(demo, "_validate_mqtt_only_source", return_value={"root": "test"}),
+                mock.patch.object(demo, "_mqtt_readiness_evidence", side_effect=lambda _config, record=None: no_listener if record is None else ready),
+                mock.patch.object(demo, "_start_process", side_effect=spawn) as start_process,
+                mock.patch.object(demo, "_attach_descendants"),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_wait_for", return_value=True),
+                mock.patch.object(demo, "_atomic_json", side_effect=observe_atomic),
+            ):
+                result = demo.mqtt_only_start(config)
+        self.assertEqual(result["state"], demo.MQTT_STATE_RUNNING)
+        self.assertEqual(result["ownership"], "managed")
+        self.assertEqual(snapshots[0]["status"], demo.STATE_STARTING)
+        self.assertEqual(snapshots[0]["services"], {})
+        self.assertEqual(snapshots[1]["services"]["mqtt"]["leader"]["pid"], 41001)
+        start_process.assert_called_once()
+
+    def test_success_persists_supervisor_child_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            child = {
+                "schema_version": "temiagent.mosquitto_child.v1",
+                "run_id": "mqtt-test",
+                "supervisor_pid": 41001,
+                "pid": 41002,
+                "ppid": 41001,
+                "start_ticks": 42,
+                "executable": "/usr/sbin/mosquitto",
+                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
+                "cmdline_sha256": "child-digest",
+            }
+            record["mqtt_child"] = child
+            no_listener = self.make_evidence(config)
+            ready = self.make_evidence(
+                config,
+                listener_count=1,
+                pids=[41002],
+                tcp_ready=True,
+                supervisor_valid=True,
+                listener_lineage_valid=True,
+                ready=True,
+            )
+            with (
+                mock.patch.object(demo, "_validate_mqtt_only_source", return_value={"root": "test"}),
+                mock.patch.object(demo, "_mqtt_readiness_evidence", side_effect=lambda _config, record=None: no_listener if record is None else ready),
+                mock.patch.object(demo, "_start_process", return_value=record),
+                mock.patch.object(demo, "_attach_descendants"),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_wait_for", return_value=True),
+            ):
+                result = demo.mqtt_only_start(config)
+            stored = demo._read_json(config.mqtt_state_path)
+        self.assertEqual(result["state"], demo.MQTT_STATE_RUNNING)
+        self.assertEqual(stored["services"]["mqtt"]["mqtt_child"], child)
+
+    def test_start_failure_rolls_back_exact_record_and_retains_failure_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            spawned = deepcopy(record)
+            no_listener = self.make_evidence(config)
+            not_ready = self.make_evidence(
+                config,
+                listener_count=1,
+                pids=[41002],
+                tcp_ready=False,
+                supervisor_valid=True,
+                listener_lineage_valid=True,
+                ready=False,
+            )
+
+            def spawn(_spec: object, argv: list[str], _env: dict[str, str]) -> dict[str, object]:
+                spawned["leader"]["cmdline"] = list(argv)
+                spawned["process_start_identity"] = dict(spawned["leader"])
+                spawned["command_fingerprint"] = demo._command_fingerprint(argv)
+                run_id_index = argv.index("--run-id") + 1
+                spawned["lifecycle_run_id"] = argv[run_id_index]
+                return spawned
+
+            with (
+                mock.patch.object(demo, "_validate_mqtt_only_source", return_value={"root": "test"}),
+                mock.patch.object(demo, "_mqtt_readiness_evidence", side_effect=lambda _config, record=None: no_listener if record is None else not_ready),
+                mock.patch.object(demo, "_start_process", side_effect=spawn),
+                mock.patch.object(demo, "_attach_descendants"),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_wait_for", return_value=False),
+                mock.patch.object(demo, "_stop_record", return_value="stopped_term") as stop_record,
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "readiness gate"):
+                    demo.mqtt_only_start(config)
+            current = demo._read_json(config.mqtt_state_path)
+            archived = demo._read_json(config.mqtt_last_run_path)
+        self.assertEqual(current["status"], demo.STATE_START_FAILED)
+        self.assertEqual(archived["status"], demo.STATE_START_FAILED)
+        self.assertEqual(current["rollback"][0]["service"], "mqtt")
+        stop_record.assert_called_once_with(spawned, timeout_seconds=20)
+
+    def test_interrupt_after_spawn_before_pid_record_recovers_exact_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            no_listener = self.make_evidence(config)
+            with (
+                mock.patch.object(demo, "_validate_mqtt_only_source", return_value={"root": "test"}),
+                mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=no_listener),
+                mock.patch.object(demo, "_start_process", side_effect=KeyboardInterrupt),
+                mock.patch.object(demo, "_mqtt_unpersisted_startup_record", return_value=record),
+                mock.patch.object(demo, "_attach_descendants"),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_stop_record", return_value="stopped_term") as stop_record,
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "MQTT_ONLY_START_FAILED"):
+                    demo.mqtt_only_start(config)
+        stop_record.assert_called_once_with(record, timeout_seconds=20)
+
+    def test_interrupt_during_pid_persistence_recovers_exact_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            no_listener = self.make_evidence(config)
+            with (
+                mock.patch.object(demo, "_validate_mqtt_only_source", return_value={"root": "test"}),
+                mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=no_listener),
+                mock.patch.object(demo, "_start_process", return_value=record),
+                mock.patch.object(demo, "_persist_starting_record", side_effect=KeyboardInterrupt),
+                mock.patch.object(demo, "_mqtt_supervisor_valid", side_effect=[False, True]) as supervisor_valid,
+                mock.patch.object(demo, "_mqtt_unpersisted_startup_record", return_value=record) as recover,
+                mock.patch.object(demo, "_attach_descendants"),
+                mock.patch.object(demo, "_stop_record", return_value="stopped_term") as stop_record,
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "MQTT_ONLY_START_FAILED"):
+                    demo.mqtt_only_start(config)
+        recover.assert_called_once()
+        self.assertEqual(supervisor_valid.call_count, 2)
+        stop_record.assert_called_once_with(record, timeout_seconds=20)
+
+    def test_start_and_stop_do_not_touch_other_component_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            full_state = {"status": demo.STATE_HEALTHY, "services": {"resident": {"leader": {"pid": 7}}}}
+            demo._atomic_json(config.state_path, full_state)
+            record = self.make_record(config)
+            no_listener = self.make_evidence(config)
+            ready = self.make_evidence(config, listener_count=1, pids=[41002], tcp_ready=True, supervisor_valid=True, listener_lineage_valid=True, ready=True)
+            with (
+                mock.patch.object(demo, "_validate_mqtt_only_source", return_value={"root": "test"}),
+                mock.patch.object(demo, "_mqtt_readiness_evidence", side_effect=lambda _config, record=None: no_listener if record is None else ready),
+                mock.patch.object(demo, "_start_process", return_value=record),
+                mock.patch.object(demo, "_attach_descendants"),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_wait_for", return_value=True),
+            ):
+                demo.mqtt_only_start(config)
+            self.assertEqual(demo._read_json(config.state_path), full_state)
+            demo._atomic_json(config.mqtt_state_path, {"schema_version": "temiagent.demo_lifecycle.v2", "scope": "mqtt", "status": demo.MQTT_STATE_RUNNING, "services": {"mqtt": record}})
+            stop_evidence = self.make_evidence(config, listener_count=1, pids=[41002], tcp_ready=True, supervisor_valid=True, listener_lineage_valid=True, ready=True)
+            final_evidence = self.make_evidence(config)
+            with (
+                mock.patch.object(demo, "_mqtt_readiness_evidence", side_effect=[stop_evidence, final_evidence]),
+                mock.patch.object(demo, "_attach_descendants"),
+                mock.patch.object(demo, "_stop_record", return_value="stopped_term"),
+            ):
+                demo.mqtt_only_stop(config)
+            self.assertEqual(demo._read_json(config.state_path), full_state)
+
+    def test_listener_config_and_bind_address_are_validated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = self.make_managed_config(root)
+            config = demo.load_config(config_path)
+            with mock.patch.object(demo, "_listener_endpoints", return_value=[{"address": "0.0.0.0", "port": 1883, "pids": []}]):
+                evidence = demo._mqtt_listener_evidence(config)
+            self.assertTrue(evidence["bind_address_valid"] is False)
+            broker = root / "wildcard.conf"
+            broker.write_text("listener 1883 0.0.0.0\n", encoding="utf-8")
+            broker.chmod(0o600)
+            config_path = self.make_managed_config(root / "wildcard", broker_config=broker)
+            broker.write_text("listener 1883 0.0.0.0\n", encoding="utf-8")
+            broker.chmod(0o600)
+            config = demo.load_config(config_path)
+            with mock.patch.object(demo, "_listener_endpoints", return_value=[{"address": "[::]", "port": 1883, "pids": []}]):
+                evidence = demo._mqtt_listener_evidence(config)
+        self.assertTrue(evidence["bind_address_valid"])
+
+    def test_listener_config_port_mismatch_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = self.make_managed_config(root)
+            broker = root / "mosquitto.conf"
+            broker.write_text("listener 1884 127.0.0.1\n", encoding="utf-8")
+            broker.chmod(0o600)
+            config = demo.load_config(config_path)
+            with self.assertRaisesRegex(demo.DemoError, "PORT_MISMATCH"):
+                demo._mqtt_listener_evidence(config)
+
+    def test_tcp_ready_is_required_even_when_listener_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            with (
+                mock.patch.object(demo, "_listener_endpoints", return_value=[{"address": "127.0.0.1", "port": 1883, "pids": [41002]}]),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=False),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_identity", return_value={"pid": 41002, "ppid": 41001, "executable": "/usr/sbin/mosquitto", "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)]}),
+            ):
+                evidence = demo._mqtt_readiness_evidence(config, record)
+        self.assertTrue(evidence["listener_count"] == 1)
+        self.assertFalse(evidence["tcp_ready"])
+        self.assertFalse(evidence["ready"])
+
+    def test_exact_supervisor_child_lineage_is_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            child = {
+                "schema_version": "temiagent.mosquitto_child.v1",
+                "run_id": "mqtt-test",
+                "supervisor_pid": 41001,
+                "pid": 41002,
+                "ppid": 41001,
+                "start_ticks": 42,
+                "executable": "/usr/sbin/mosquitto",
+                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
+                "cmdline_sha256": "child-digest",
+            }
+            record["mqtt_child"] = child
+            with (
+                mock.patch.object(demo, "_listener_endpoints", return_value=[{"address": "127.0.0.1", "port": 1883, "pids": [41002]}]),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_mqtt_limited_identity", return_value=child),
+            ):
+                evidence = demo._mqtt_readiness_evidence(config, record)
+            child["ppid"] = 41003
+            with (
+                mock.patch.object(demo, "_listener_endpoints", return_value=[{"address": "127.0.0.1", "port": 1883, "pids": [41002]}]),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_mqtt_limited_identity", return_value=child),
+            ):
+                foreign = demo._mqtt_readiness_evidence(config, record)
+        self.assertTrue(evidence["listener_lineage_valid"])
+        self.assertTrue(evidence["ready"])
+        self.assertFalse(foreign["listener_lineage_valid"])
+        self.assertFalse(foreign["ready"])
+
+    def test_mqtt_start_requests_supervisor_child_pid_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            argv = demo._service_argv(config, "mqtt", run_id="mqtt-test")
+        self.assertEqual(
+            argv[-2:],
+            ["--child-state-path", str(config.mqtt_state_path.with_name("mqtt-child.json"))],
+        )
+
+    def test_owned_child_contract_survives_unreadable_proc_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            child = {
+                "schema_version": "temiagent.mosquitto_child.v1",
+                "run_id": "mqtt-test",
+                "supervisor_pid": 41001,
+                "pid": 41002,
+                "ppid": 41001,
+                "start_ticks": 42,
+                "executable": "/usr/sbin/mosquitto",
+                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
+                "cmdline_sha256": "child-digest",
+            }
+            demo._atomic_json(demo._mqtt_child_state_path(config), child)
+            current_child = {**child, "identity_source": "limited_proc"}
+            with (
+                mock.patch.object(demo, "_listener_endpoints", return_value=[{"address": "127.0.0.1", "port": 1883, "pids": []}]),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_identity", side_effect=PermissionError),
+                mock.patch.object(demo, "_mqtt_limited_identity", return_value=current_child),
+            ):
+                evidence = demo._mqtt_readiness_evidence(config, record)
+        self.assertTrue(evidence["listener_lineage_valid"])
+        self.assertTrue(evidence["ready"])
+        self.assertTrue(evidence["listener_pid_matches_child"])
+        self.assertEqual(evidence["listener_pids"], [])
+        self.assertEqual(evidence["mosquitto_pids"], [])
+        self.assertEqual(evidence["child_pid"], 41002)
+
+    def test_listener_pid_must_match_the_recorded_child(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            child = {
+                "schema_version": "temiagent.mosquitto_child.v1",
+                "run_id": "mqtt-test",
+                "supervisor_pid": 41001,
+                "pid": 41002,
+                "ppid": 41001,
+                "start_ticks": 42,
+                "executable": "/usr/sbin/mosquitto",
+                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
+                "cmdline_sha256": "child-digest",
+            }
+            record["mqtt_child"] = child
+            with (
+                mock.patch.object(demo, "_listener_endpoints", return_value=[{"address": "127.0.0.1", "port": 1883, "pids": [41003]}]),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_mqtt_limited_identity", return_value=child),
+            ):
+                evidence = demo._mqtt_readiness_evidence(config, record)
+        self.assertFalse(evidence["listener_lineage_valid"])
+        self.assertFalse(evidence["ready"])
+        self.assertEqual(evidence["listener_pids"], [41003])
+        self.assertEqual(evidence["mosquitto_pids"], [])
+
+    def test_dead_recorded_child_cannot_pass_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            child = {
+                "schema_version": "temiagent.mosquitto_child.v1",
+                "run_id": "mqtt-test",
+                "supervisor_pid": 41001,
+                "pid": 41002,
+                "ppid": 41001,
+                "start_ticks": 42,
+                "executable": "/usr/sbin/mosquitto",
+                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
+                "cmdline_sha256": "child-digest",
+            }
+            record["mqtt_child"] = child
+            with (
+                mock.patch.object(demo, "_listener_endpoints", return_value=[{"address": "127.0.0.1", "port": 1883, "pids": [41002]}]),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_mqtt_limited_identity", side_effect=FileNotFoundError),
+            ):
+                evidence = demo._mqtt_readiness_evidence(config, record)
+        self.assertFalse(evidence["child_contract_valid"])
+        self.assertFalse(evidence["ready"])
+
+    def test_recorded_child_contract_can_be_stopped_after_supervisor_loss(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            child = {
+                "schema_version": "temiagent.mosquitto_child.v1",
+                "run_id": "mqtt-test",
+                "supervisor_pid": 41001,
+                "pid": 41002,
+                "ppid": 41001,
+                "start_ticks": 42,
+                "executable": "/usr/sbin/mosquitto",
+                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
+                "cmdline_sha256": "child-digest",
+            }
+            record["mqtt_child"] = child
+            self.write_state(config, status=demo.MQTT_STATE_RUNNING, record=record)
+            occupied = self.make_evidence(
+                config,
+                listener_count=1,
+                pids=[41002],
+                tcp_ready=True,
+                supervisor_valid=False,
+                listener_lineage_valid=False,
+            )
+            stopped = self.make_evidence(config)
+            with (
+                mock.patch.object(demo, "_mqtt_readiness_evidence", side_effect=[occupied, stopped]),
+                mock.patch.object(demo, "_identity_matches", return_value=False),
+                mock.patch.object(demo, "_mqtt_limited_identity", return_value=child),
+                mock.patch.object(demo, "_wait_for", return_value=True),
+                mock.patch.object(demo, "_listener_count", return_value=0),
+                mock.patch.object(demo.os, "kill") as kill,
+            ):
+                result = demo.mqtt_only_stop(config)
+        self.assertEqual(result["state"], demo.STATE_STOPPED)
+        kill.assert_called_once_with(41002, demo.signal.SIGTERM)
+        self.assertFalse(config.mqtt_state_path.exists())
+
+    def test_starting_stop_terminates_only_recorded_lineage(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            self.write_state(config, status=demo.STATE_STARTING, record=record)
+            owned = self.make_evidence(config, listener_count=0, supervisor_valid=True)
+            stopped = self.make_evidence(config)
+            with (
+                mock.patch.object(demo, "_mqtt_readiness_evidence", side_effect=[owned, stopped]),
+                mock.patch.object(demo, "_attach_descendants"),
+                mock.patch.object(demo, "_stop_record", return_value="stopped_term") as stop_record,
+            ):
+                result = demo.mqtt_only_stop(config)
+        self.assertEqual(result["state"], demo.STATE_STOPPED)
+        stop_record.assert_called_once_with(record, timeout_seconds=30)
+        self.assertFalse(config.mqtt_state_path.exists())
+
+    def test_invalid_live_record_is_preserved_for_manual_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            record["leader"]["cmdline"] = ["/usr/bin/python3", "/tmp/other.py"]
+            self.write_state(config, status=demo.MQTT_STATE_RUNNING, record=record)
+            with (
+                mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=self.make_evidence(config)),
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "OWNERSHIP_UNRESOLVED"):
+                    demo.mqtt_only_stop(config)
+            state_remains = config.mqtt_state_path.exists()
+        self.assertTrue(state_remains)
+
+    def test_unsupported_state_is_preserved_for_manual_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            demo._atomic_json(
+                config.mqtt_state_path,
+                {
+                    "schema_version": "temiagent.demo_lifecycle.v2",
+                    "scope": "mqtt",
+                    "status": "AMBIGUOUS",
+                    "services": {},
+                },
+            )
+            with self.assertRaisesRegex(demo.DemoError, "MQTT_STATE_STATUS_UNSUPPORTED"):
+                demo.mqtt_only_stop(config)
+            state_remains = config.mqtt_state_path.exists()
+        self.assertTrue(state_remains)
+
+    def test_supervisor_identity_requires_exact_script_and_interpreter(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            with mock.patch.object(demo, "_identity_matches", return_value=True):
+                self.assertTrue(demo._mqtt_supervisor_valid(config, record))
+                record["leader"]["cmdline"][1] = "/tmp/other/tools/managed_mosquitto_supervisor.py"
+                self.assertFalse(demo._mqtt_supervisor_valid(config, record))
+
+    def test_mqtt_source_policy_allows_unrelated_docs_but_full_policy_does_not(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            source = {"root": str(demo.ROOT), "branch": "main", "head": "test"}
+            with (
+                mock.patch.object(demo, "_mqtt_only_source_roots", return_value=[demo.ROOT.resolve()]),
+                mock.patch.object(demo, "_source_record_at", return_value=source),
+                mock.patch.object(demo, "_git_status_paths", return_value={"docs/README.md"}),
+            ):
+                validated = demo._validate_mqtt_only_source(config)
+        self.assertEqual(validated["checked_roots"][0]["checked_files"], sorted(demo.MQTT_ONLY_RUNTIME_FILES))
+        dirty_source = {"branch": "main", "head": "test", "tree": [" M docs/README.md"]}
+        with (
+            mock.patch.object(demo, "_source_record", return_value=dirty_source),
+            mock.patch.object(demo, "_git", return_value=""),
+        ):
+            with self.assertRaisesRegex(demo.DemoError, "non-runtime dirty files"):
+                demo._validate_source(config)
+
+    def test_mqtt_source_policy_rejects_each_critical_runtime_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base_config = demo.load_config(self.make_managed_config(Path(temporary)))
+            source = {"root": str(demo.ROOT), "branch": "main", "head": "test"}
+            for path in (*demo.MQTT_ONLY_RUNTIME_FILES, "mqtt/mosquitto.conf"):
+                with self.subTest(path=path):
+                    config = (
+                        replace(base_config, mqtt_config_path=demo.ROOT / "mqtt" / "mosquitto.conf")
+                        if path == "mqtt/mosquitto.conf"
+                        else base_config
+                    )
+                    with (
+                        mock.patch.object(demo, "_mqtt_only_source_roots", return_value=[demo.ROOT.resolve()]),
+                        mock.patch.object(demo, "_source_record_at", return_value=source),
+                        mock.patch.object(demo, "_git_status_paths", return_value={path}),
+                    ):
+                        with self.assertRaisesRegex(demo.DemoError, "MQTT_ONLY_SOURCE_DIRTY"):
+                            demo._validate_mqtt_only_source(config)
+
+    def test_primary_worktree_is_the_mqtt_default_authority(self) -> None:
+        self.assertEqual(
+            demo.canonical_mqtt_runtime_root(),
+            demo.CANONICAL_MQTT_SOURCE_ROOT / ".runtime" / "demo",
+        )
+        self.assertEqual(
+            demo.canonical_mqtt_config_path(),
+            demo.canonical_mqtt_runtime_root() / "demo.env",
+        )
+
+    def test_custom_private_config_cannot_reuse_canonical_mqtt_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config_path = self.make_managed_config(Path(temporary))
+            content = config_path.read_text(encoding="utf-8")
+            content = content.replace(
+                f"TEMIAGENT_RUNTIME_ROOT={Path(temporary) / 'runtime'}",
+                f"TEMIAGENT_RUNTIME_ROOT={demo.canonical_mqtt_runtime_root()}",
+            )
+            config_path.write_text(content, encoding="utf-8")
+            config_path.chmod(0o600)
+            with self.assertRaisesRegex(demo.DemoError, "canonical MQTT runtime"):
+                demo.load_config(config_path, mqtt_only=True)
+
+    def test_mqtt_only_rejects_an_executing_worktree_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config_path = self.make_managed_config(Path(temporary))
+            executing_runtime = Path(temporary) / "executing-worktree" / ".runtime" / "demo"
+            primary_runtime = Path(temporary) / "primary-worktree" / ".runtime" / "demo"
+            with (
+                mock.patch.object(demo, "CANONICAL_RUNTIME_ROOT", executing_runtime),
+                mock.patch.object(demo, "CANONICAL_CONFIG_PATH", executing_runtime / "demo.env"),
+                mock.patch.object(demo, "CANONICAL_MQTT_RUNTIME_ROOT", primary_runtime),
+                mock.patch.object(demo, "CANONICAL_MQTT_CONFIG_PATH", primary_runtime / "demo.env"),
+            ):
+                content = config_path.read_text(encoding="utf-8").replace(
+                    str(Path(temporary) / "runtime"),
+                    str(demo.canonical_runtime_root()),
+                )
+                config_path.write_text(content, encoding="utf-8")
+                config_path.chmod(0o600)
+                with self.assertRaisesRegex(demo.DemoError, "MQTT-only runtime"):
+                    demo.load_config(config_path, mqtt_only=True)
 
 
 class DemoLifecycleRecordTests(unittest.TestCase):
