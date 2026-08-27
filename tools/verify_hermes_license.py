@@ -7,11 +7,15 @@ import argparse
 import hashlib
 import json
 import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+try:
+    from bounded_process import BoundedProcessResult, run_bounded_command
+except ImportError:
+    from tools.bounded_process import BoundedProcessResult, run_bounded_command
 
 
 class HermesLicenseVerificationError(RuntimeError):
@@ -81,26 +85,29 @@ def _validated_license_contract(manifest: dict[str, Any]) -> tuple[str, str, str
     return license_path, license_sha256, license_blob_sha
 
 
-def _git_output(checkout: Path, *arguments: str) -> str:
+def _git_result(checkout: Path, *arguments: str) -> BoundedProcessResult:
     try:
-        completed = subprocess.run(
+        result = run_bounded_command(
             ["git", "-C", str(checkout), *arguments],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-            timeout=10,
+            timeout_seconds=10,
+            kill_grace_seconds=1,
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, ValueError) as exc:
         raise HermesLicenseVerificationError(
             f"HERMES_LICENSE_GIT_FAILED: git {' '.join(arguments)}: {exc}"
         ) from exc
-    if completed.returncode != 0:
-        detail = completed.stderr.decode("utf-8", errors="replace").strip()
+    if result.timed_out:
+        raise HermesLicenseVerificationError(
+            "HERMES_LICENSE_GIT_TIMEOUT: "
+            f"git {' '.join(arguments)} exceeded 10s; owned process group cleaned"
+        )
+    if result.returncode != 0:
+        detail = result.output.strip()
         raise HermesLicenseVerificationError(
             "HERMES_LICENSE_GIT_FAILED: "
             f"git {' '.join(arguments)} failed: {detail or 'unknown error'}"
         )
-    return completed.stdout.decode("utf-8", errors="strict")
+    return result
 
 
 def verify_pinned_license(
@@ -122,21 +129,9 @@ def verify_pinned_license(
         manifest
     )
     license_ref = f"{base_commit}:{license_path}"
-    blob_sha = _git_output(checkout_path, "rev-parse", license_ref).strip()
-    license_bytes = subprocess.run(
-        ["git", "-C", str(checkout_path), "cat-file", "blob", blob_sha],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-        timeout=10,
-    )
-    if license_bytes.returncode != 0:
-        detail = license_bytes.stderr.decode("utf-8", errors="replace").strip()
-        raise HermesLicenseVerificationError(
-            "HERMES_LICENSE_GIT_FAILED: cannot read pinned license blob: "
-            f"{detail or 'unknown error'}"
-        )
-    actual_sha256 = hashlib.sha256(license_bytes.stdout).hexdigest()
+    blob_sha = _git_result(checkout_path, "rev-parse", license_ref).output.strip()
+    license_bytes = _git_result(checkout_path, "cat-file", "blob", blob_sha).output_bytes
+    actual_sha256 = hashlib.sha256(license_bytes).hexdigest()
     if actual_sha256 != expected_sha256:
         raise HermesLicenseVerificationError(
             "HERMES_LICENSE_MISMATCH: pinned base LICENSE content does not "

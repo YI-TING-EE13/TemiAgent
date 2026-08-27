@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
-from typing import Sequence
+from typing import BinaryIO, Sequence
 
 
 @dataclass(frozen=True)
@@ -18,13 +18,14 @@ class BoundedProcessResult:
     command: tuple[str, ...]
     returncode: int
     output: str
+    output_bytes: bytes
     timed_out: bool
     term_sent: bool
     hard_kill_sent: bool
     process_group_id: int
 
 
-def _send_process_group_signal(process_group_id: int, signum: signal.Signals) -> bool:
+def _send_process_group_signal(process_group_id: int, signum: int) -> bool:
     """Signal only the process group created for the task-owned command."""
 
     try:
@@ -44,11 +45,11 @@ def _process_group_exists(process_group_id: int) -> bool:
     return True
 
 
-def _decode_output(output_file: tempfile._TemporaryFileWrapper[bytes]) -> str:
+def _read_output(output_file: BinaryIO) -> bytes:
     """Read bounded command output from a regular temporary file."""
 
     output_file.seek(0)
-    return output_file.read().decode("utf-8", errors="replace")
+    return output_file.read()
 
 
 def run_bounded_command(
@@ -102,8 +103,9 @@ def run_bounded_command(
                     break
                 time.sleep(min(0.01, grace_deadline - time.monotonic()))
 
-            # Do this before reaping the direct child so its PID cannot be
-            # reused while the task-owned process group is being cleaned.
+            # A still-running direct child is not reaped before this check.
+            # If it exited during grace, it was reaped above; a surviving
+            # descendant then keeps the exact task-owned group present.
             if _process_group_exists(process.pid):
                 hard_kill_sent = _send_process_group_signal(
                     process.pid, signal.SIGKILL
@@ -116,10 +118,12 @@ def run_bounded_command(
                 process.kill()
                 process.wait(timeout=max(kill_grace_seconds, 0.1))
 
+        output_bytes = _read_output(output_file)
         return BoundedProcessResult(
             command=normalized_command,
             returncode=process.returncode,
-            output=_decode_output(output_file),
+            output=output_bytes.decode("utf-8", errors="replace"),
+            output_bytes=output_bytes,
             timed_out=timed_out,
             term_sent=term_sent,
             hard_kill_sent=hard_kill_sent,
