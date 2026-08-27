@@ -23,6 +23,25 @@ import time
 CHILD_STATE_SCHEMA = "temiagent.mosquitto_child.v1"
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _resolve_mosquitto_executable() -> tuple[str, str]:
+    """Resolve and fingerprint the exact broker binary before spawning it."""
+    executable = shutil.which("mosquitto")
+    if executable is None:
+        raise RuntimeError("mosquitto executable was not found on PATH")
+    resolved = Path(os.path.realpath(executable))
+    if not resolved.is_file() or not os.access(resolved, os.X_OK):
+        raise RuntimeError("mosquitto executable is not an executable regular file")
+    return str(resolved), _sha256(resolved)
+
+
 def _limited_child_identity(pid: int) -> dict[str, object]:
     """Read the child fields that remain visible after Mosquitto drops UID."""
     proc = Path("/proc") / str(pid)
@@ -100,10 +119,11 @@ def main(argv: list[str] | None = None) -> int:
     if bool(args.run_id) != bool(args.child_state_path):
         parser.error("--run-id and --child-state-path must be supplied together")
 
-    child_command = ["mosquitto", "-c", str(config)]
-    mosquitto_executable = shutil.which("mosquitto")
-    if mosquitto_executable is None:
-        parser.error("mosquitto executable was not found on PATH")
+    try:
+        mosquitto_executable, executable_sha256 = _resolve_mosquitto_executable()
+    except (OSError, RuntimeError) as exc:
+        parser.error(str(exc))
+    child_command = [mosquitto_executable, "-c", str(config)]
     child = subprocess.Popen(child_command)
     if args.child_state_path is not None:
         try:
@@ -120,7 +140,8 @@ def main(argv: list[str] | None = None) -> int:
                     "schema_version": CHILD_STATE_SCHEMA,
                     "run_id": args.run_id,
                     "supervisor_pid": os.getpid(),
-                    "executable": os.path.realpath(mosquitto_executable),
+                    "executable": mosquitto_executable,
+                    "executable_sha256": executable_sha256,
                     **child_identity,
                 },
             )

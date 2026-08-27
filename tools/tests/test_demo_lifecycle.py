@@ -741,6 +741,23 @@ class MqttOnlyLifecycleTests(unittest.TestCase):
             "lifecycle_run_id": "mqtt-test",
         }
 
+    def make_child(self, config: demo.DemoConfig) -> dict[str, object]:
+        executable, executable_sha256 = demo._mosquitto_executable_identity()
+        self.assertIsNotNone(executable)
+        self.assertIsNotNone(executable_sha256)
+        return {
+            "schema_version": "temiagent.mosquitto_child.v1",
+            "run_id": "mqtt-test",
+            "supervisor_pid": 41001,
+            "pid": 41002,
+            "ppid": 41001,
+            "start_ticks": 42,
+            "executable": executable,
+            "executable_sha256": executable_sha256,
+            "cmdline": [executable, "-c", str(config.mqtt_config_path)],
+            "cmdline_sha256": "child-digest",
+        }
+
     def make_evidence(
         self,
         config: demo.DemoConfig,
@@ -1111,17 +1128,7 @@ class MqttOnlyLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_managed_config(Path(temporary)))
             record = self.make_record(config)
-            child = {
-                "schema_version": "temiagent.mosquitto_child.v1",
-                "run_id": "mqtt-test",
-                "supervisor_pid": 41001,
-                "pid": 41002,
-                "ppid": 41001,
-                "start_ticks": 42,
-                "executable": "/usr/sbin/mosquitto",
-                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
-                "cmdline_sha256": "child-digest",
-            }
+            child = self.make_child(config)
             record["mqtt_child"] = child
             no_listener = self.make_evidence(config)
             ready = self.make_evidence(
@@ -1305,17 +1312,7 @@ class MqttOnlyLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_managed_config(Path(temporary)))
             record = self.make_record(config)
-            child = {
-                "schema_version": "temiagent.mosquitto_child.v1",
-                "run_id": "mqtt-test",
-                "supervisor_pid": 41001,
-                "pid": 41002,
-                "ppid": 41001,
-                "start_ticks": 42,
-                "executable": "/usr/sbin/mosquitto",
-                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
-                "cmdline_sha256": "child-digest",
-            }
+            child = self.make_child(config)
             record["mqtt_child"] = child
             with (
                 mock.patch.object(demo, "_listener_endpoints", return_value=[{"address": "127.0.0.1", "port": 1883, "pids": [41002]}]),
@@ -1346,21 +1343,139 @@ class MqttOnlyLifecycleTests(unittest.TestCase):
             ["--child-state-path", str(config.mqtt_state_path.with_name("mqtt-child.json"))],
         )
 
+    def test_child_contract_rejects_unexpected_executable_or_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            child = self.make_child(config)
+            with mock.patch.object(
+                demo,
+                "_mosquitto_executable_identity",
+                return_value=(child["executable"], child["executable_sha256"]),
+            ):
+                self.assertTrue(
+                    demo._mqtt_child_contract_shape(
+                        config,
+                        child,
+                        supervisor_pid=41001,
+                        run_id="mqtt-test",
+                    )
+                )
+                unexpected_path = {**child, "executable": "/tmp/unexpected-mosquitto"}
+                unexpected_digest = {**child, "executable_sha256": "0" * 64}
+                self.assertFalse(
+                    demo._mqtt_child_contract_shape(
+                        config,
+                        unexpected_path,
+                        supervisor_pid=41001,
+                        run_id="mqtt-test",
+                    )
+                )
+                self.assertFalse(
+                    demo._mqtt_child_contract_shape(
+                        config,
+                        unexpected_digest,
+                        supervisor_pid=41001,
+                        run_id="mqtt-test",
+                    )
+                )
+
+    def test_child_contract_rejects_pid_start_command_and_command_hash_reuse(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            child = self.make_child(config)
+            with (
+                mock.patch.object(
+                    demo,
+                    "_mosquitto_executable_identity",
+                    return_value=(child["executable"], child["executable_sha256"]),
+                ),
+                mock.patch.object(demo, "_mqtt_limited_identity", return_value=child),
+            ):
+                for field, value in (
+                    ("pid", 41003),
+                    ("ppid", 41003),
+                    ("start_ticks", 43),
+                    ("cmdline", [child["executable"], "-c", "/tmp/other.conf"]),
+                    ("cmdline_sha256", "different-child-digest"),
+                ):
+                    with self.subTest(field=field):
+                        candidate = {**child, field: value}
+                        self.assertFalse(
+                            demo._mqtt_child_contract_live(
+                                config,
+                                candidate,
+                                require_direct=True,
+                            )
+                        )
+
+    def test_full_stack_mqtt_start_requires_child_contract_for_listener_attachment(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            spec = demo.ServiceSpec(
+                "mqtt",
+                demo.ROOT,
+                "managed_mosquitto_supervisor.py",
+                (config.mqtt_port,),
+                config.mqtt_log_path,
+            )
+            record = self.make_record(config)
+            evidence = self.make_evidence(
+                config,
+                listener_count=1,
+                pids=[41002],
+                tcp_ready=True,
+                supervisor_valid=True,
+                listener_lineage_valid=True,
+                ready=True,
+            )
+            with (
+                mock.patch.object(demo, "_validate_source", return_value={"branch": "main", "head": "test", "tree": []}),
+                mock.patch.object(demo, "_specs", return_value={"mqtt": spec}),
+                mock.patch.object(demo, "_validate_resource_manifest", return_value={}),
+                mock.patch.object(demo, "_reconcile_archived_callback_socket"),
+                mock.patch.object(demo, "_assert_start_ports_clear"),
+                mock.patch.object(demo, "_external_dependency_ready"),
+                mock.patch.object(demo, "_base_env", return_value={}),
+                mock.patch.object(demo, "_start_process", return_value=record) as start_process,
+                mock.patch.object(demo, "_identity_matches", return_value=True),
+                mock.patch.object(demo, "_record_mqtt_child_contract", return_value=self.make_child(config)) as child_contract,
+                mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=evidence),
+                mock.patch.object(demo, "_wait_for", return_value=True),
+                mock.patch.object(demo, "_attach_listeners") as attach_listeners,
+                mock.patch.object(demo, "_attach_descendants"),
+                mock.patch.object(demo, "runtime_health", return_value={"readiness": "BACKEND_READY_WAITING_ANDROID"}),
+            ):
+                result = demo.start(config)
+
+        self.assertEqual(result["state"], "BACKEND_READY_WAITING_ANDROID")
+        argv = start_process.call_args.args[1]
+        self.assertIn("--run-id", argv)
+        self.assertIn("--child-state-path", argv)
+        child_contract.assert_called_once_with(config, record)
+        attach_listeners.assert_called_once_with(record, config=config)
+
+    def test_mqtt_listener_attachment_rejects_unverified_listener(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_managed_config(Path(temporary)))
+            record = self.make_record(config)
+            evidence = self.make_evidence(
+                config,
+                listener_count=1,
+                pids=[],
+                tcp_ready=True,
+                supervisor_valid=True,
+                listener_lineage_valid=False,
+                ready=False,
+            )
+            with mock.patch.object(demo, "_mqtt_readiness_evidence", return_value=evidence):
+                with self.assertRaisesRegex(demo.DemoError, "exact child"):
+                    demo._attach_listeners(record, config=config)
+
     def test_owned_child_contract_survives_unreadable_proc_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_managed_config(Path(temporary)))
             record = self.make_record(config)
-            child = {
-                "schema_version": "temiagent.mosquitto_child.v1",
-                "run_id": "mqtt-test",
-                "supervisor_pid": 41001,
-                "pid": 41002,
-                "ppid": 41001,
-                "start_ticks": 42,
-                "executable": "/usr/sbin/mosquitto",
-                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
-                "cmdline_sha256": "child-digest",
-            }
+            child = self.make_child(config)
             demo._atomic_json(demo._mqtt_child_state_path(config), child)
             current_child = {**child, "identity_source": "limited_proc"}
             with (
@@ -1382,17 +1497,7 @@ class MqttOnlyLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_managed_config(Path(temporary)))
             record = self.make_record(config)
-            child = {
-                "schema_version": "temiagent.mosquitto_child.v1",
-                "run_id": "mqtt-test",
-                "supervisor_pid": 41001,
-                "pid": 41002,
-                "ppid": 41001,
-                "start_ticks": 42,
-                "executable": "/usr/sbin/mosquitto",
-                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
-                "cmdline_sha256": "child-digest",
-            }
+            child = self.make_child(config)
             record["mqtt_child"] = child
             with (
                 mock.patch.object(demo, "_listener_endpoints", return_value=[{"address": "127.0.0.1", "port": 1883, "pids": [41003]}]),
@@ -1410,17 +1515,7 @@ class MqttOnlyLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_managed_config(Path(temporary)))
             record = self.make_record(config)
-            child = {
-                "schema_version": "temiagent.mosquitto_child.v1",
-                "run_id": "mqtt-test",
-                "supervisor_pid": 41001,
-                "pid": 41002,
-                "ppid": 41001,
-                "start_ticks": 42,
-                "executable": "/usr/sbin/mosquitto",
-                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
-                "cmdline_sha256": "child-digest",
-            }
+            child = self.make_child(config)
             record["mqtt_child"] = child
             with (
                 mock.patch.object(demo, "_listener_endpoints", return_value=[{"address": "127.0.0.1", "port": 1883, "pids": [41002]}]),
@@ -1436,17 +1531,7 @@ class MqttOnlyLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_managed_config(Path(temporary)))
             record = self.make_record(config)
-            child = {
-                "schema_version": "temiagent.mosquitto_child.v1",
-                "run_id": "mqtt-test",
-                "supervisor_pid": 41001,
-                "pid": 41002,
-                "ppid": 41001,
-                "start_ticks": 42,
-                "executable": "/usr/sbin/mosquitto",
-                "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
-                "cmdline_sha256": "child-digest",
-            }
+            child = self.make_child(config)
             record["mqtt_child"] = child
             self.write_state(config, status=demo.MQTT_STATE_RUNNING, record=record)
             occupied = self.make_evidence(

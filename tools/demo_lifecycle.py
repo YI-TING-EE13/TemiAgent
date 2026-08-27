@@ -1144,6 +1144,20 @@ def _mqtt_limited_identity(pid: int) -> dict[str, Any]:
     }
 
 
+def _mosquitto_executable_identity() -> tuple[str, str] | None:
+    """Resolve and fingerprint the broker binary visible to this lifecycle."""
+    executable = shutil.which("mosquitto")
+    if executable is None:
+        return None
+    resolved = Path(os.path.realpath(executable))
+    if not resolved.is_file() or not os.access(resolved, os.X_OK):
+        return None
+    try:
+        return str(resolved), _sha256(resolved)
+    except OSError:
+        return None
+
+
 def _identity_matches(record: dict[str, Any]) -> bool:
     try:
         current = _identity(int(record["pid"]))
@@ -1399,15 +1413,18 @@ def _mqtt_child_contract_shape(
         or start_ticks <= 0
     ):
         return False
-    expected_command = ["mosquitto", "-c", str(config.mqtt_config_path)]
+    executable_identity = _mosquitto_executable_identity()
+    if executable_identity is None:
+        return False
+    expected_executable, expected_executable_sha256 = executable_identity
+    expected_command = [expected_executable, "-c", str(config.mqtt_config_path)]
     if candidate.get("cmdline") != expected_command:
         return False
     executable = candidate.get("executable")
-    mosquitto_executable = shutil.which("mosquitto")
     if (
         not isinstance(executable, str)
-        or mosquitto_executable is None
-        or os.path.realpath(mosquitto_executable) != executable
+        or executable != expected_executable
+        or candidate.get("executable_sha256") != expected_executable_sha256
     ):
         return False
     return isinstance(candidate.get("cmdline_sha256"), str)
@@ -1537,15 +1554,22 @@ def _mqtt_child_command_valid(config: DemoConfig, identity: dict[str, Any]) -> b
     command = identity.get("cmdline")
     if not isinstance(command, list) or not all(isinstance(item, str) for item in command):
         return False
-    mosquitto_executable = shutil.which("mosquitto")
-    if (
-        not command
-        or command[0] != "mosquitto"
-        or mosquitto_executable is None
-        or os.path.realpath(mosquitto_executable) != identity.get("executable")
-    ):
+    executable_identity = _mosquitto_executable_identity()
+    if executable_identity is None:
         return False
-    return command == ["mosquitto", "-c", str(config.mqtt_config_path)]
+    expected_executable, expected_executable_sha256 = executable_identity
+    if identity.get("schema_version") == MQTT_CHILD_STATE_SCHEMA:
+        return (
+            command == [expected_executable, "-c", str(config.mqtt_config_path)]
+            and identity.get("executable") == expected_executable
+            and identity.get("executable_sha256") == expected_executable_sha256
+        )
+    # Legacy full-stack records can still be used for exact-child recovery,
+    # but they are never sufficient to establish new managed ownership.
+    return (
+        command == ["mosquitto", "-c", str(config.mqtt_config_path)]
+        and identity.get("executable") == expected_executable
+    )
 
 
 def _mqtt_child_valid(config: DemoConfig, identity: dict[str, Any], leader: dict[str, Any]) -> bool:
@@ -2069,20 +2093,21 @@ def _persist_starting_record(
     _atomic_json(state_path or config.state_path, state)
 
 
-def _attach_listeners(record: dict[str, Any]) -> None:
+def _attach_listeners(record: dict[str, Any], *, config: DemoConfig | None = None) -> None:
     members = list(record.get("members", []))
     for port in record.get("ports", []):
+        if record.get("name") == "mqtt":
+            if config is None:
+                raise DemoError("mqtt listener ownership requires its validated config")
+            evidence = _mqtt_readiness_evidence(config, record)
+            if not evidence["ready"]:
+                raise DemoError("mqtt listener does not match the exact child contract and readiness gate")
+            # A dropped-privilege Mosquitto child may be absent from ss -p.
+            # Its child contract, exact listener shape and TCP probe are the
+            # ownership evidence; never fall back to listener count alone.
+            continue
         identities = _listener_identities(int(port))
         if len(identities) != 1:
-            # Mosquitto intentionally drops privileges. The recorded root
-            # supervisor remains the exact lifecycle owner and relays TERM to
-            # that child; do not accept an unobservable listener otherwise.
-            if (
-                record["name"] == "mqtt"
-                and _identity_matches(record["leader"])
-                and _listener_count(int(port)) == 1
-            ):
-                continue
             raise DemoError(f"{record['name']} does not own exactly one listener on {port}")
         _append_member(members, identities[0])
     record["members"] = members
@@ -3219,13 +3244,15 @@ def start(config: DemoConfig) -> dict[str, Any]:
             spec = specs.get(name)
             if spec is None:
                 continue
-            argv = _service_argv(config, name)
+            argv = _service_argv(config, name, run_id=run_id if name == "mqtt" else None)
             record = _start_process(spec, argv, env)
             record["config_sha256"] = _sha256(config.config_path)
             record["started_at"] = _utc_now()
             record["lifecycle_run_id"] = run_id
             started.append(record)
             _persist_starting_record(config, state, name, record, argv)
+            if name == "mqtt" and _record_mqtt_child_contract(config, record) is None:
+                raise DemoError("mqtt supervisor did not publish an exact child contract")
             if name == "lmstudio":
                 ok = _wait_for(
                     lambda: _lmstudio_ready(config) and _lmstudio_context_ready(config),
@@ -3233,7 +3260,7 @@ def start(config: DemoConfig) -> dict[str, Any]:
                 )
             elif name == "mqtt":
                 ok = _wait_for(
-                    lambda: _listener_count(config.mqtt_port) == 1 and _mqtt_tcp_ready(config),
+                    lambda: _mqtt_readiness_evidence(config, record)["ready"],
                     30,
                 )
             elif name == "adapter":
@@ -3262,7 +3289,7 @@ def start(config: DemoConfig) -> dict[str, Any]:
                 ok = _wait_for(lambda: _viewer_ready(config), config.timeout_seconds)
             if not ok:
                 raise DemoError(f"{name} did not pass its health gate; inspect {spec.log_path}")
-            _attach_listeners(record)
+            _attach_listeners(record, config=config if name == "mqtt" else None)
             _attach_descendants(record)
             state["updated_at"] = _utc_now()
             _atomic_json(config.state_path, state)

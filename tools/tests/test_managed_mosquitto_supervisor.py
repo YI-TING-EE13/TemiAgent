@@ -34,17 +34,19 @@ class ManagedMosquittoSupervisorTests(unittest.TestCase):
             broker_config = root / "mosquitto.conf"
             child_state = root / "mqtt-child.json"
             broker_config.write_text("listener 1883 127.0.0.1\n", encoding="utf-8")
+            resolved_executable = os.path.realpath("/usr/sbin/mosquitto")
             child_identity = {
                 "pid": _ExitedChild.pid,
                 "ppid": os.getpid(),
                 "start_ticks": 42,
-                "cmdline": ["mosquitto", "-c", str(broker_config)],
+                "cmdline": [resolved_executable, "-c", str(broker_config)],
                 "cmdline_sha256": "child-digest",
             }
             child = _ExitedChild()
             with (
                 mock.patch.object(supervisor.subprocess, "Popen", return_value=child) as popen,
                 mock.patch.object(supervisor.shutil, "which", return_value="/usr/sbin/mosquitto"),
+                mock.patch.object(supervisor, "_resolve_mosquitto_executable", return_value=(resolved_executable, "binary-digest")),
                 mock.patch.object(supervisor, "_limited_child_identity", return_value=child_identity),
                 mock.patch.object(supervisor.signal, "signal"),
             ):
@@ -60,7 +62,7 @@ class ManagedMosquittoSupervisorTests(unittest.TestCase):
                 )
 
             self.assertEqual(result, 0)
-            popen.assert_called_once_with(["mosquitto", "-c", str(broker_config)])
+            popen.assert_called_once_with([resolved_executable, "-c", str(broker_config)])
             payload = json.loads(child_state.read_text(encoding="utf-8"))
             self.assertEqual(payload["schema_version"], supervisor.CHILD_STATE_SCHEMA)
             self.assertEqual(payload["run_id"], "mqtt-test")
@@ -68,6 +70,8 @@ class ManagedMosquittoSupervisorTests(unittest.TestCase):
             self.assertEqual(payload["pid"], _ExitedChild.pid)
             self.assertEqual(payload["ppid"], os.getpid())
             self.assertEqual(payload["cmdline"], child_identity["cmdline"])
+            self.assertEqual(payload["executable"], resolved_executable)
+            self.assertEqual(payload["executable_sha256"], "binary-digest")
             self.assertEqual(child_state.stat().st_mode & 0o777, 0o600)
 
 
