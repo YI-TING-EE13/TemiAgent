@@ -100,8 +100,7 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
   bootstraps with matching evidence: A and B both produced
   `HEAD=0b7154066e8544ed88d92ae2132cc1e055cf6304` and
   `TREE=1020a771795f406b8891d18ee607b4da3783fa7f`, with clean roots.
-`third_party/llama_cpp/` holds the manifest and README; bootstrap materializes
-`third_party/llama_cpp/` holds the manifest and README; bootstrap materializes
+- `third_party/llama_cpp/` holds the manifest and README; bootstrap materializes
   the generated external checkout at `anomaly_detection/third_party/llama.cpp/`.
   Neither path is TemiAgent root source, and the clone does not imply a model
   binary or model weights.
