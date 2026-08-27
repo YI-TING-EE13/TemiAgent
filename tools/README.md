@@ -87,6 +87,35 @@ cd /TemiAgent
 ./scripts/demo stop
 ```
 
+For a broker-only lifecycle transition, use the dedicated MQTT command group:
+
+```bash
+cd /TemiAgent
+./scripts/demo mqtt start
+./scripts/demo mqtt status
+./scripts/demo mqtt stop
+```
+
+These commands resolve the canonical private configuration from the primary
+`/TemiAgent` worktree and use its owner-only runtime root at
+`/TemiAgent/.runtime/demo`. They manage or inspect only the configured MQTT
+broker on port `1883`; they do not start, stop or restart LM Studio, Hermes,
+Bridge, resident, viewer, gateway, adapter or Android. `mqtt status` is
+read-only. `mqtt start` refuses any existing listener unless it is the exact
+managed broker startup, and `mqtt stop` signals only the recorded exact owner.
+
+Managed Mosquitto runs under a lifecycle supervisor. The supervisor launches
+the resolved absolute broker executable with the canonical config, then
+publishes an owner-only child contract containing the supervisor PID, child
+PID, direct PPID, process start ticks, exact command line, executable path,
+executable SHA-256 and command-line SHA-256. Readiness revalidates that
+contract, the configured listener address and port, and a local TCP probe.
+Mosquitto may drop privileges, so `ss -p` may expose no listener PID; missing
+PID metadata alone is not treated as unowned when the child contract is live.
+A visible contradictory listener PID, a wrong bind or port, a failed TCP probe,
+or an executable/path/digest mismatch fails closed. A foreign broker is never
+adopted or killed by name.
+
 When the private Demo flags explicitly enable identity and repeated discomfort, these commands
 remain inside the same Bridge callback / memory boundary and do not raw-publish MQTT:
 

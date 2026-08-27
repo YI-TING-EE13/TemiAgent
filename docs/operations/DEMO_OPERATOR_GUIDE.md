@@ -53,7 +53,7 @@ Create or select the private configuration:
 ./scripts/demo init-config --profile production --force
 ```
 
-The canonical lifecycle vocabulary is exactly these five commands:
+The full-stack canonical lifecycle vocabulary is exactly these five commands:
 
 ```bash
 ./scripts/demo doctor
@@ -62,6 +62,33 @@ The canonical lifecycle vocabulary is exactly these five commands:
 ./scripts/demo restart
 ./scripts/demo stop
 ```
+
+For a broker-only transition, use the separate MQTT command group:
+
+```bash
+./scripts/demo mqtt start
+./scripts/demo mqtt status
+./scripts/demo mqtt stop
+```
+
+The MQTT-only commands use the primary worktree's canonical private config and
+`/TemiAgent/.runtime/demo` owner-only runtime root. They operate only the
+managed Mosquitto broker on `1883`; they never dispatch the full Demo lifecycle
+or touch LM Studio, Hermes, Bridge, resident, viewer, gateway, adapter or
+Android. `mqtt status` is read-only. Start refuses a listener that cannot be
+proven to be the exact managed child, and stop signals only the recorded exact
+supervisor/child lineage.
+
+The managed supervisor launches the resolved absolute Mosquitto executable
+with the canonical broker config and records an owner-only child contract:
+supervisor PID, child PID, direct PPID, process start ticks, exact command
+line, executable path, executable SHA-256 and command-line SHA-256. The
+readiness gate also requires the configured listener address/port and a
+successful local TCP probe. Mosquitto can drop privileges, so `ss -p` may have
+no listener PID; missing PID metadata is acceptable only with a live matching
+child contract. A visible contradictory PID, executable/path/digest mismatch,
+wrong bind or port, or failed TCP probe is a failure, and a foreign broker is
+never adopted or killed by name.
 
 `doctor` 與 `status` 不啟停 service，也不發布 MQTT。`restart` 只會採用已記錄、或在此明確
 restart 中以 cwd、command line、PID start identity 與 listener 驗證過的既有 Demo process。
