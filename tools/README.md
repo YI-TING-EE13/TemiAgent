@@ -218,6 +218,12 @@ MQTT 或直接讀寫 memory files。
 
 ### Legacy ASR/camera to canonical contract
 
+`start_temi_pc_services.sh` and `start_temi_pc_services_background.sh` are
+legacy compatibility starters and require an explicit `PC_IP`; they fail
+closed when it is absent. `temi_overview_adapter.py` likewise requires
+`--broker` or `TEMI_MQTT_BROKER`. No machine-specific private-LAN address is a
+tracked default.
+
 ```bash
 cd /TemiAgent/temi_backend
 export PC_IP='<pc-ip>'
@@ -234,7 +240,9 @@ uv run python /TemiAgent/tools/temi_overview_adapter.py \
 - `temi_overview_adapter.py` 只負責 ASR 與 camera；不要在 adapter 重新加入 `cmd/request` -> `temi/action/speak` 轉發，否則新版 Temi app 會重複說話。
 - 腳本應保持可從 `/TemiAgent` 絕對路徑執行，方便 runbook 複製。
 - 修改 topic、schema 或 path mapping 時，必須同步更新 `hermes_temi_bridge/README.md` 與 `docs/operations/` runbooks。
-- Demo 用 IP、機器人狀態與臨時結果應放 runbook，不要硬編到 reusable scripts。
+- Demo 用 IP、機器人狀態與臨時結果應放 runbook，不要硬編到 reusable scripts。Legacy
+  service starters must receive `PC_IP`, and the adapter must receive
+  `--broker` or `TEMI_MQTT_BROKER`.
 
 ## Non-responsibilities
 

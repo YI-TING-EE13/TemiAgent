@@ -67,11 +67,17 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
 
 ## External, generated and optional artifacts
 
-- `third_party/hermes/` records the public upstream URL, base commit, patch series
-  and target-tree metadata used to reconstruct the nested `hermes-agent/` checkout.
-  The local evidence is branch `temiagent/integration` at
-  `126aa304cda027679fc84212925bbd5329ada20b`. This is not a team-accessible fork
-  and is not an independently reproducible public root checkout.
+- `third_party/hermes/` records the public upstream URL, base commit, ordered patch
+  series, required paths, target-tree metadata and the
+  `PINNED_BASE_PLUS_PATCHED_WORKTREE` contract used to reconstruct the nested
+  `hermes-agent/` checkout. The historical local evidence is branch
+  `temiagent/integration` at `126aa304cda027679fc84212925bbd5329ada20b`; it is
+  not publication source and does not replace a fresh public reconstruction.
+- The Hermes pinned commit is intended to be fetched directly from the public
+  upstream. Gate 3.1 candidate fetches were bounded and remained unavailable
+  because of upstream timeout and earlier HTTP 429 responses, so fresh Hermes
+  A/B evidence and the manifest base-tree value remain pending. A team-accessible
+  fork is not required by this contract.
 - `hermes-agent/` is generated external checkout state, not TemiAgent root source,
   vendored source or a current root submodule. Its nested working tree was left
   unchanged.
@@ -96,9 +102,10 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
    unresolved; do not publish or redistribute the local weight until confirmed.
 4. Local credential-bearing environment files are owner-only and excluded from Git;
    owner handling/rotation remains outside this documentation gate.
-5. The nested Hermes source needs a team-accessible fork or equivalent remote plus
-   a clean-clone reconstruction check before the root repository can be described
-   as fully reproducible outside this workspace.
+5. The nested Hermes source needs successful public pinned fetches plus the
+   clean-clone reconstruction check before the root repository can be described
+   as fully reproducible outside this workspace. The contract does not require a
+   team-accessible fork; the current blocker is public upstream availability.
 
 ## Documentation authority
 

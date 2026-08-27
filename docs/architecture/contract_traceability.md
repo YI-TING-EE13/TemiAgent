@@ -163,10 +163,12 @@ Do not rewrite a planned or experimental item as an implemented, verified or reg
    also contains a pose checkpoint; the Gate 1A publication change stages its removal from the
    current index. Runtime output, real care data and external model weights remain outside the
    publication boundary.
-5. `tools/check_temi_connection.sh`, `tools/validate_temi_e2e_stack.sh`,
-   `tools/start_temi_pc_services.sh`, `tools/start_temi_pc_services_background.sh`
-   and `tools/temi_overview_adapter.py` contain machine-specific private-network
-   defaults. Operators can override them through environment variables or CLI
-   arguments, but portable defaults require a separately authorized code change.
+5. The legacy Temi starters and Overview adapter are intentionally not
+   canonical lifecycle owners. Their Temi-facing broker/video endpoint is now
+   explicit: the starters require `PC_IP`, while the adapter requires
+   `--broker` or `TEMI_MQTT_BROKER`. The tracked publication contains no
+   machine-specific private-LAN default; Demo-specific addresses belong in
+   ignored configuration or operator runbooks.
 
-These gaps require separate code, contract or repository-history changes and are outside a documentation-only governance pass.
+The remaining legacy integration and real-device acceptance work is outside
+the canonical hardware-free publication evidence.

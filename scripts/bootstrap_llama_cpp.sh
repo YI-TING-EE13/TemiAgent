@@ -25,10 +25,21 @@ test -f "$MANIFEST" || {
 
 mapfile -t fields < <(python3 - "$MANIFEST" <<'PY'
 import json
+import re
 import sys
+from pathlib import PurePosixPath
 
 manifest = json.load(open(sys.argv[1], encoding="utf-8"))
-required = ("format_version", "upstream_url", "commit", "runtime_path", "target_tree_sha")
+required = (
+    "format_version",
+    "upstream_url",
+    "commit",
+    "runtime_path",
+    "target_tree_sha",
+    "license_path",
+    "license_spdx",
+    "license_sha256",
+)
 missing = [key for key in required if key not in manifest]
 if missing:
     raise SystemExit("manifest missing: " + ", ".join(missing))
@@ -40,10 +51,24 @@ if runtime_path.startswith("/") or ".." in runtime_path.split("/"):
 for key in ("upstream_url", "commit", "target_tree_sha"):
     if not isinstance(manifest[key], str) or not manifest[key]:
         raise SystemExit(f"manifest {key} must be a non-empty string")
+license_path = manifest["license_path"]
+if (
+    not isinstance(license_path, str)
+    or not license_path
+    or license_path.startswith("/")
+    or ".." in PurePosixPath(license_path).parts
+):
+    raise SystemExit("manifest license_path must stay below the runtime checkout")
+if manifest["license_spdx"] != "MIT":
+    raise SystemExit("unsupported llama.cpp license identifier")
+if not re.fullmatch(r"[0-9a-f]{64}", manifest["license_sha256"]):
+    raise SystemExit("manifest license_sha256 must be a lowercase SHA-256")
 print(manifest["upstream_url"])
 print(manifest["commit"])
 print(runtime_path)
 print(manifest["target_tree_sha"])
+print(manifest["license_path"])
+print(manifest["license_sha256"])
 PY
 )
 
@@ -51,7 +76,10 @@ UPSTREAM_URL="${fields[0]}"
 PINNED_COMMIT="${fields[1]}"
 RUNTIME_RELATIVE_PATH="${fields[2]}"
 EXPECTED_TREE="${fields[3]}"
+LICENSE_RELATIVE_PATH="${fields[4]}"
+EXPECTED_LICENSE_SHA="${fields[5]}"
 RUNTIME_PATH="$ROOT/$RUNTIME_RELATIVE_PATH"
+LICENSE_PATH="$RUNTIME_PATH/$LICENSE_RELATIVE_PATH"
 
 if [[ "$RUNTIME_RELATIVE_PATH" != "anomaly_detection/third_party/llama.cpp" ]]; then
   echo "llama.cpp runtime_path must be anomaly_detection/third_party/llama.cpp" >&2
@@ -94,6 +122,16 @@ if ! git -C "$RUNTIME_PATH" cat-file -e "$PINNED_COMMIT^{commit}" 2>/dev/null; t
   git -C "$RUNTIME_PATH" fetch --no-tags --depth=1 origin "$PINNED_COMMIT"
 fi
 git -C "$RUNTIME_PATH" cat-file -e "$PINNED_COMMIT^{commit}"
+
+test -f "$LICENSE_PATH" || {
+  echo "llama.cpp pinned checkout is missing the declared license file: $LICENSE_RELATIVE_PATH" >&2
+  exit 1
+}
+ACTUAL_LICENSE_SHA="$(sha256sum "$LICENSE_PATH" | cut -d " " -f1)"
+if [[ "$ACTUAL_LICENSE_SHA" != "$EXPECTED_LICENSE_SHA" ]]; then
+  echo "llama.cpp license checksum does not match the reviewed manifest" >&2
+  exit 1
+fi
 
 CURRENT_COMMIT="$(git -C "$RUNTIME_PATH" rev-parse HEAD 2>/dev/null || true)"
 CURRENT_TREE="$(git -C "$RUNTIME_PATH" rev-parse HEAD^{tree} 2>/dev/null || true)"

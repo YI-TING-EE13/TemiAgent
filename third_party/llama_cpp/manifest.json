@@ -3,5 +3,8 @@
   "upstream_url": "https://github.com/ggml-org/llama.cpp",
   "commit": "0b7154066e8544ed88d92ae2132cc1e055cf6304",
   "runtime_path": "anomaly_detection/third_party/llama.cpp",
-  "target_tree_sha": "1020a771795f406b8891d18ee607b4da3783fa7f"
+  "target_tree_sha": "1020a771795f406b8891d18ee607b4da3783fa7f",
+  "license_path": "LICENSE",
+  "license_spdx": "MIT",
+  "license_sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
 }

@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import signal
 import sys
 import time
@@ -192,7 +193,7 @@ def parse_args() -> argparse.Namespace:
     """Parse CLI flags for the local adapter process."""
     parser = argparse.ArgumentParser(description="Adapt legacy Temi app topics to the Overview MQTT contract.")
     parser.add_argument("--robot-id", default="temi-01")
-    parser.add_argument("--broker", default="192.168.50.236")
+    parser.add_argument("--broker", default=os.environ.get("TEMI_MQTT_BROKER"))
     parser.add_argument("--port", type=int, default=1883)
     parser.add_argument("--vision-host", default="0.0.0.0")
     parser.add_argument("--vision-port", type=int, default=8080)
@@ -203,7 +204,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bridge-root", default="/TemiAgent/temi_shared")
     parser.add_argument("--conversation-id", default="conv_temi_live")
     parser.add_argument("--log-level", default="INFO")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.broker:
+        parser.error("set --broker or TEMI_MQTT_BROKER to the Temi-facing MQTT host")
+    return args
 
 
 def main() -> int:

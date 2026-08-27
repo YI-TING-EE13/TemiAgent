@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools" / "temi_overview_adapter.py"
@@ -60,6 +62,34 @@ def test_connect_subscribes_only_to_legacy_asr(tmp_path: Path) -> None:
 
 def test_adapter_does_not_expose_command_forwarder() -> None:
     assert not hasattr(overview_adapter.OverviewAdapter, "handle_overview_command")
+
+
+def test_parse_args_requires_explicit_broker(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TEMI_MQTT_BROKER", raising=False)
+    monkeypatch.setattr(sys, "argv", ["temi_overview_adapter.py"])
+
+    with pytest.raises(SystemExit) as error:
+        overview_adapter.parse_args()
+
+    assert error.value.code == 2
+
+
+def test_parse_args_uses_broker_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEMI_MQTT_BROKER", "temi-host")
+    monkeypatch.setattr(sys, "argv", ["temi_overview_adapter.py"])
+
+    assert overview_adapter.parse_args().broker == "temi-host"
+
+
+def test_parse_args_cli_broker_overrides_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEMI_MQTT_BROKER", "environment-host")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["temi_overview_adapter.py", "--broker", "cli-host"],
+    )
+
+    assert overview_adapter.parse_args().broker == "cli-host"
 
 
 def test_missing_keyframes_does_not_publish_speak_fallback(tmp_path: Path) -> None:

@@ -4,7 +4,7 @@ set -euo pipefail
 # Legacy machine-specific background starter; use scripts/demo for the canonical lifecycle.
 
 ROOT="${ROOT:-/TemiAgent}"
-PC_IP="${PC_IP:-192.168.50.236}"
+: "${PC_IP:?Set PC_IP to the Temi-facing MQTT/video host address.}"
 MQTT_PORT="${MQTT_PORT:-1883}"
 VISION_PORT="${VISION_PORT:-8080}"
 FRAME_BROADCAST_PORT="${FRAME_BROADCAST_PORT:-8081}"
