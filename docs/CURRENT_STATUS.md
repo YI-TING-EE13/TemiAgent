@@ -92,6 +92,15 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
   vendored source or a current root submodule. Its nested working tree was left
   unchanged; the technical reconstruction manifest does not by itself establish
   ownership or handover readiness.
+- Gate 3.3 changed-bootstrap reachability is Hermes-only:
+  `scripts/bootstrap_hermes.sh` invokes the new bounded-process and Hermes license
+  tools, while `scripts/bootstrap_llama_cpp.sh` remains independent and invokes neither.
+  `LLAMA_REGRESSION_REQUIRED: YES` was retained conservatively. Two independent
+  final-candidate publication clones each passed first and second llama-only
+  bootstraps with matching evidence: A and B both produced
+  `HEAD=0b7154066e8544ed88d92ae2132cc1e055cf6304` and
+  `TREE=1020a771795f406b8891d18ee607b4da3783fa7f`, with clean roots.
+`third_party/llama_cpp/` holds the manifest and README; bootstrap materializes
 `third_party/llama_cpp/` holds the manifest and README; bootstrap materializes
   the generated external checkout at `anomaly_detection/third_party/llama.cpp/`.
   Neither path is TemiAgent root source, and the clone does not imply a model
