@@ -73,7 +73,7 @@ node_modules/
 .vscode/
 .idea/
 
-# Bootstrap-managed external source checkouts. Their reviewed pins and Hermes
-# overlay patches are tracked below third_party/; the generated checkouts are not.
-hermes-agent/
+# Hermes is a formal submodule pinned by the root index. Its generated patched
+# worktree remains outside root source; the submodule definition and base pin
+# are tracked in .gitmodules and the root gitlink.
 anomaly_detection/third_party/llama.cpp/
