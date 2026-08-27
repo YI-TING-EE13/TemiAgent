@@ -16,8 +16,14 @@ Inventory command used in the candidate:
 git ls-files -co --exclude-standard -- '*.md'
 ~~~
 
-The inventory contains 74 active Markdown documents after adding this map,
-the developer setup and the student handover. The unreferenced
+<code>ACTIVE_FIRST_PARTY_MARKDOWN_DOCUMENTS</code> means the root-repository
+Markdown paths emitted by the command above. It includes tracked paths and
+non-ignored Markdown paths in the root worktree, excludes ignored runtime or
+generated artifacts, and does not recurse into nested Git repositories or
+submodule contents. The Gate 4.1 repair candidate has
+<code>MARKDOWN_COUNT_ACTUAL=74</code> under this definition.
+
+The unreferenced
 <code>docs/archive/README.redirect.html</code> was classified as
 <code>DELETE_CANDIDATE</code> and removed from this candidate because it was
 an obsolete generated redirect containing private deployment data. Git

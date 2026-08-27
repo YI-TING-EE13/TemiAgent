@@ -89,7 +89,7 @@ external owner or maintainer input. There are no <code>MISSING</code> items.
 | # | Question | Status | Answer and authoritative path |
 |---:|---|---|---|
 | 1 | What is TemiAgent? | ANSWERED | AI6 is a safety-bounded Temi integration: adapter, Bridge validation/dispatch, Hermes reasoning boundary, optional perception and Android-facing contracts. Start with [README](../../README.md). |
-| 2 | Which repository/branch is authoritative? | ANSWERED | The maintainer-designated canonical runtime checkout is on root branch <code>main</code>; the official project path inside the container is <code>/TemiAgent</code>. The host path is intentionally local to each maintainer. See [CURRENT_STATUS](../CURRENT_STATUS.md). |
+| 2 | Which repository/branch is authoritative? | ANSWERED | The maintainer-designated canonical runtime checkout is on root branch <code>main</code>. In this audited deployment the canonical AI6 host checkout is <code>/home/yiting/TemiAgent</code>, mounted inside the designated container as <code>/TemiAgent</code>. This is an explicitly labeled deployment callout; generic clones use the user-selected <code>REPO_ROOT</code> in [developer setup](../operations/developer_setup.md). See [CURRENT_STATUS](../CURRENT_STATUS.md). |
 | 3 | What is publication versus runtime main? | ANSWERED | Runtime main is the maintained canonical checkout and may contain private dirty work. <code>release/github-v1</code> is the publication candidate/ref; Gate 4 uses an isolated candidate and does not advance the release ref. |
 | 4 | How do I clone it? | PARTIAL | Use step 1 of [developer setup](../operations/developer_setup.md). The root publication URL is not configured in the audited local checkout and must be supplied by the publication maintainer. |
 | 5 | How do I initialize Hermes? | ANSWERED | Run the bounded <code>git submodule update --init --recursive --depth=1</code>, then <code>./scripts/bootstrap --hermes</code> or <code>./scripts/bootstrap --sources</code>; verify the manifest and license. |
@@ -130,10 +130,69 @@ external owner or maintainer input. There are no <code>MISSING</code> items.
 | 40 | What should I check before a Demo? | ANSWERED | Confirm branch/config/runtime ownership, <code>doctor</code>, status, exact ports/PIDs, LM Studio/model/GPU if production, fresh Android evidence if claiming <code>DEMO_READY</code>, and the acceptance checklist. |
 
 Handover result: <code>ANSWERED=35</code>,
-<code>PARTIAL=5</code>, <code>MISSING=0</code>. The five partial answers are
-explicit external handover dependencies, not undocumented knowledge: root
-publication URL, container/tool provisioning and unpinned versions, physical
-Android/device evidence, and maintainer-controlled release adoption/push.
+<code>PARTIAL=5</code>, <code>MISSING=0</code>. Each partial answer has an
+individual owner and future gate in the register below.
+
+## Partial handover register
+
+Each record identifies the fact that remains outside the portable repository
+contract and the action a student can take without guessing or changing the
+runtime boundary.
+
+### #4 — How do I clone it?
+
+- <code>QUESTION_NUMBER</code>: 4
+- <code>QUESTION</code>: How do I clone it?
+- <code>STATUS</code>: PARTIAL
+- <code>WHY_PARTIAL</code>: The audited local snapshot does not contain the root publication URL, and a URL cannot be inferred safely.
+- <code>MISSING_FACT</code>: The maintainer-designated public repository URL and any access requirement.
+- <code>OWNER</code>: Publication maintainer / repository owner.
+- <code>FUTURE_GATE</code>: Final GitHub publication gate.
+- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Request the maintainer URL, substitute it only for <code>TEMIAGENT_REPO_URL</code>, and never use a local checkout, file URL or Git alternate as the publication source.
+
+### #10 — What tools must be installed?
+
+- <code>QUESTION_NUMBER</code>: 10
+- <code>QUESTION</code>: What tools must be installed?
+- <code>STATUS</code>: PARTIAL
+- <code>WHY_PARTIAL</code>: The repository requires a designated container and host Docker support but does not own their provisioning.
+- <code>MISSING_FACT</code>: The approved container image, Docker host provisioning and installation source for the required container tools.
+- <code>OWNER</code>: AI6 container/infrastructure maintainer.
+- <code>FUTURE_GATE</code>: Gate 5 runtime/environment acceptance.
+- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Use the designated container and record <code>python3 --version</code>, <code>uv --version</code>, <code>git --version</code>, <code>bash --version</code> and <code>mosquitto -h</code>; do not add an ad-hoc host or image recipe.
+
+### #11 — Which versions matter?
+
+- <code>QUESTION_NUMBER</code>: 11
+- <code>QUESTION</code>: Which versions matter?
+- <code>STATUS</code>: PARTIAL
+- <code>WHY_PARTIAL</code>: Python floors and lockfiles are source-backed, but several host, container and provider versions remain unpinned.
+- <code>MISSING_FACT</code>: Approved versions or digests for uv, Git, Bash, Mosquitto, the container image, LM Studio and CUDA/driver software.
+- <code>OWNER</code>: AI6 environment maintainer.
+- <code>FUTURE_GATE</code>: Gate 5 runtime/environment acceptance.
+- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Use the checked-in lockfiles and record observed tool versions as evidence; do not invent minimums or update lockfiles to hide an environment gap.
+
+### #32 — Which tests require hardware?
+
+- <code>QUESTION_NUMBER</code>: 32
+- <code>QUESTION</code>: Which tests require hardware?
+- <code>STATUS</code>: PARTIAL
+- <code>WHY_PARTIAL</code>: Real Android/Temi sessions, physical playback, camera, microphone and device results cannot be verified by this repository alone.
+- <code>MISSING_FACT</code>: A fresh Android/Temi session with device observation and the corresponding command/result evidence.
+- <code>OWNER</code>: Temi Android/device integration owner.
+- <code>FUTURE_GATE</code>: Gate 5 runtime/environment acceptance.
+- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Run the hardware-free Bridge, backend, anomaly, tools and mock/fake checks, then request a separately authorized device acceptance record; do not label software evidence as live hardware evidence.
+
+### #38 — How do I make a release?
+
+- <code>QUESTION_NUMBER</code>: 38
+- <code>QUESTION</code>: How do I make a release?
+- <code>STATUS</code>: PARTIAL
+- <code>WHY_PARTIAL</code>: Release-ref adoption and root publication require maintainer authorization and a selected publication target.
+- <code>MISSING_FACT</code>: Approval to adopt the reviewed release ref and the authorized root GitHub remote/push target.
+- <code>OWNER</code>: Release maintainer / repository owner.
+- <code>FUTURE_GATE</code>: Final GitHub publication gate after maintainer review and authorization.
+- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Prepare an isolated candidate, run the required validation, and request review; do not modify <code>release/github-v1</code>, rewrite history or push.
 
 ## Release handover
 

@@ -15,11 +15,14 @@ maintainer input; it is deliberately not replaced with a guessed URL.
 
 ## Execution boundary and state labels
 
-Run project commands inside the designated container and from <code>/TemiAgent</code>:
+Run project commands inside the designated container. Generic fresh-clone steps
+use <code>REPO_ROOT</code> for the user-selected clone root. The canonical AI6
+deployment uses <code>REPO_ROOT=/TemiAgent</code>; that deployment-specific
+value is not required by the generic setup below.
 
 ~~~bash
 docker exec -it yiting.TemiAgent_gpu_all bash
-cd /TemiAgent
+# Set REPO_ROOT to the root of the fresh clone before running repository commands.
 ~~~
 
 The host owns Docker/container availability and the mount. The container owns
@@ -59,10 +62,11 @@ publication target:
 
 ~~~bash
 export TEMIAGENT_REPO_URL='<maintainer-provided-root-repository-url>'
-export TEMIAGENT_CLONE_PARENT=/tmp/temiagent-student-gate4
+export TEMIAGENT_CLONE_PARENT='<user-selected-clone-parent>'
+export REPO_ROOT="$TEMIAGENT_CLONE_PARENT/TemiAgent"
 mkdir -p "$TEMIAGENT_CLONE_PARENT"
-git clone "$TEMIAGENT_REPO_URL" "$TEMIAGENT_CLONE_PARENT/TemiAgent"
-cd "$TEMIAGENT_CLONE_PARENT/TemiAgent"
+git clone "$TEMIAGENT_REPO_URL" "$REPO_ROOT"
+cd "$REPO_ROOT"
 ~~~
 
 Do not use a local checkout URL or Git alternate as a
@@ -149,11 +153,11 @@ Create the safe local newcomer profile:
 
 ~~~bash
 ./scripts/demo init-config
-stat -c '%a %U %n' /TemiAgent/.runtime/demo/demo.env
+stat -c '%a %U %n' "$REPO_ROOT/.runtime/demo/demo.env"
 ~~~
 
 This creates the ignored owner-only
-<code>/TemiAgent/.runtime/demo/demo.env</code> with mode <code>0600</code> and
+<code>$REPO_ROOT/.runtime/demo/demo.env</code> with mode <code>0600</code> and
 the private runtime root with owner-only directories. The default profile is
 <code>newcomer_mock</code>; its LM Studio, MQTT, resident, Android and Discord
 components are local test doubles and use isolated high ports. It does not
@@ -205,7 +209,7 @@ Run the source/dependency readiness check only after the preceding provisioning:
 
 ~~~bash
 ./scripts/bootstrap --check
-./scripts/demo --config /TemiAgent/.runtime/demo/demo.env --json doctor
+./scripts/demo --config "$REPO_ROOT/.runtime/demo/demo.env" --json doctor
 git submodule status --recursive
 ~~~
 
@@ -250,8 +254,8 @@ validate documentation.
 Use read-only evidence; do not infer readiness from a listening port alone:
 
 ~~~bash
-./scripts/demo --config /TemiAgent/.runtime/demo/demo.env --json doctor
-./scripts/demo --config /TemiAgent/.runtime/demo/demo.env --json status
+./scripts/demo --config "$REPO_ROOT/.runtime/demo/demo.env" --json doctor
+./scripts/demo --config "$REPO_ROOT/.runtime/demo/demo.env" --json status
 ~~~
 
 Before an authorized start, a newly initialized profile is normally not ready.

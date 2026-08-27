@@ -35,7 +35,7 @@
 - `temi_backend` legacy route 已完成實機路線驗證，適合作為快速展示備援。
 - Overview adapter 已調整為只處理 legacy ASR 與 camera frames，輸出 canonical ASR event 與三張影像 path；不再轉發 command。
 - HermesTemiBridge 已支援 ASR event validation、image path validation、Hermes JSON parsing、action validation、command publish、event dedup 與 result logging。
-- Bridge mock/unit/local E2E 在 container 中通過：Bridge unittest 33 tests、backend pytest 14 tests、root mock E2E `status: ok`。
+- HISTORICAL (2026-05-31): Bridge mock/unit/local E2E 在 container 中通過：Bridge unittest 33 tests、backend pytest 14 tests、root mock E2E `status: ok`。Current accepted test baselines are maintained in `docs/CURRENT_STATUS.md`。
 - Resident Hermes HTTP server 已支援多 skill preload，並可選擇開啟 Hermes memory/profile。
 - 三個 Temi care 核心 skills 與 `temi-discord-care-assistant` 入口 skill 已存在於 `hermes-agent/skills/temi-*`；mirror 同步於 `hermes-skills/`。
 - Discord/gateway 對話已補上 Temi 身份與 skill 路由文件：`/TemiAgent/.hermes.md`、`hermes-agent/docker/SOUL.md`、`hermes-agent/skills/temi-discord-care-assistant/`。

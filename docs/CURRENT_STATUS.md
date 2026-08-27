@@ -7,15 +7,18 @@ runtime honesty and publication blockers. It is not a runtime health endpoint an
 does not replace the runtime schemas, module READMEs or the
 [canonical Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md).
 
-## Gate 4 handover candidate
+## Gate 4.1 handover repair candidate
 
-Gate 4 documentation work is isolated in
-<code>/tmp/temiagent-worktrees/github-v1-handover-freeze</code> on branch
-<code>codex/github-v1-handover-freeze</code>, derived from
+The rejected Gate 4 documentation candidate is
+<code>d0e6a4ebe162363e58dcc3146d80d679151d2a75</code>, derived from
 <code>release/github-v1@d66a046395aed21712b00cba43d4ea1b2d9f23de</code>.
-The candidate changes documentation and documentation validation only. It does
-not advance <code>release/github-v1</code>, modify canonical <code>main</code>,
-operate services, publish MQTT or push.
+Gate 4.1 repairs its documentation-contract findings and restores the protected
+synthetic fixture to the publication-base bytes in the isolated
+<code>/tmp/temiagent-worktrees/github-v1-handover-contract-fix</code> worktree
+on branch <code>codex/github-v1-handover-contract-fix</code>. The repair changes
+documentation and that protected fixture only. It does not advance
+<code>release/github-v1</code>, modify canonical <code>main</code>, operate
+services, publish MQTT or push.
 
 ## Snapshot
 
@@ -30,10 +33,10 @@ operate services, publish MQTT or push.
 | Service operation | No service was started, stopped or restarted for Gate 4. | Hardware and external-service state was left unchanged. |
 
 The canonical worktree contains pre-existing Gate 1A, synthetic-fixture and
-documentation changes. Gate 4 changes are isolated in
-`/tmp/temiagent-worktrees/github-v1-handover-freeze`; the candidate does not
-modify the canonical runtime or publication branch. A running MQTT status is
-reported only as the read-only Phase 0 observation.
+documentation changes. Gate 4.1 changes are isolated in
+`/tmp/temiagent-worktrees/github-v1-handover-contract-fix`; the repair
+candidate does not modify the canonical runtime or publication branch. A
+running MQTT status is reported only as the read-only Phase 0 observation.
 
 ## Canonical V1 flow and ownership
 
@@ -160,12 +163,12 @@ remains hardware-free and did not start a long-running service:
 |---|---|
 | `./scripts/bootstrap --check` | PASS |
 | `cd hermes_temi_bridge && uv run --locked --offline python -m unittest discover -s tests` | 166 PASS |
-| `cd temi_backend && uv run --locked --offline pytest` | 22 passed |
+| `cd temi_backend && uv run --locked --offline pytest` | HISTORICAL Gate 1B evidence; the current accepted baseline is 25/25 PASS in the Gate 4.1 section below. |
 | `cd anomaly_detection && uv run --locked --offline python -m unittest discover -s tests` | 34 PASS |
-| `python3 -m unittest discover -s tools/tests` | 62 PASS |
+| `python3 -m unittest discover -s tools/tests` | HISTORICAL Gate 1B evidence; the current accepted baseline is 133/133 PASS in the Gate 4.1 section below. |
 | `python3 tools/e2e_test_runner.py` | PASS; `status:ok` with mock command topic |
 | `python3 tools/media_v11_fake_e2e.py` | PASS; 4 request traces, 7 result traces, cached replay confirmed |
-| `python3 tools/validate_documentation.py` | PASS; 71 first-party Markdown files and 8 schema mappings |
+| `python3 tools/validate_documentation.py` | HISTORICAL Gate 1B evidence; the current inventory definition and count are maintained in <code>DOCUMENT_AUTHORITY_MAP.md</code>. |
 | Live Temi/Android/MQTT/LM Studio/GPU/Discord/perception gates | SKIPPED / LIVE_NOT_VERIFIED |
 
 No service was started merely to validate documentation.
@@ -184,11 +187,11 @@ full Gate 3 run was performed.
 |---|---|
 | `python3 -m py_compile tools/bounded_process.py tools/run_bounded_process.py tools/verify_hermes_license.py tools/tests/test_bounded_process.py tools/tests/test_hermes_license.py tools/tests/test_external_dependency_publication.py` | PASS |
 | `python3 -m unittest tools.tests.test_bounded_process tools.tests.test_hermes_license tools.tests.test_external_dependency_publication tools.tests.test_validate_documentation` | PASS; 15 tests |
-| `python3 tools/validate_documentation.py` | PASS; 71 first-party Markdown files and 8 schema mappings |
+| `python3 tools/validate_documentation.py` | HISTORICAL Gate 3.3 evidence; the current inventory definition and count are maintained in <code>DOCUMENT_AUTHORITY_MAP.md</code>. |
 | `bash -n scripts/bootstrap scripts/bootstrap_hermes.sh scripts/bootstrap_llama_cpp.sh` | PASS |
 | `git diff --check 2efcd7bc2668dafcbccc5461b9bc4ac275a2606d..HEAD` | PASS |
 | Private-LAN, private-path/embedded-URL, secret, generated-source, pose-path/blob and large-object scans | PASS; 0 private-LAN defaults, no current pose path/blob, no tracked generated checkouts, no blobs >= 50 MiB |
-| `python3 -m unittest discover -s tools/tests` | BLOCKED; 119/120 tests completed, one pre-existing production-doctor fixture requires the intentionally absent generated `hermes-agent/` checkout; the Gate 3.3 focused matrix above is green |
+| `python3 -m unittest discover -s tools/tests` | HISTORICAL Gate 3.3 environment evidence; the incomplete environment was superseded by the reconstructed 133/133 Gate 3.4 evidence and the current Gate 4.1 run below. |
 | Two independent `git clone --no-local` publication clones, each running `./scripts/bootstrap --llama-cpp` twice | PASS; both roots clean, llama HEAD `0b7154066e8544ed88d92ae2132cc1e055cf6304`, tree `1020a771795f406b8891d18ee607b4da3783fa7f` |
 
 ## Gate 3.4 formal Hermes submodule evidence
@@ -233,11 +236,30 @@ carried forward because Gate 3.4 changed no llama reconstruction path or shared
 bootstrap helper; no runtime service, MQTT publish/subscribe, model inference,
 Android operation or hardware operation was performed.
 
+## Gate 4.1 repair verification
+
+The current repair candidate is verified with the same source-backed,
+hardware-free baseline used for Gate 4. The test counts below are current
+candidate evidence; historical snapshots above are not current baselines.
+
+| Check | Result |
+|---|---|
+| <code>python3 tools/validate_documentation.py</code> | PASS; 74 active first-party Markdown documents and 8 schema mappings |
+| <code>python3 -m unittest discover -s tools/tests</code> | PASS; 133/133 |
+| <code>cd hermes_temi_bridge && uv run --locked --offline python -m unittest discover -s tests</code> | PASS; 166/166 |
+| <code>cd temi_backend && uv run --locked --offline pytest</code> | PASS; 25/25 |
+| External dependency, Hermes submodule and license tests | PASS; 23/23 |
+| Shell syntax, Python compilation and <code>git diff --check</code> | PASS |
+| Live Temi/Android/MQTT/LM Studio/GPU/Discord/perception gates | SKIPPED; not authorized by Gate 4.1 |
+
+No service was started, stopped or restarted for Gate 4.1. No MQTT message was
+published or subscribed.
+
 ## Gate 4 disposition
 
 Gate 3 external dependency reproducibility is closed PASS and its adopted chain
 is at <code>release/github-v1=d66a046395aed21712b00cba43d4ea1b2d9f23de</code>.
-Gate 4 leaves that ref unchanged and leaves the handover documentation in the
-isolated candidate for maintainer review. Real Android, Temi, broker, model/GPU,
-Discord and perception verification require their own authorized operational
-gate. Gate 4 performed no service operation, MQTT publication or root push.
+Gate 4 and Gate 4.1 leave that ref unchanged. Real Android, Temi, broker,
+model/GPU, Discord and perception verification require their own authorized
+operational gate. Gate 4.1 performed no service operation, MQTT publication or
+root push.
