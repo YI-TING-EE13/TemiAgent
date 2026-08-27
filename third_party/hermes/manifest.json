@@ -6,6 +6,8 @@
   "integration_branch": "temiagent/integration",
   "target_tree_sha": "968f1668a05fafd09461c17a835198421f14a48f",
   "contract_semantics": "PINNED_BASE_PLUS_PATCHED_WORKTREE",
+  "license_path": "LICENSE",
+  "license_status": "UNVERIFIED_PENDING_PUBLIC_FETCH",
   "required_paths": [
     "agent/context_compressor.py",
     "skills/temi-robot-control/SKILL.md",

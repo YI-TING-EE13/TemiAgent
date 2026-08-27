@@ -12,7 +12,7 @@ if [[ "${1:---bootstrap}" != "--bootstrap" && "${1:---bootstrap}" != "--check" ]
 fi
 MODE="${1:---bootstrap}"
 
-for command in git python3 sha256sum timeout; do
+for command in git python3 sha256sum; do
   command -v "$command" >/dev/null || {
     echo "missing required command: $command" >&2
     exit 1
@@ -20,6 +20,14 @@ for command in git python3 sha256sum timeout; do
 done
 test -f "$MANIFEST" || {
   echo "missing Hermes reconstruction manifest: $MANIFEST" >&2
+  exit 1
+}
+test -f "$ROOT/tools/run_bounded_process.py" || {
+  echo "missing bounded process helper: $ROOT/tools/run_bounded_process.py" >&2
+  exit 1
+}
+test -f "$ROOT/tools/verify_hermes_license.py" || {
+  echo "missing Hermes license verifier: $ROOT/tools/verify_hermes_license.py" >&2
   exit 1
 }
 
@@ -37,6 +45,8 @@ required = (
     "integration_branch",
     "target_tree_sha",
     "contract_semantics",
+    "license_path",
+    "license_status",
     "required_paths",
     "patches",
 )
@@ -50,6 +60,23 @@ if runtime_path.startswith("/") or ".." in runtime_path.split("/"):
     raise SystemExit("runtime_path must stay below the repository root")
 if manifest["contract_semantics"] != "PINNED_BASE_PLUS_PATCHED_WORKTREE":
     raise SystemExit("unsupported Hermes reconstruction contract semantics")
+license_path = manifest["license_path"]
+if (
+    not isinstance(license_path, str)
+    or not license_path
+    or license_path.startswith("/")
+    or ".." in license_path.split("/")
+):
+    raise SystemExit("manifest license_path must stay below the runtime checkout")
+license_status = manifest["license_status"]
+if license_status not in ("UNVERIFIED_PENDING_PUBLIC_FETCH", "VERIFIED"):
+    raise SystemExit("unsupported Hermes license_status")
+license_sha256 = manifest.get("license_sha256", "")
+if license_status == "VERIFIED" and not re.fullmatch(r"[0-9a-f]{64}", license_sha256):
+    raise SystemExit("verified Hermes manifest requires a lowercase license_sha256")
+license_blob_sha = manifest.get("license_blob_sha", "")
+if license_blob_sha and not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", license_blob_sha):
+    raise SystemExit("manifest license_blob_sha must be a Git object ID")
 if not isinstance(manifest["required_paths"], list) or not manifest["required_paths"]:
     raise SystemExit("manifest required_paths must be a non-empty list")
 for required_path in manifest["required_paths"]:
@@ -91,12 +118,21 @@ RUNTIME_PATH="$ROOT/$RUNTIME_RELATIVE_PATH"
 MAX_FETCH_ATTEMPTS=2
 FETCH_RETRY_DELAY_SECONDS=1
 FETCH_TIMEOUT_SECONDS=20
+FETCH_KILL_GRACE_SECONDS=2
 
 fetch_pinned_base() {
   local attempt fetch_output fetch_status
   for ((attempt = 1; attempt <= MAX_FETCH_ATTEMPTS; attempt++)); do
     fetch_status=0
-    fetch_output="$(timeout --signal=TERM "${FETCH_TIMEOUT_SECONDS}s" git -C "$RUNTIME_PATH" fetch --no-tags origin "$BASE_COMMIT" 2>&1)" || fetch_status=$?
+    fetch_output="$(
+      python3 "$ROOT/tools/run_bounded_process.py" \
+        --timeout-seconds "$FETCH_TIMEOUT_SECONDS" \
+        --kill-grace-seconds "$FETCH_KILL_GRACE_SECONDS" \
+        -- git -C "$RUNTIME_PATH" fetch --no-tags origin "$BASE_COMMIT" 2>&1
+    )" || fetch_status=$?
+    if [[ "$fetch_output" == *PROCESS_HARD_KILL:* ]]; then
+      echo "HERMES_FETCH_PROCESS_HARD_KILL: task-owned fetch process group required KILL after TERM" >&2
+    fi
     if ((fetch_status == 0)); then
       printf "%s\n" "$fetch_output"
       return 0
@@ -169,6 +205,33 @@ verify_required_paths() {
   done
 }
 
+verify_hermes_license() {
+  local verifier_mode="${1-}"
+  local -a verifier_args=(
+    --manifest "$MANIFEST"
+    --checkout "$RUNTIME_PATH"
+    --base-commit "$BASE_COMMIT"
+  )
+  if [[ "$verifier_mode" == "--base-only" ]]; then
+    verifier_args+=(--base-only)
+  elif [[ -n "$verifier_mode" ]]; then
+    echo "invalid Hermes license verifier mode: $verifier_mode" >&2
+    return 2
+  fi
+  python3 "$ROOT/tools/verify_hermes_license.py" "${verifier_args[@]}"
+}
+
+ensure_pinned_base() {
+  if ! git -C "$RUNTIME_PATH" cat-file -e "$BASE_COMMIT^{commit}" 2>/dev/null; then
+    [[ "$MODE" == "--bootstrap" ]] || {
+      echo "Hermes pinned base commit is absent; run without --check to reconstruct it" >&2
+      return 1
+    }
+    fetch_pinned_base
+  fi
+  git -C "$RUNTIME_PATH" cat-file -e "$BASE_COMMIT^{commit}"
+}
+
 if [[ ! -e "$RUNTIME_PATH/.git" ]]; then
   if [[ -e "$RUNTIME_PATH" ]] && [[ -n "$(find "$RUNTIME_PATH" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
     echo "refusing to replace a non-empty non-Git Hermes path: $RUNTIME_PATH" >&2
@@ -197,26 +260,22 @@ if [[ "$(git -C "$RUNTIME_PATH" remote get-url origin)" != "$UPSTREAM_URL" ]]; t
   exit 1
 fi
 
+ensure_pinned_base
 if [[ -n "$EXPECTED_BASE_TREE" ]]; then
-  if ! git -C "$RUNTIME_PATH" cat-file -e "$BASE_COMMIT^{commit}" 2>/dev/null; then
-    [[ "$MODE" == "--bootstrap" ]] || {
-      echo "Hermes pinned base commit is absent; run without --check to reconstruct it" >&2
-      exit 1
-    }
-    fetch_pinned_base
-  fi
   ACTUAL_BASE_TREE="$(git -C "$RUNTIME_PATH" show -s --format=%T "$BASE_COMMIT")"
   if [[ "$ACTUAL_BASE_TREE" != "$EXPECTED_BASE_TREE" ]]; then
     echo "Hermes pinned base tree does not match the reviewed manifest" >&2
     exit 1
   fi
 fi
+verify_hermes_license --base-only
 
 CURRENT_TREE=""
 if git -C "$RUNTIME_PATH" rev-parse --verify HEAD^{tree} >/dev/null 2>&1; then
   CURRENT_TREE="$(git -C "$RUNTIME_PATH" rev-parse HEAD^{tree})"
 fi
 if [[ "$CURRENT_TREE" == "$EXPECTED_TREE" ]]; then
+  verify_hermes_license
   verify_required_paths
   echo "bootstrap_hermes: PASS (already reconstructed)"
   exit 0
@@ -227,10 +286,6 @@ fi
   exit 1
 }
 
-if ! git -C "$RUNTIME_PATH" cat-file -e "$BASE_COMMIT^{commit}" 2>/dev/null; then
-  fetch_pinned_base
-fi
-git -C "$RUNTIME_PATH" cat-file -e "$BASE_COMMIT^{commit}"
 git -C "$RUNTIME_PATH" switch --detach "$BASE_COMMIT"
 git -C "$RUNTIME_PATH" switch -C "$INTEGRATION_BRANCH" "$BASE_COMMIT"
 git -C "$RUNTIME_PATH" am --3way "${patch_files[@]}"
@@ -243,6 +298,7 @@ if [[ -n "$(git -C "$RUNTIME_PATH" status --porcelain)" ]]; then
   echo "Hermes reconstruction unexpectedly left a dirty checkout" >&2
   exit 1
 fi
+verify_hermes_license
 verify_required_paths
 
 echo "bootstrap_hermes: PASS (reconstructed)"
