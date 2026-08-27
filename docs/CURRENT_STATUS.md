@@ -1,6 +1,6 @@
 # TemiAgent Current Status
 
-狀態：CURRENT；governance snapshot：2026-08-26。
+狀態：CURRENT；governance snapshot：2026-08-27。
 
 This page is the maintained status snapshot for implementation, verification,
 runtime honesty and publication blockers. It is not a runtime health endpoint and
@@ -161,6 +161,24 @@ No service was started merely to validate documentation.
 The bootstrap row above is historical Gate 1B evidence, not fresh Gate 3.3
 Hermes evidence. Gate 3.3 does not claim a Hermes reconstruction while the
 manifest license status remains `UNVERIFIED_PENDING_PUBLIC_FETCH`.
+
+## Gate 3.3 standards-remediation evidence
+
+The following checks were run in the isolated candidate at
+`43c0c7c18a4b119f807b5dd04ef197272e43bbdd` (before this documentation-only
+evidence update). No Hermes public fetch, service operation, MQTT publish, or
+full Gate 3 run was performed.
+
+| Command or evidence | Result |
+|---|---|
+| `python3 -m py_compile tools/bounded_process.py tools/run_bounded_process.py tools/verify_hermes_license.py tools/tests/test_bounded_process.py tools/tests/test_hermes_license.py tools/tests/test_external_dependency_publication.py` | PASS |
+| `python3 -m unittest tools.tests.test_bounded_process tools.tests.test_hermes_license tools.tests.test_external_dependency_publication tools.tests.test_validate_documentation` | PASS; 15 tests |
+| `python3 tools/validate_documentation.py` | PASS; 71 first-party Markdown files and 8 schema mappings |
+| `bash -n scripts/bootstrap scripts/bootstrap_hermes.sh scripts/bootstrap_llama_cpp.sh` | PASS |
+| `git diff --check 2efcd7bc2668dafcbccc5461b9bc4ac275a2606d..HEAD` | PASS |
+| Private-LAN, private-path/embedded-URL, secret, generated-source, pose-path/blob and large-object scans | PASS; 0 private-LAN defaults, no current pose path/blob, no tracked generated checkouts, no blobs >= 50 MiB |
+| `python3 -m unittest discover -s tools/tests` | BLOCKED; 119/120 tests completed, one pre-existing production-doctor fixture requires the intentionally absent generated `hermes-agent/` checkout; the Gate 3.3 focused matrix above is green |
+| Two independent `git clone --no-local` publication clones, each running `./scripts/bootstrap --llama-cpp` twice | PASS; both roots clean, llama HEAD `0b7154066e8544ed88d92ae2132cc1e055cf6304`, tree `1020a771795f406b8891d18ee607b4da3783fa7f` |
 
 ## Next gate
 
