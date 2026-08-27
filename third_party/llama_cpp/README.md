@@ -5,9 +5,11 @@ checkout. It is deliberately ignored by TemiAgent and is not a Git submodule.
 The reviewed upstream URL, exact commit, checkout path, and expected tree are
 recorded in `manifest.json`.
 
-From a clean TemiAgent clone, reconstruct all external source checkouts with:
+From a clean TemiAgent clone, initialize the formal Hermes submodule using the
+Hermes handover procedure, then reconstruct all external source checkouts with:
 
 ```bash
+python3 tools/run_bounded_process.py --timeout-seconds 120 --kill-grace-seconds 2 -- git submodule update --init --recursive --depth=1
 ./scripts/bootstrap --sources
 ```
 

@@ -58,7 +58,7 @@ The detailed module map and payload narrative are in [project_overview.md](docs/
 | Module | Responsibility | Entry point | README | Verification |
 |---|---|---|---|---|
 | `hermes_temi_bridge/` | Canonical safety boundary and command dispatcher | `hermes-temi-bridge` | [README](hermes_temi_bridge/README.md) | `uv run python -m unittest discover -s tests` |
-| `hermes-agent/` | External nested Hermes runtime reconstructed from public base plus tracked patches | `tools/hermes_resident_server.py` for Temi Demo | [Bootstrap overlay](third_party/hermes/README.md) | Bootstrap and Bridge/resident integration checks |
+| `hermes-agent/` | Formal Hermes submodule pinned to the team fork; bootstrap applies the tracked Temi overlay in its worktree | `tools/hermes_resident_server.py` for Temi Demo | [External dependency contract](third_party/hermes/README.md) | Submodule, bootstrap and Bridge/resident integration checks |
 | `hermes-skills/` | Reviewable mirror of Temi-specific Hermes skills | `SKILL.md` files | [README](hermes-skills/README.md) | Mirror diff and skill validators |
 | `temi_backend/` | Verified legacy ASR, video and VLM route | `uv run temi-backend` | [README](temi_backend/README.md) | `uv run pytest` |
 | `anomaly_detection/` | Experimental stream viewer and abnormal-event producer | `temi_action_viewer.py` | [README](anomaly_detection/README.md) | Module tests or documented manual QA |
@@ -136,6 +136,10 @@ owner-only permissions and never asks for a Discord credential.
 
 ```bash
 cd /TemiAgent
+python3 tools/run_bounded_process.py \
+  --timeout-seconds 120 \
+  --kill-grace-seconds 2 \
+  -- git submodule update --init --recursive --depth=1
 ./scripts/bootstrap --sources
 ./scripts/bootstrap --check
 ./scripts/demo init-config
@@ -163,15 +167,16 @@ cd /TemiAgent
 `start` and `stop` manage only services whose private config sets
 `<SERVICE>_OWNERSHIP=managed`; external ownership is health-checked but never
 stopped. The checked-in [resource manifest](config/demo_resources.json) lists
-the logical media and skill assets. From a clean clone, run
-`./scripts/bootstrap --sources` once to reconstruct the reviewed Hermes overlay
-and the pinned optional llama.cpp source checkout from public upstream. Run
-`./scripts/bootstrap --check` only after the documented dependency environments
-have been provisioned. Neither command starts services or creates credentials.
-The Hermes manifest and patch series provide technical reconstruction only;
-`AGENTS.md` still requires a team-accessible Hermes fork or remote, the pinned
-commit, a formal Git submodule URL and clean-clone submodule verification before
-root publication or handover can be called ready.
+the logical media and skill assets. From a clean clone, initialize the formal
+Hermes submodule with the bounded command above, then run
+`./scripts/bootstrap --sources` once. Hermes resolves only the team fork at the
+pinned base commit; the bootstrap validates the submodule and applies the nine
+root-owned patches. The command then reconstructs the independent optional
+llama.cpp source checkout from its public upstream pin. Run `./scripts/bootstrap
+--check` only after the documented dependency environments have been
+provisioned. Neither command starts services or creates credentials. See
+[`third_party/hermes/README.md`](third_party/hermes/README.md) for the expected
+base/final trees, license check, idempotency behavior and failure boundary.
 `docker-compose.yml` is an optional secondary/development configuration; it is
 not a parallel production entrypoint and is not the canonical lifecycle.
 

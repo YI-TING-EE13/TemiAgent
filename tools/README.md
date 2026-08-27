@@ -38,23 +38,25 @@
 | `bounded_process.py` | 將單一外部命令放入 task-owned process group，於逾時後以 TERM/KILL 和 bounded reap 清理。 |
 | `run_bounded_process.py` | `bounded_process.py` 的 CLI wrapper；將逾時映射為 `124` 並保留安全的 cleanup markers。 |
 | `verify_hermes_license.py` | 驗證 Hermes manifest 宣告的 license identity 屬於 pinned base，並在 checkout 中保持一致；未驗證狀態 fail closed。 |
+| `verify_hermes_submodule.py` | 驗證 `.gitmodules`、root gitlink、team remote、pinned base/tree、patch hashes、final tree、dirty state 與 Git alternates。 |
 
 ### External dependency bootstrap
 
-`scripts/bootstrap_hermes.sh` 是 Hermes technical reconstruction 的唯一
-bootstrap owner。每次 public fetch 最多兩次、每次 20 秒，逾時後只對該次
-命令建立的 process group 發 TERM，等待兩秒後才對同一 group 發 KILL，並做
-bounded reap；`PUBLIC_UPSTREAM_RATE_LIMITED`、`PUBLIC_UPSTREAM_TIMEOUT` 與其他
-fetch failure 會保留可恢復的 Git checkout，且不使用 local checkout、cache 或
-file URL fallback。這條路不啟動任何服務。
+`git submodule update --init --recursive` 是 Hermes 唯一的 source-acquisition
+step；它必須從 `.gitmodules` 的 team remote 初始化 `hermes-agent`。接著
+`scripts/bootstrap_hermes.sh` 是 Hermes patch reconstruction 的唯一 owner。
+它以 bounded Git reads 驗證 `.gitmodules`、root gitlink、exact pinned base/tree、
+license、patch hashes 和 alternates，然後只在 pinned base 上套用 `0001`–`0009`。
+它不執行 clone/fetch，不使用 local checkout、cache、file URL 或 alternates
+fallback，也不啟動任何服務。第二次 `./scripts/bootstrap --hermes` 只驗證
+已重建的 final tree。
 
-Hermes `manifest.json` 必須有 `license_path` 與明確的 `license_status`。目前
-為 `UNVERIFIED_PENDING_PUBLIC_FETCH`，所以
-`verify_hermes_license.py` 會以 `HERMES_LICENSE_UNVERIFIED` fail closed；只有
-實際取得 pinned base 並獨立確認後，才可填入 `license_sha256`（及可選的
-`license_blob_sha`）。技術重建能力不等於 publication/handover readiness；
-`AGENTS.md` 仍要求 team-accessible Hermes fork 或 remote、pinned commit、
-formal Git submodule URL，以及 clean-clone submodule verification。
+Hermes `manifest.json` records the original upstream URL, team remote, submodule
+path/URL, base/final trees, patch count and verified license identity.
+`verify_hermes_license.py` compares the declared license content with the pinned
+Git object and the checked-out file. If submodule initialization cannot reach the
+team remote, retain the named failure and stop; do not silently use the original
+upstream.
 
 ## 常用流程
 

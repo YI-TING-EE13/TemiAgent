@@ -18,6 +18,10 @@ values.
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
 cd /TemiAgent
+python3 tools/run_bounded_process.py \
+  --timeout-seconds 120 \
+  --kill-grace-seconds 2 \
+  -- git submodule update --init --recursive --depth=1
 ./scripts/bootstrap --sources
 ./scripts/demo init-config
 ./scripts/demo doctor

@@ -62,7 +62,7 @@ authoritative when any prose conflicts with them.
 | Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes the Bridge-backed software-only newcomer acceptance. Hardware, Android, GPU and Discord remain external gates. |
 | Bridge-owned abnormal alert, follow-up, and Demo injection | [Immediate abnormal-care flow](operations/immediate_abnormal_care_flow.md) | Bridge owner; formal injector is synthetic-only and real Discord remains an authorization-gated external path. |
 | Module commands and artifacts | Each module README in the root module index | Owning module; do not infer contracts from a README alone. |
-| External source bootstrap | [`third_party/hermes/`](../third_party/hermes/README.md) and [`third_party/llama_cpp/`](../third_party/llama_cpp/README.md) | Hermes and llama.cpp are external/generated dependencies reconstructed from manifests; neither is root source or a current root submodule. |
+| External source bootstrap | [`third_party/hermes/`](../third_party/hermes/README.md) and [`third_party/llama_cpp/`](../third_party/llama_cpp/README.md) | Hermes is a formal team-remote submodule plus root-owned patches; llama.cpp remains an ignored generated checkout reconstructed from its manifest. |
 | Final Demo release reconciliation | [2026-07-31 consolidation record](project/final_demo_release_consolidation_20260731.md) | Release owner; retained worktree commits, owner disposition, and clean-clone delivery boundary. |
 
 ## Architecture
@@ -131,15 +131,18 @@ external or generated, and what is local runtime state.
 The publication boundary includes reviewed source, contracts, tests, configuration
 templates and synthetic fixtures. It excludes real care or user data, runtime logs and
 images, credentials, model caches, downloaded weights, recordings, and owner-only
-`.runtime/` state. Models are not implied by a clean clone. `third_party/hermes/` and
-`third_party/llama_cpp/` describe external/generated source reconstruction; neither is
-TemiAgent root source or a current root submodule. `計劃書/` is research/reference
+`.runtime/` state. Models are not implied by a clean clone. `third_party/hermes/`
+records the original upstream, team remote, formal submodule pin, license
+identity and root-owned patch series. `hermes-agent/` is the external submodule
+worktree rather than TemiAgent root source; `third_party/llama_cpp/` still
+describes an ignored generated checkout. `計劃書/` is research/reference
 material, not runtime source.
 
-For Hermes, the manifest and patch series are technical reconstruction inputs
-only. Root publication or handover also requires the team-accessible remote,
-pinned commit, formal Git submodule URL and clean-clone submodule verification
-required by `AGENTS.md`.
+For Hermes, initialize the root submodule from the team remote and run the
+documented bootstrap to apply patches `0001`–`0009`. The final patched tree is
+verified by content identity; generated local submodule commit IDs are not
+dependency authority. If the team remote is unavailable, stop without falling
+back to the original upstream, a local checkout, a file URL or Git alternates.
 
 ## Schemas
 

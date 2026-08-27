@@ -15,13 +15,19 @@ another command vocabulary.
 
 Run every project operation in the designated container, from `/TemiAgent`.
 The source bind mount must resolve to the approved canonical workspace.
-`hermes-agent` remains an upstream checkout; the reviewed Temi overlay is
-reconstructed from its public base plus tracked patches before any Demo service
+`hermes-agent` is the formal submodule pinned to the team-controlled Hermes
+fork. The reviewed Temi overlay is reconstructed in that submodule worktree
+from the pinned base plus the nine root-owned patches before any Demo service
 starts.
 
 ```bash
 cd /TemiAgent
-# Required external-source reconstruction for a clean clone; no dependency install.
+# Required bounded submodule initialization for a clean clone.
+python3 tools/run_bounded_process.py \
+  --timeout-seconds 120 \
+  --kill-grace-seconds 2 \
+  -- git submodule update --init --recursive --depth=1
+# Required external-source reconstruction; no dependency install.
 ./scripts/bootstrap --sources
 # Run only after the documented Hermes and module environments exist:
 ./scripts/bootstrap --check
@@ -29,23 +35,25 @@ cd /TemiAgent
 ./scripts/bootstrap --sync
 ```
 
-`--sources` is the clean-clone source-reconstruction step. It initializes the
-independent Hermes checkout, fetches its public upstream base, verifies the
-tracked patch SHA-256 values, creates the local-only `temiagent/integration`
-branch, and verifies the expected tree hash. It also reconstructs the optional
-llama.cpp checkout at the exact public upstream commit recorded in
+`git submodule update --init --recursive` is the only Hermes source-acquisition
+step. It must initialize `hermes-agent` from the team URL recorded in
+`.gitmodules` and the root gitlink must resolve to the pinned base commit.
+`--sources` then verifies the formal submodule, verifies the tracked patch
+SHA-256 values, creates the local-only `temiagent/integration` branch, and
+verifies the expected patched tree. It also reconstructs the optional llama.cpp
+checkout at the exact public upstream commit recorded in
 [`third_party/llama_cpp/manifest.json`](../../third_party/llama_cpp/manifest.json).
 It starts no service, installs no dependency, downloads no model, and does not
 build `llama-server`. `--hermes` and `--llama-cpp` remain focused source-only
 commands. `--check` makes no credentials, starts no service, and changes no
 runtime state, but it is a readiness gate that requires the documented Hermes
 and module environments to already exist. `--sync` uses each existing project's
-`uv sync --frozen`; it does not update lockfiles. Both generated checkouts are
-ignored external dependencies. Their manifests define technical
-reconstruction, but Hermes root publication/handover additionally requires the
-`AGENTS.md` team-accessible fork or remote, pinned commit, formal Git submodule
-URL and clean-clone submodule verification. This candidate has not satisfied
-that ownership gate.
+`uv sync --frozen`; it does not update lockfiles. The Hermes submodule remains
+formally tracked at the base gitlink while its generated patched worktree is
+local state; a post-bootstrap ` m hermes-agent` status line is expected. The
+llama.cpp checkout remains ignored. If the team remote cannot be reached, retain
+the submodule failure and stop; no original-upstream, local-checkout, file-URL,
+cache or alternate-object fallback is allowed.
 
 ## Private configuration and runtime data
 

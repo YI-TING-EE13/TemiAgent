@@ -221,7 +221,15 @@ Before editing, record branch, HEAD and `git status --short`. After editing, ins
 
 Do not commit, push, merge, rebase, reset, clean or tag unless the user explicitly requests that Git action. A dirty tree belongs to the user; preserve unrelated changes and identify pre-existing changes separately from task changes.
 
-`hermes-agent/` is an upstream nested Git repository recorded by the root repository as a gitlink. The currently pinned TemiAgent integration commit exists only in the local checkout. Before the first root-repository publication, a maintainer MUST create a team-accessible Hermes fork or remote, push the pinned commit, configure the formal submodule URL, and verify `git submodule update --init --recursive` from a clean clone. Until that clean-clone check passes, the root repository MUST NOT be described as fully reproducible outside this workspace.
+`hermes-agent/` is an external Git repository recorded by the root repository as
+a formal submodule. The root gitlink pins the verified team-controlled base
+commit; Temi-specific integration remains in the root repository's ordered
+patch series and is applied in the submodule worktree. Before the first
+root-repository publication, a maintainer MUST use a team-accessible Hermes
+fork or remote containing the pinned commit, configure the formal submodule URL,
+and verify `git submodule update --init --recursive` from a clean clone. Until
+that clean-clone check passes, the root repository MUST NOT be described as
+fully reproducible outside this workspace.
 
 The final report MUST include:
 

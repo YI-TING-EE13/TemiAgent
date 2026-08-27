@@ -12,17 +12,18 @@ does not replace the runtime schemas, module READMEs or the
 | Item | Snapshot | Meaning |
 |---|---|---|
 | Project root | `/TemiAgent` in `yiting.TemiAgent_gpu_all` | Canonical project command boundary. |
-| Root branch | `main` | No branch operation was performed in this gate. |
-| Root HEAD | `ff37462ca393993b0cf2d42384e474649b463e50` | HEAD is unchanged during Gate 1B. |
-| Configured root remotes | None in this local snapshot | Publication still needs a maintainer-owned remote decision. |
-| Lifecycle status | `BACKEND_NOT_READY`; `lifecycle_state=NO_OWNERSHIP` | Read-only `./scripts/demo --json status` found no owned run. |
-| Canonical listeners | None on `1234`, `1883`, `8010`, `8011`, `8080`, `8081`, or `8765` | No production listener claim is made. |
-| Service operation | No service was started, stopped or restarted for this documentation gate. | Hardware and external-service state was left unchanged. |
+| Root branch | `main` | Canonical root branch; Gate 3.4 work runs in an isolated candidate worktree. |
+| Root HEAD | `12aff3bfdfe526c17a25a2681aea2afad7112b33` | Canonical HEAD is unchanged during Gate 3.4. |
+| Configured root remotes | None in the canonical local snapshot | Root publication push was not performed; the separate Hermes team remote was independently verified. |
+| Lifecycle status | `RUNNING`; `reason=READY` | Read-only `./scripts/demo --json mqtt status` found the canonical MQTT broker healthy at `0.0.0.0:1883`. |
+| Canonical listeners | One listener on `0.0.0.0:1883` | This is a read-only runtime observation, not a Gate 3.4 service operation. |
+| Service operation | No service was started, stopped or restarted for Gate 3.4. | Hardware and external-service state was left unchanged. |
 
-The worktree contains intentional Gate 1A publication and synthetic-fixture changes
-plus this Gate 1B documentation work. `./scripts/demo doctor` reports a dirty
-repository for that reason; its runtime layout, ownership and path checks pass,
-while service-dependent checks remain unavailable. This is not evidence of a live Demo.
+The canonical worktree contains pre-existing Gate 1A, synthetic-fixture and
+documentation changes. Gate 3.4 changes are isolated in
+`/tmp/temiagent-worktrees/github-v1-hermes-submodule`; the candidate does not
+modify the canonical runtime or publication branch. A running MQTT status is
+reported only as the read-only Phase 0 observation.
 
 ## Canonical V1 flow and ownership
 
@@ -67,36 +68,32 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
 
 ## External, generated and optional artifacts
 
-- `third_party/hermes/` records the public upstream URL, base commit, ordered patch
-  series, required paths, target-tree metadata and the
-  `PINNED_BASE_PLUS_PATCHED_WORKTREE` contract used to reconstruct the nested
-  `hermes-agent/` checkout. The historical local evidence is branch
-  `temiagent/integration` at `126aa304cda027679fc84212925bbd5329ada20b`; it is
-  not publication source and does not replace a fresh public reconstruction.
-- The Hermes pinned commit is intended to be fetched directly from the public
-  upstream. Gate 3.1 candidate fetches were bounded and remained unavailable
-  because of upstream timeout and earlier HTTP 429 responses, so fresh Hermes
-  A/B evidence and the manifest base-tree value remain pending. The current
-  manifest also keeps Hermes license identity explicitly
-  `UNVERIFIED_PENDING_PUBLIC_FETCH`; the bootstrap verifier fails closed until
-  the pinned source is available and independently checked.
-- `HERMES_DEPENDENCY_GOVERNANCE: BLOCKED / NOT YET SATISFIED`. Per
-  `AGENTS.md`, a maintainer must provide a team-accessible Hermes fork or
-  remote containing the pinned commit, configure the formal Git submodule URL,
-  and verify `git submodule update --init --recursive` from a clean clone.
-  This candidate has no such team-accessible remote or formal submodule.
-  `HERMES_TEAM_FORK_REQUIRED: YES`; `HERMES_TEAM_FORK_AVAILABLE: NO`. The
-  formal submodule is required as part of this handover model, not an alternative
-  that removes the remote ownership requirement.
-- `hermes-agent/` is generated external checkout state, not TemiAgent root source,
-  vendored source or a current root submodule. Its nested working tree was left
-  unchanged; the technical reconstruction manifest does not by itself establish
-  ownership or handover readiness.
+- `third_party/hermes/` records the original upstream URL, the team-controlled
+  remote, the formal `hermes-agent/` submodule path and URL, the pinned base
+  commit/tree, the ordered nine-patch series, the expected final tree and the
+  verified license identity. The historical local integration commit
+  `126aa304cda027679fc84212925bbd5329ada20b` remains historical; generated local
+  final commit IDs are not dependency authority.
+- Gate 3.4 independently fetched the exact pinned object from
+  `https://github.com/YI-TING-EE13/hermes-agent.git` and verified base tree
+  `bda69c575e65725bf9264dd1288a63093cea3cc3`. The manifest records `VERIFIED`
+  MIT license identity for `LICENSE`; `tools/verify_hermes_license.py` checks
+  both the pinned Git blob and the checked-out file.
+- `HERMES_DEPENDENCY_GOVERNANCE: TEAM_REMOTE_AND_SUBMODULE_VERIFIED`. The root
+  gitlink stays at the pinned base while bootstrap applies patches `0001`–`0009`
+  in the submodule worktree and verifies final tree
+  `968f1668a05fafd09461c17a835198421f14a48f`. The clean-clone A/B acceptance is
+  recorded in the Gate 3.4 section below.
+- `hermes-agent/` is a formal external submodule, not TemiAgent root source or
+  vendored source. The root `hermes-skills/` directory remains a reviewable
+  mirror; resident Hermes reads the patched submodule skill paths. No manual
+  copy is used.
 - Gate 3.3 changed-bootstrap reachability is Hermes-only:
   `scripts/bootstrap_hermes.sh` invokes the new bounded-process and Hermes license
   tools, while `scripts/bootstrap_llama_cpp.sh` remains independent and invokes neither.
-  `LLAMA_REGRESSION_REQUIRED: YES` was retained conservatively. Two independent
-  final-candidate publication clones each passed first and second llama-only
+  `LLAMA_REGRESSION_REQUIRED: NO` for Gate 3.4 because no llama reconstruction
+  path or shared bootstrap helper changed. Gate 3.3 evidence is carried forward:
+  two independent final-candidate publication clones each passed first and second llama-only
   bootstraps with matching evidence: A and B both produced
   `HEAD=0b7154066e8544ed88d92ae2132cc1e055cf6304` and
   `TREE=1020a771795f406b8891d18ee607b4da3783fa7f`, with clean roots.
@@ -121,13 +118,9 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
    unresolved; do not publish or redistribute the local weight until confirmed.
 4. Local credential-bearing environment files are owner-only and excluded from Git;
    owner handling/rotation remains outside this documentation gate.
-5. The nested Hermes source needs successful public pinned fetches plus the
-   clean-clone reconstruction check before the root repository can be described
-   as fully reproducible outside this workspace. In addition, `AGENTS.md`
-   requires a team-accessible fork or remote containing the pinned commit, a
-   formal Git submodule URL, and clean-clone submodule verification. The current
-   technical reconstruction has none of those ownership artifacts:
-   `HERMES_DEPENDENCY_GOVERNANCE: BLOCKED / NOT YET SATISFIED`.
+5. The Hermes team remote and formal submodule contract are verified in the
+   Gate 3.4 candidate. Root publication remains a separate maintainer decision;
+   `release/github-v1` was not fast-forwarded and no root push was performed.
 
 ## Documentation authority
 
@@ -158,9 +151,8 @@ remains hardware-free and did not start a long-running service:
 
 No service was started merely to validate documentation.
 
-The bootstrap row above is historical Gate 1B evidence, not fresh Gate 3.3
-Hermes evidence. Gate 3.3 does not claim a Hermes reconstruction while the
-manifest license status remains `UNVERIFIED_PENDING_PUBLIC_FETCH`.
+The bootstrap row above is historical Gate 1B evidence and does not replace the
+fresh Gate 3.4 Hermes evidence below.
 
 ## Gate 3.3 standards-remediation evidence
 
@@ -180,9 +172,51 @@ full Gate 3 run was performed.
 | `python3 -m unittest discover -s tools/tests` | BLOCKED; 119/120 tests completed, one pre-existing production-doctor fixture requires the intentionally absent generated `hermes-agent/` checkout; the Gate 3.3 focused matrix above is green |
 | Two independent `git clone --no-local` publication clones, each running `./scripts/bootstrap --llama-cpp` twice | PASS; both roots clean, llama HEAD `0b7154066e8544ed88d92ae2132cc1e055cf6304`, tree `1020a771795f406b8891d18ee607b4da3783fa7f` |
 
+## Gate 3.4 formal Hermes submodule evidence
+
+Gate 3.4 was executed from the exact clean Gate 3.3 candidate at
+`6dae2429064c3af54af5b7004db9e1755412b2f1` in an isolated worktree. The team
+remote, exact pinned object, pinned base tree and pinned MIT license were fetched
+and independently verified before adoption:
+
+| Contract | Result |
+|---|---|
+| Team remote `https://github.com/YI-TING-EE13/hermes-agent.git` reachable | PASS; `git ls-remote` returned `5fc308a70719a83cccdbba4c0e39c23f5a8239d5` for `refs/heads/main`. |
+| Pinned commit `a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2` available from team remote | PASS |
+| Pinned base tree | PASS; `bda69c575e65725bf9264dd1288a63093cea3cc3` |
+| Pinned license | PASS; `LICENSE`, MIT, `Copyright (c) 2025 Nous Research`, verified Git blob and SHA-256. |
+| Formal root submodule | PASS; `.gitmodules` and the `hermes-agent` gitlink use the team URL and pinned base commit; no floating branch. |
+| Root-owned overlay | PASS; manifest order and SHA-256 values for patches `0001`–`0009` produce final tree `968f1668a05fafd09461c17a835198421f14a48f`. |
+
+The canonical setup is one bounded submodule initialization followed by
+`./scripts/bootstrap --hermes` (or `./scripts/bootstrap --sources` for the
+combined source flow). Bootstrap verifies the formal submodule and license, then
+applies the root-owned patches in the submodule worktree. It does not clone,
+fetch, use the original upstream, use a local checkout, use a file URL or use
+Git alternates. A second invocation is a final-tree verification no-op.
+
+Two independent Fresh A/B root clones were created with `git clone --no-local`
+from Gate 3.4 commit `551790e0553ce58490f2883b857cd246db20058c`. Each initialized
+the submodule from the team remote with the documented bounded depth-1 command,
+verified the same base commit/tree, reconstructed the nine patches, verified the
+same final tree and license, ran the setup a second time, and found all required
+Temi skills. A/B patch aggregate hash was
+`d793be62374675de58c51d3a4d9d62753026ddb56a8410de57d92352b5462698`; both
+submodules were clean and had no alternates. The generated local final commit
+IDs differed, as expected; content identity did not drift.
+
+The complete reconstructed-candidate command
+`python3 -m unittest discover -s tools/tests` passed `133/133`. This includes
+the lifecycle, external-dependency, Hermes license, formal-submodule, bootstrap,
+skills, documentation, shell/compile, root hardware-free mock-E2E and media fake
+checks. `git diff --check` passed. Gate 3.3's independent llama A/B evidence is
+carried forward because Gate 3.4 changed no llama reconstruction path or shared
+bootstrap helper; no runtime service, MQTT publish/subscribe, model inference,
+Android operation or hardware operation was performed.
+
 ## Next gate
 
-After maintainer approval, perform the separately scoped history/publication
-remediation. Then establish the team-accessible Hermes source boundary and run a
-clean-clone reconstruction check. Real Android, Temi, broker, model/GPU, Discord
-and perception verification require their own authorized operational gate.
+Gate 3.4 stops at this clean publication candidate. A separate maintainer review
+may adopt the Gate 3.1 + Gate 3.3 + Gate 3.4 chain; `release/github-v1` remains
+unchanged. Real Android, Temi, broker, model/GPU, Discord and perception
+verification require their own authorized operational gate.

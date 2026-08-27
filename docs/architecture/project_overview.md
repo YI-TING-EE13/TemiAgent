@@ -43,10 +43,11 @@ Gate snapshot classifies real Android, MQTT, model/GPU and live perception behav
 
 Canonical V1 includes the root scripts/tools, Bridge, legacy backend compatibility
 route, canonical configuration and schemas, MQTT configuration, reviewable skills,
-source manifests/patches, and documentation. The nested `hermes-agent/` checkout
-and generated `anomaly_detection/third_party/llama.cpp/` checkout are external
-dependencies reconstructed by bootstrap; neither is root source, vendored source or
-a current root submodule. `memory/` contains only reviewed synthetic fixtures;
+source manifests/patches, and documentation. The `hermes-agent/` formal submodule
+is pinned to the team remote; bootstrap applies the root-owned Temi patch series
+in its worktree. The generated `anomaly_detection/third_party/llama.cpp/` checkout
+remains an ignored external dependency reconstructed from its manifest. Neither
+dependency is root source or vendored source. `memory/` contains only reviewed synthetic fixtures;
 runtime state, real care data, images, logs and checkpoints are not publication data.
 
 ## Experimental / non-canonical local inference

@@ -32,10 +32,15 @@ Canonical config is the ignored, owner-only `/TemiAgent/.runtime/demo/demo.env`;
 credential. It defaults to the safe `newcomer_mock` profile. Use an explicit
 absolute `--config` only for a separately owned custom deployment.
 
-From a clean source checkout, reconstruct only the reviewed external source pins.
-This does not install dependencies or start a service:
+From a clean source checkout, initialize the formal Hermes submodule, then
+reconstruct the reviewed external source pins. These commands do not install
+dependencies or start a service:
 
 ```bash
+python3 tools/run_bounded_process.py \
+  --timeout-seconds 120 \
+  --kill-grace-seconds 2 \
+  -- git submodule update --init --recursive --depth=1
 ./scripts/bootstrap --sources
 ```
 

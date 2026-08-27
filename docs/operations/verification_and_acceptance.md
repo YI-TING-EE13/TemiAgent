@@ -63,10 +63,12 @@ cd /TemiAgent
 
 `--check` verifies the existing reconstructed source and provisioned dependency
 environment. It is not a clean-clone source reconstruction, does not install
-dependencies, and starts no service. For a clean source checkout, the separate
-operator/maintainer action is `./scripts/bootstrap --sources`; it reconstructs
-the reviewed external checkouts from manifests and must not be combined with an
-unreviewed nested-checkout change.
+dependencies, and starts no service. For a clean source checkout, initialize
+the formal Hermes submodule with the bounded `git submodule update --init
+--recursive` command documented in the Hermes handover, then run
+`./scripts/bootstrap --sources`. The command reconstructs the reviewed external
+checkouts from manifests and must not be combined with an unreviewed
+nested-checkout change.
 
 ## Software-only newcomer acceptance
 
@@ -83,6 +85,7 @@ repository URL only at clone time; do not place a private URL in the sample.
 git clone <canonical-repository-url> TemiAgent-newcomer
 cd TemiAgent-newcomer
 python3 tools/validate_documentation.py
+python3 tools/run_bounded_process.py --timeout-seconds 120 --kill-grace-seconds 2 -- git submodule update --init --recursive --depth=1
 ./scripts/bootstrap --sources
 ./scripts/bootstrap --sources
 
