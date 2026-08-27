@@ -123,12 +123,12 @@ if ! git -C "$RUNTIME_PATH" cat-file -e "$PINNED_COMMIT^{commit}" 2>/dev/null; t
 fi
 git -C "$RUNTIME_PATH" cat-file -e "$PINNED_COMMIT^{commit}"
 
-test -f "$LICENSE_PATH" || {
-  echo "llama.cpp pinned checkout is missing the declared license file: $LICENSE_RELATIVE_PATH" >&2
+LICENSE_BLOB_SHA=""
+if ! LICENSE_BLOB_SHA="$(git -C "$RUNTIME_PATH" show "$PINNED_COMMIT:$LICENSE_RELATIVE_PATH" | sha256sum | cut -d " " -f1)"; then
+  echo "llama.cpp pinned commit is missing the declared license file: $LICENSE_RELATIVE_PATH" >&2
   exit 1
-}
-ACTUAL_LICENSE_SHA="$(sha256sum "$LICENSE_PATH" | cut -d " " -f1)"
-if [[ "$ACTUAL_LICENSE_SHA" != "$EXPECTED_LICENSE_SHA" ]]; then
+fi
+if [[ "$LICENSE_BLOB_SHA" != "$EXPECTED_LICENSE_SHA" ]]; then
   echo "llama.cpp license checksum does not match the reviewed manifest" >&2
   exit 1
 fi
@@ -148,6 +148,15 @@ fi
 git -C "$RUNTIME_PATH" switch --detach "$PINNED_COMMIT"
 if [[ "$(git -C "$RUNTIME_PATH" rev-parse HEAD^{tree})" != "$EXPECTED_TREE" ]]; then
   echo "llama.cpp checkout tree does not match the reviewed pin" >&2
+  exit 1
+fi
+test -f "$LICENSE_PATH" || {
+  echo "llama.cpp checkout is missing the declared license file: $LICENSE_RELATIVE_PATH" >&2
+  exit 1
+}
+ACTUAL_LICENSE_SHA="$(sha256sum "$LICENSE_PATH" | cut -d " " -f1)"
+if [[ "$ACTUAL_LICENSE_SHA" != "$EXPECTED_LICENSE_SHA" ]]; then
+  echo "llama.cpp checked-out license does not match the reviewed manifest" >&2
   exit 1
 fi
 if [[ -n "$(git -C "$RUNTIME_PATH" status --porcelain)" ]]; then
