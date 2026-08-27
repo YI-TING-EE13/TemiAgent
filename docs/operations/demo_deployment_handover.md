@@ -41,8 +41,11 @@ commands. `--check` makes no credentials, starts no service, and changes no
 runtime state, but it is a readiness gate that requires the documented Hermes
 and module environments to already exist. `--sync` uses each existing project's
 `uv sync --frozen`; it does not update lockfiles. Both generated checkouts are
-ignored external dependencies; reproducibility is defined by their tracked
-manifests and the Hermes patch series, not by an unmapped gitlink.
+ignored external dependencies. Their manifests define technical
+reconstruction, but Hermes root publication/handover additionally requires the
+`AGENTS.md` team-accessible fork or remote, pinned commit, formal Git submodule
+URL and clean-clone submodule verification. This candidate has not satisfied
+that ownership gate.
 
 ## Private configuration and runtime data
 

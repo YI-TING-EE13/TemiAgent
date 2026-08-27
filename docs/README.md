@@ -136,6 +136,11 @@ images, credentials, model caches, downloaded weights, recordings, and owner-onl
 TemiAgent root source or a current root submodule. `計劃書/` is research/reference
 material, not runtime source.
 
+For Hermes, the manifest and patch series are technical reconstruction inputs
+only. Root publication or handover also requires the team-accessible remote,
+pinned commit, formal Git submodule URL and clean-clone submodule verification
+required by `AGENTS.md`.
+
 ## Schemas
 
 | Reader copy | Authoritative runtime schema | Status |

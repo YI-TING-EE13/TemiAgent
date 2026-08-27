@@ -168,6 +168,10 @@ the logical media and skill assets. From a clean clone, run
 and the pinned optional llama.cpp source checkout from public upstream. Run
 `./scripts/bootstrap --check` only after the documented dependency environments
 have been provisioned. Neither command starts services or creates credentials.
+The Hermes manifest and patch series provide technical reconstruction only;
+`AGENTS.md` still requires a team-accessible Hermes fork or remote, the pinned
+commit, a formal Git submodule URL and clean-clone submodule verification before
+root publication or handover can be called ready.
 `docker-compose.yml` is an optional secondary/development configuration; it is
 not a parallel production entrypoint and is not the canonical lifecycle.
 

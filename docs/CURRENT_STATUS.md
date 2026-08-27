@@ -76,11 +76,22 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
 - The Hermes pinned commit is intended to be fetched directly from the public
   upstream. Gate 3.1 candidate fetches were bounded and remained unavailable
   because of upstream timeout and earlier HTTP 429 responses, so fresh Hermes
-  A/B evidence and the manifest base-tree value remain pending. A team-accessible
-  fork is not required by this contract.
+  A/B evidence and the manifest base-tree value remain pending. The current
+  manifest also keeps Hermes license identity explicitly
+  `UNVERIFIED_PENDING_PUBLIC_FETCH`; the bootstrap verifier fails closed until
+  the pinned source is available and independently checked.
+- `HERMES_DEPENDENCY_GOVERNANCE: BLOCKED / NOT YET SATISFIED`. Per
+  `AGENTS.md`, a maintainer must provide a team-accessible Hermes fork or
+  remote containing the pinned commit, configure the formal Git submodule URL,
+  and verify `git submodule update --init --recursive` from a clean clone.
+  This candidate has no such team-accessible remote or formal submodule.
+  `HERMES_TEAM_FORK_REQUIRED: YES`; `HERMES_TEAM_FORK_AVAILABLE: NO`. The
+  formal submodule is required as part of this handover model, not an alternative
+  that removes the remote ownership requirement.
 - `hermes-agent/` is generated external checkout state, not TemiAgent root source,
   vendored source or a current root submodule. Its nested working tree was left
-  unchanged.
+  unchanged; the technical reconstruction manifest does not by itself establish
+  ownership or handover readiness.
 `third_party/llama_cpp/` holds the manifest and README; bootstrap materializes
   the generated external checkout at `anomaly_detection/third_party/llama.cpp/`.
   Neither path is TemiAgent root source, and the clone does not imply a model
@@ -104,8 +115,11 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
    owner handling/rotation remains outside this documentation gate.
 5. The nested Hermes source needs successful public pinned fetches plus the
    clean-clone reconstruction check before the root repository can be described
-   as fully reproducible outside this workspace. The contract does not require a
-   team-accessible fork; the current blocker is public upstream availability.
+   as fully reproducible outside this workspace. In addition, `AGENTS.md`
+   requires a team-accessible fork or remote containing the pinned commit, a
+   formal Git submodule URL, and clean-clone submodule verification. The current
+   technical reconstruction has none of those ownership artifacts:
+   `HERMES_DEPENDENCY_GOVERNANCE: BLOCKED / NOT YET SATISFIED`.
 
 ## Documentation authority
 
@@ -135,6 +149,10 @@ remains hardware-free and did not start a long-running service:
 | Live Temi/Android/MQTT/LM Studio/GPU/Discord/perception gates | SKIPPED / LIVE_NOT_VERIFIED |
 
 No service was started merely to validate documentation.
+
+The bootstrap row above is historical Gate 1B evidence, not fresh Gate 3.3
+Hermes evidence. Gate 3.3 does not claim a Hermes reconstruction while the
+manifest license status remains `UNVERIFIED_PENDING_PUBLIC_FETCH`.
 
 ## Next gate
 

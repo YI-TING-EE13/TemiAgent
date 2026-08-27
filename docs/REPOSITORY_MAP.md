@@ -26,11 +26,16 @@ publication material.
 
 | Area | Classification | Publication rule |
 |---|---|---|
-| `third_party/hermes/` | Manifest, patches and reconstruction instructions | External generated dependency; not root source, not vendored, not a current root submodule. |
-| `hermes-agent/` | Local nested checkout | External generated runtime state; nested source is not root-owned and must not be edited by this task. |
+| `third_party/hermes/` | Manifest, patches and technical reconstruction instructions | External generated dependency; not root source, not vendored, and not a current root submodule. Root handover remains blocked until the `AGENTS.md` team-accessible remote, formal submodule URL and clean-clone gate exist. |
+| `hermes-agent/` | Local nested checkout | External generated runtime state; nested source is not root-owned and must not be edited by this task. Its presence is not ownership or handover evidence. |
 | `third_party/llama_cpp/` | Tracked manifest and bootstrap README | Defines the external pin; bootstrap materializes `anomaly_detection/third_party/llama.cpp/`. |
 | `anomaly_detection/third_party/llama.cpp/` | Ignored generated upstream checkout | External source only; not root source, and no model binary or weight is implied by the clone. |
 | Model caches, downloaded weights and checkpoints | External artifacts | Keep outside publication until provenance, license and redistribution rules are confirmed. |
+
+The Hermes manifest and patch series describe a technical public-upstream
+reconstruction. They do not replace the repository-mandated team-accessible
+fork/remote, formal Git submodule and clean-clone verification required before
+root publication or handover.
 
 ## Experimental and local-only areas
 
