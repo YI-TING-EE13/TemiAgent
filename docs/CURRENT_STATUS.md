@@ -247,7 +247,7 @@ remediation is limited to the lifecycle source gate and its regression test:
   <code>tools/verify_hermes_submodule.py</code> returns success with
   <code>state=RECONSTRUCTED</code>.
 - <code>tools/tests/test_demo_lifecycle.py</code> proves that verified formal
-  reconstruction is accepted and an ordinary generated external checkout
+  reconstruction is accepted and an unverified generated external checkout
   difference is still rejected.
 - A nested <code>hermes-agent</code> checkout must remain clean. An index
   change, any other dirty path, an absent verifier/manifest, an unverified
@@ -270,29 +270,29 @@ configuration, dependency or test paths. The following object pairs are the
 exact non-documentation/non-memory portion of that comparison; a dash means
 the path is absent on that side.
 
-| Path | Canonical object | Publication object | Intent and live-risk classification |
-|---|---|---|---|
-| <code>.gitignore</code> | <code>7ef7c8e6651d683875dc53a911e89ac3f6217042</code> | <code>daa6ff7eee8fd6511bab5e1c5464a92c09c49f80</code> | Ignore generated/private artifacts; intended publication boundary. |
-| <code>.gitmodules</code> | — | <code>fd770e5901e3bfb999240f69bbba788bd1fe01e9</code> | Formal Hermes team submodule; intended source contract. |
-| <code>config/demo_resources.json</code> | <code>e2138d0bd65e5406eb7eaeb65c7b2f0d5e6027e4</code> | <code>3c09c7b3106eb4048b41b39b00c5cde95ec0486e</code> | External resource manifest and optional pose mapping; intended artifact boundary. |
-| <code>anomaly_detection/yolo26x-pose.pt</code> | <code>d1fa01ade8358577cde976874ccf6abfa94eb9fa</code> | — | Remove large model bytes from publication; intended privacy/provenance boundary. |
-| <code>hermes-agent</code> | — | <code>a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2</code> | Gitlink to team-owned base; intended external-source contract. |
-| <code>scripts/bootstrap_hermes.sh</code> | <code>ae39dc08dba5878c00fc3bf7c64878596fd6cb1d</code> | <code>872ebcbf05cd49af2e924020999ee71a4e5a86a0</code> | Reconstruct formal submodule plus nine root patches; intended reproducibility behavior. |
-| <code>scripts/bootstrap_llama_cpp.sh</code> | <code>ba7512f53ac47ec99dff581abfab30b709814aa8</code> | <code>fd599537429df1b3a4d984edd570fa24c9e8730d</code> | Pin/check llama source and license; intended reproducibility behavior. |
-| <code>temi_backend/tests/test_overview_adapter.py</code> | <code>908a1448f36e8182479f3b0b61008f1f3a35ec18</code> | <code>24b70dbbc486e68dacfb8eccf19bef54bbf6236f</code> | Cover broker input boundary; test-only intended coverage. |
-| <code>third_party/hermes/manifest.json</code> | <code>0cff78c0be7759efbc124a09861b00acaa24eb02</code> | <code>7248e858e2a2336ee2e3f546cb5ec0de42dcdeef</code> | Record team remote, base, patches, final tree and license; intended source contract. |
-| <code>third_party/llama_cpp/manifest.json</code> | <code>b432bf4942fb3635b60a6a7ad4c2eed3f6e324b2</code> | <code>6eee32ecdd43f0984108acd006ea08a4e3278c22</code> | Record llama commit/tree/license; intended source contract. |
-| <code>tools/bounded_process.py</code> | — | <code>2354ae606f649707f78c34e920359ecaf3c2a5bd</code> | Bound subprocess lifetime and exact process group; intended safety helper. |
-| <code>tools/run_bounded_process.py</code> | — | <code>80bf4cf385b4dd1ff44d80056b4452978867d640</code> | CLI wrapper for bounded operations; intended safety helper. |
-| <code>tools/start_temi_pc_services.sh</code> | <code>78522a00ecf2228008a38dca8b73f3ca718458cc</code> | <code>742d007b5f07036c609847b6a3cd6d9a66e7fb26</code> | Require operator-provided <code>PC_IP</code>; intended removal of a private default. |
-| <code>tools/start_temi_pc_services_background.sh</code> | <code>9fc57d3b983f1b73e0d20a469858ed610a4d5657</code> | <code>73771a443577bbd28abd15afdebea825358fc5</code> | Require operator-provided <code>PC_IP</code>; intended removal of a private default. |
-| <code>tools/temi_overview_adapter.py</code> | <code>a71a28da334def32ba47d8d4a10b42e0f79af9c9</code> | <code>2cb852c4718543e0eb14ca2a4781941976a3afcf</code> | Require explicit broker CLI/env input; intended fail-closed security behavior. |
-| <code>tools/tests/test_bounded_process.py</code> | — | <code>7c1684f9ed0fd0fa7597941157110f436e78821a</code> | Cover bounded process groups; test-only intended coverage. |
-| <code>tools/tests/test_external_dependency_publication.py</code> | — | <code>48d37acb53aeb3bfc4052e69e684f47a36717713</code> | Cover external publication manifests; test-only intended coverage. |
-| <code>tools/tests/test_hermes_license.py</code> | — | <code>c87e232afc82a08db88b96cbf7b677327a2f43bb</code> | Cover Hermes license boundary; test-only intended coverage. |
-| <code>tools/tests/test_hermes_submodule.py</code> | — | <code>7f565df9be6be92bb190b1a039ed0d14991a1b51</code> | Cover formal submodule/base/final-tree contract; test-only intended coverage. |
-| <code>tools/verify_hermes_license.py</code> | — | <code>0b22151d2cda14fd8bf3be471a1e3e27f7d4b699</code> | Verify reconstructed Hermes license; intended source gate. |
-| <code>tools/verify_hermes_submodule.py</code> | — | <code>68f071696c04a0636786c111cef9fbd16f7a7d63</code> | Verify gitlink, base, final tree, nested cleanliness and no alternates; intended source gate. |
+| Path | Canonical object | Publication object | Category | Behavioral? | Live validation? | Intended? | Source gate | Risk |
+|---|---|---|---|---|---|---|---|---|
+| <code>.gitignore</code> | <code>7ef7c8e6651d683875dc53a911e89ac3f6217042</code> | <code>daa6ff7eee8fd6511bab5e1c5464a92c09c49f80</code> | PORTABILITY_HARDENING | NO | NO | YES | publication scan | LOW |
+| <code>.gitmodules</code> | — | <code>fd770e5901e3bfb999240f69bbba788bd1fe01e9</code> | DEPENDENCY_GOVERNANCE | NO | YES | YES | submodule verifier | HIGH |
+| <code>config/demo_resources.json</code> | <code>e2138d0bd65e5406eb7eaeb65c7b2f0d5e6027e4</code> | <code>3c09c7b3106eb4048b41b39b00c5cde95ec0486e</code> | CONFIGURATION_CONTRACT | YES | YES | YES | resource manifest/doctor | MEDIUM |
+| <code>anomaly_detection/yolo26x-pose.pt</code> | <code>d1fa01ade8358577cde976874ccf6abfa94eb9fa</code> | — | SECURITY_HARDENING | NO | NO | YES | blob/path scan | MEDIUM |
+| <code>hermes-agent</code> | — | <code>a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2</code> | DEPENDENCY_GOVERNANCE | YES | YES | YES | submodule/bootstrap verifier | HIGH |
+| <code>scripts/bootstrap_hermes.sh</code> | <code>ae39dc08dba5878c00fc3bf7c64878596fd6cb1d</code> | <code>872ebcbf05cd49af2e924020999ee71a4e5a86a0</code> | BOOTSTRAP | NO | YES | YES | bootstrap check/tests | MEDIUM |
+| <code>scripts/bootstrap_llama_cpp.sh</code> | <code>ba7512f53ac47ec99dff581abfab30b709814aa8</code> | <code>fd599537429df1b3a4d984edd570fa24c9e8730d</code> | BOOTSTRAP | NO | YES | YES | bootstrap check/tests | MEDIUM |
+| <code>temi_backend/tests/test_overview_adapter.py</code> | <code>908a1448f36e8182479f3b0b61008f1f3a35ec18</code> | <code>24b70dbbc486e68dacfb8eccf19bef54bbf6236f</code> | TEST_ONLY | NO | NO | YES | backend suite | LOW |
+| <code>third_party/hermes/manifest.json</code> | <code>0cff78c0be7759efbc124a09861b00acaa24eb02</code> | <code>7248e858e2a2336ee2e3f546cb5ec0de42dcdeef</code> | DEPENDENCY_GOVERNANCE | NO | YES | YES | Hermes verifier | HIGH |
+| <code>third_party/llama_cpp/manifest.json</code> | <code>b432bf4942fb3635b60a6a7ad4c2eed3f6e324b2</code> | <code>6eee32ecdd43f0984108acd006ea08a4e3278c22</code> | DEPENDENCY_GOVERNANCE | NO | YES | YES | llama bootstrap/tests | HIGH |
+| <code>tools/bounded_process.py</code> | — | <code>2354ae606f649707f78c34e920359ecaf3c2a5bd</code> | PORTABILITY_HARDENING | NO | NO | YES | bounded-process tests | MEDIUM |
+| <code>tools/run_bounded_process.py</code> | — | <code>80bf4cf385b4dd1ff44d80056b4452978867d640</code> | PORTABILITY_HARDENING | NO | NO | YES | bounded-process tests | MEDIUM |
+| <code>tools/start_temi_pc_services.sh</code> | <code>78522a00ecf2228008a38dca8b73f3ca718458cc</code> | <code>742d007b5f07036c609847b6a3cd6d9a66e7fb26</code> | SECURITY_HARDENING | YES | YES | YES | shell/adapter tests | HIGH |
+| <code>tools/start_temi_pc_services_background.sh</code> | <code>9fc57d3b983f1b73e0d20a469858ed610a4d5657</code> | <code>73771a443577bbd28abd15afdebea825358fc5</code> | SECURITY_HARDENING | YES | YES | YES | shell/adapter tests | HIGH |
+| <code>tools/temi_overview_adapter.py</code> | <code>a71a28da334def32ba47d8d4a10b42e0f79af9c9</code> | <code>2cb852c4718543e0eb14ca2a4781941976a3afcf</code> | SECURITY_HARDENING | YES | YES | YES | adapter/backend tests | HIGH |
+| <code>tools/tests/test_bounded_process.py</code> | — | <code>7c1684f9ed0fd0fa7597941157110f436e78821a</code> | TEST_ONLY | NO | NO | YES | tools suite | LOW |
+| <code>tools/tests/test_external_dependency_publication.py</code> | — | <code>48d37acb53aeb3bfc4052e69e684f47a36717713</code> | TEST_ONLY | NO | NO | YES | tools suite | LOW |
+| <code>tools/tests/test_hermes_license.py</code> | — | <code>c87e232afc82a08db88b96cbf7b677327a2f43bb</code> | TEST_ONLY | NO | NO | YES | tools suite | LOW |
+| <code>tools/tests/test_hermes_submodule.py</code> | — | <code>7f565df9be6be92bb190b1a039ed0d14991a1b51</code> | TEST_ONLY | NO | NO | YES | tools suite | LOW |
+| <code>tools/verify_hermes_license.py</code> | — | <code>0b22151d2cda14fd8bf3be471a1e3e27f7d4b699</code> | DEPENDENCY_GOVERNANCE | NO | YES | YES | license verifier | HIGH |
+| <code>tools/verify_hermes_submodule.py</code> | — | <code>68f071696c04a0636786c111cef9fbd16f7a7d63</code> | DEPENDENCY_GOVERNANCE | NO | YES | YES | submodule verifier | HIGH |
 
 The MQTT lifecycle implementation, tracked broker configuration and
 MQTT-only status contract are byte-identical between the two baseline trees.
@@ -300,6 +300,13 @@ The publication-only adapter, legacy PC-IP and dependency deltas are
 therefore accepted as intended. The only additional Gate 5A.1 runtime code
 change is the narrowly scoped formal-submodule source-gate compatibility
 fix described above.
+
+For the final classification count, four of the 21 paths are direct
+behavioral/configuration or security-hardening inputs
+(<code>config/demo_resources.json</code>, the two PC starter scripts and the
+overview adapter); the remaining 17 are intentional publication-boundary,
+dependency/bootstrap, bounded-process or test support. All 21 are intended
+publication deltas and zero are accidental runtime regressions.
 
 ### Broker, PC-IP and resource contracts
 
@@ -314,6 +321,14 @@ scripts require non-empty <code>PC_IP</code> and export it as
 deployment address. A missing value fails before a client listener is
 created.
 
+<code>BROKER_CONFIG_INPUT</code> is the owner-only
+<code>MQTT_BROKER_HOST</code>/<code>MQTT_BROKER_PORT</code> pair in the
+resolved Demo env; <code>BROKER_CONFIG_PRECEDENCE</code> at the adapter is
+<code>--broker &gt; TEMI_MQTT_BROKER &gt; fail</code>;
+<code>MISSING_CONFIG_BEHAVIOR</code> is parse-time exit before client/listener
+creation; and <code>EXPECTED_GATE5B_VALUE_SOURCE</code> is the operator's
+private deployment input, never a tracked default.
+
 For Gate 5B the operator must provide a deployment-specific Temi-facing
 endpoint in the private runtime input. The candidate documentation and
 tracked templates intentionally contain no private LAN default. The safe
@@ -321,17 +336,45 @@ default for this Gate 5B plan is <code>MQTT_OWNERSHIP=external</code> and
 read-only proof of the already healthy managed broker on its configured
 production listener; no broker restart or MQTT publish/subscribe is part of
 Gate 5A.1.
+<code>MQTT_RESTART_REQUIRED=NO</code>.
 
-| Resource | Source/layout contract | Gate 5B requirement |
-|---|---|---|
-| MQTT broker | External owner; configured private host/port and managed Mosquitto evidence | Reuse verified listener; one owner, exact lineage and TCP probe. |
-| Hermes base/overlay | <code>hermes-agent</code> formal gitlink plus root patch overlay under <code>third_party/hermes/patches/</code> | Bounded submodule init, manifest verification, nine patches, final tree/license, nested clean. |
-| Hermes environment | External <code>hermes-agent/venv</code>; Python 3.11 was observed | Provision from the locked Hermes project environment; do not treat an ignored local venv as source. |
-| llama.cpp | Pinned manifest commit/tree and external build output | Reconstruct/check source; use an externally provisioned executable only after path and model checks. |
-| Gemma GGUF/mmproj | External LM Studio/model cache; tracked identifiers, not model bytes | LM Studio API/model/context/GPU gate before resident start. |
-| Optional pose weight | Logical path <code>anomaly_detection/yolo26x-pose.pt</code>; removed from publication and provenance not closed | Optional viewer path only; provenance/license must be approved before enabling. |
-| Android/Temi | External application and physical device | Separate device-owner acceptance; no software-only result advances it. |
-| Runtime state | Private <code>TEMIAGENT_RUNTIME_ROOT</code> containing logs, memory, shared metadata, PID/state/socket files | Fresh owner-only root per run; no runtime artifacts in Git or source root. |
+#### PC_IP contract
+
+<code>PC_IP_REQUIRED_BY</code>: <code>tools/start_temi_pc_services.sh</code>
+and <code>tools/start_temi_pc_services_background.sh</code>, including the
+legacy adapter/video child commands they assemble. The canonical
+<code>scripts/demo</code> lifecycle uses explicit
+<code>MQTT_BROKER_HOST</code> and does not synthesize <code>PC_IP</code>.
+
+<code>PC_IP_SEMANTICS</code>: the Temi-facing AI6 host address used by the
+legacy MQTT/video client route; it is not a bind-all address, a robot address
+or a public repository default. <code>PC_IP_VALIDATION</code> is currently
+non-empty shell parameter validation only. There is no IP-format, route or
+reachability validation in those legacy starters.
+
+<code>MISSING_PC_IP_BEHAVIOR</code>: the shell parameter expansion fails before
+the child process is launched. <code>GATE5B_VALUE</code> is the observed AI6
+deployment address classified as <code>OBSERVED_AI6_DEPLOYMENT</code>, not
+<code>PORTABLE_DEFAULT</code>; the value is intentionally omitted from this
+tracked candidate and may be placed only in the owner-only ephemeral Gate 5B
+input after an operator confirms the active interface. The
+<code>GATE5B_VALUE_SOURCE</code> is the read-only
+<code>ip -4 addr</code>/<code>ip route</code> observation recorded in the
+Gate 5A evidence, not a checked-in template.
+
+#### Resource runtime mapping
+
+| Resource | Purpose | Publication contract | Actual AI6 location | Present? | Validation | Portable? | Secret? | Gate 5B required? |
+|---|---|---|---|---|---|---|---|---|
+| <code>elderly_hand_exercise</code> | Android-deployed logical media | Required logical resource; no media bytes in Git | External Temi Android application/device asset | NOT_VERIFIED | Bridge allowlist, fake Android/media tests, then device-owner observation | NO; device-owned | NO | YES only at L4 device acceptance |
+| <code>temi_discord_care_skill</code> | Resident Hermes skill | Required relative path <code>hermes-agent/skills/temi-discord-care-assistant/SKILL.md</code> | <code>/TemiAgent/hermes-agent/skills/temi-discord-care-assistant/SKILL.md</code> after reconstruction | YES in canonical/fresh preflight | Resource manifest, formal Hermes verifier, nested clean check | YES after bounded bootstrap | NO | YES for resident L1 |
+| <code>anomaly_pose_model</code> | Optional pose preprocessing for action viewer | Manifest-only optional path; model blob removed from publication | Observed canonical external path <code>/TemiAgent/anomaly_detection/yolo26x-pose.pt</code>; absent from publication clone | CANONICAL_ONLY | Manifest size/hash plus maintainer source/license/restriction approval | NO until provenance is closed | NO | NO by default; optional viewer only |
+| <code>Gemma GGUF</code> | LM Studio/resident model bytes | External configured cache; tracked identifier only | <code>/TemiAgent/.lmstudio-data/models/...</code> in the observed deployment | YES canonical; external in clone | LM Studio <code>/v1/models</code>, model identifier/context/GPU policy | NO; provider/cache-owned | NO; credentials separate | YES for production L1/L5 |
+| <code>mmproj-F32.gguf</code> | Optional viewer projection | External configured path; not tracked | <code>/TemiAgent/.lmstudio-data/models/...</code> in the observed deployment | YES canonical; external in clone | Viewer resource/path and llama readiness checks | NO until supplied | NO; credentials separate | NO unless viewer is explicitly enabled |
+| <code>llama-server</code> | Optional viewer inference server | External build output under ignored path | <code>/TemiAgent/anomaly_detection/third_party/llama.cpp/build/bin/llama-server</code> | YES canonical; external in clone | Executable/build/source checks and viewer health | NO; build environment-owned | NO | NO by default |
+| <code>hermes-agent/venv</code> | Hermes resident/gateway runtime | External ignored environment; source is the formal submodule plus overlay | <code>/TemiAgent/hermes-agent/venv</code> in observed deployment | YES canonical; supplied externally in clone | Locked environment setup and resident health | NO; environment-owned | NO | YES for resident L1 |
+| <code>TEMIAGENT_RUNTIME_ROOT</code> | Logs, memory, shared metadata, PID/state/socket files | Absolute owner-only external root | New Gate 5B private runtime root, outside source Git state | NOT_CREATED in this gate | Mode/owner/path checks and lifecycle state checks | YES as a layout, not as retained data | Logs/payloads may be sensitive | YES |
+| <code>MQTT_CONFIG_PATH</code> | Managed broker configuration when lifecycle owns MQTT | Private file only; reuse plan sets MQTT external | Canonical private Mosquitto config in observed deployment | YES canonical; not copied | MQTT status/lineage/config identity | NO; deployment-owned | YES; never print | NO for external reuse |
 
 ### Hermes reconstructed layout and publication preflight
 
@@ -344,8 +387,12 @@ git submodule update --init --recursive --depth=1
 ./scripts/bootstrap_hermes.sh --bootstrap
 ./scripts/bootstrap_llama_cpp.sh --bootstrap
 ./scripts/bootstrap --check
-./tools/verify_hermes_submodule.py
-./tools/verify_hermes_license.py
+python3 tools/verify_hermes_submodule.py \
+  --root . --manifest third_party/hermes/manifest.json
+python3 tools/verify_hermes_license.py \
+  --manifest third_party/hermes/manifest.json \
+  --checkout hermes-agent \
+  --base-commit a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2
 ~~~
 
 The formal Hermes layout after reconstruction is: root gitlink at the
@@ -357,32 +404,133 @@ license. The llama.cpp check records commit
 <code>1020a771795f406b8891d18ee607b4da3783fa7f</code>. Generated build
 directories, venvs, model caches and runtime files remain external/ignored.
 
+The live-layout fields are explicit:
+<code>SUBMODULE_BASE=hermes-agent@a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2</code>;
+<code>PATCHED_WORKTREE=hermes-agent</code> at final tree
+<code>968f1668a05fafd09461c17a835198421f14a48f</code> with nine tracked root
+patches; <code>VENV=hermes-agent/venv</code> supplied by the environment;
+<code>SKILLS=hermes-agent/skills/temi-robot-control,
+temi-care-memory,temi-home-esi,temi-discord-care-assistant</code>;
+<code>CONFIG=config/demo_resources.json</code> plus the private
+<code>GATE5B_RUNTIME_CONFIG</code> and safe Bridge template;
+<code>MEMORY=&lt;TEMIAGENT_RUNTIME_ROOT&gt;/data/care-memory</code>; and
+<code>RUNTIME_STATE=&lt;TEMIAGENT_RUNTIME_ROOT&gt;/state</code> with private
+logs, PID/ownership records, sockets and shared metadata. No resident or
+Hermes process is started by this gate.
+
 Gate 5A.1 publication preflight was run in a disposable clone without
 starting a service: bounded recursive submodule initialization, Hermes
 bootstrap, llama bootstrap, source/license checks, and the documentation
 validator passed. A newcomer configuration was materialized in that
 disposable root. No MQTT publication/subscription, model inference, Android
 operation, GPU mutation, or full-stack start was performed. The final
-disposable-clone result must additionally show the reconstructed-submodule
-source gate as PASS before Gate 5B is considered.
+disposable-clone result showed the reconstructed-submodule source gate as
+PASS, with no service transition, before Gate 5B was considered.
 
 ### Gate 5B exact source root and ephemeral inputs
 
-Before Gate 5B, the operator must record:
+The exact Gate 5B source identity is fixed by a maintainer-supplied
+non-tracked handover value, while its filesystem path is transient. Set
+<code>GATE5B_SOURCE_ROOT</code> to the absolute path of the isolated worktree
+checked out at <code>codex/github-v1-live-environment-audit</code>. The
+handover input/evidence must supply the concrete
+<code>GATE5B_EXPECTED_HEAD</code> recorded by this Gate 5A.1 review; do not
+derive it from the worktree under test or silently replace it with a branch
+tip.
 
-- <code>GATE5B_SOURCE_ROOT</code>: an isolated checkout of
-  <code>codex/github-v1-live-environment-audit</code> at the reviewed
-  candidate commit recorded in the Gate 5A.1 handoff.
-- <code>GATE5B_EXPECTED_HEAD</code>: the exact candidate commit; verify it
-  before reading private configuration or starting any process.
-- <code>GATE5B_RUNTIME_CONFIG</code>: a new owner-only mode-0600 absolute env
-  file outside Git, not created during this gate.
-- <code>TEMIAGENT_RUNTIME_ROOT</code>: a new owner-only runtime root separate
-  from the source checkout.
-- <code>DEMO_GIT_BRANCH_POLICY=disabled</code> only because the reviewed
-  candidate branch is not named <code>main</code>; exact HEAD and dirty-path
-  checks remain mandatory. Any configuration that disables those checks is
-  invalid.
+Before reading private configuration or starting any process, require:
+
+~~~text
+test -n "$GATE5B_EXPECTED_HEAD"
+test "$(git -C "$GATE5B_SOURCE_ROOT" rev-parse --show-toplevel)" = "$GATE5B_SOURCE_ROOT"
+test "$(git -C "$GATE5B_SOURCE_ROOT" rev-parse HEAD)" = "$GATE5B_EXPECTED_HEAD"
+test "$GATE5B_SOURCE_ROOT" != "/TemiAgent"
+~~~
+
+The Gate 5A.1 candidate worktree used for this evidence is the source-root
+owner; an operator may materialize the same reviewed commit at any isolated
+absolute path, but must record that path and the two identity checks above.
+The source must never silently fall back to canonical <code>main</code>.
+
+<code>GATE5B_RUNTIME_INPUT_LOCATION=/tmp/ai6-gate5b-runtime-input.env</code>
+is the planned owner-only mode-0600 env file; it is not created or tracked by
+Gate 5A.1. <code>TEMIAGENT_RUNTIME_ROOT=/tmp/ai6-gate5b-runtime-root</code> is
+the planned new owner-only runtime root and must be created separately from
+the source checkout. An operator may choose a different private path only
+when recording its exact path before start.
+
+<code>DEMO_GIT_BRANCH_POLICY=disabled</code> is permitted only because the
+reviewed candidate branch is not named <code>main</code>; exact HEAD, root
+dirty-path and nested-Hermes checks remain mandatory. Any configuration that
+disables those checks is invalid.
+
+The explicit non-secret key contract for the Gate 5B input is:
+<code>GATE5B_EXPECTED_HEAD</code> (source-preflight identity, supplied by the
+owner), <code>DEMO_PROFILE</code>, <code>DEMO_GIT_BRANCH_POLICY</code>,
+<code>TEMIAGENT_RUNTIME_ROOT</code>, <code>LOG_DIR</code>,
+<code>MEMORY_DIR</code>, <code>DEMO_CARE_MEMORY_ROOT</code>,
+<code>TEMI_SHARED_BRIDGE_PATH</code>, <code>TEMI_SHARED_HERMES_PATH</code>,
+<code>HERMES_MEDIA_CALLBACK_SOCKET</code>,
+<code>HERMES_DEMO_IDENTITY_CALLBACK_SOCKET</code>,
+<code>HERMES_DEMO_CARE_CALLBACK_SOCKET</code>,
+<code>DEMO_IDENTITY_STATE_DIR</code>, <code>LMSTUDIO_OWNERSHIP</code>,
+<code>LMSTUDIO_TARGET_DIR</code>, <code>LMSTUDIO_MODEL_ID</code>,
+<code>LMSTUDIO_API_IDENTIFIER</code>, <code>LMSTUDIO_SERVER_PORT</code>,
+<code>CONTEXT_LENGTH</code>, <code>LMSTUDIO_CONTEXT_LENGTH</code>,
+<code>LMSTUDIO_VISIBLE_GPUS</code>, <code>MQTT_OWNERSHIP</code>,
+<code>MQTT_BROKER_HOST</code>, <code>MQTT_BROKER_PORT</code>,
+<code>ROBOT_ID_ALLOWLIST</code>, <code>HERMES_INVOKE_MODE</code>,
+<code>HERMES_HTTP_URL</code>, <code>HERMES_TIMEOUT_SECONDS</code>,
+<code>TRACE_ENABLED</code>, <code>TRACE_INCLUDE_ASR_TEXT</code>,
+<code>DEBUG_TRACE_FULL</code>, <code>MEDIA_V11_ENABLED</code>,
+<code>HERMES_MEDIA_TOOL_ENABLED</code>,
+<code>HERMES_MEDIA_FAST_PATH_ENABLED</code>,
+<code>HERMES_GATEWAY_ENABLED</code>,
+<code>HERMES_GATEWAY_OWNERSHIP</code>, <code>MANAGE_ANDROID</code>,
+<code>DEMO_ACTION_VIEWER_ENABLED</code>,
+<code>DEMO_ACTION_VIEWER_MODEL</code>,
+<code>DEMO_ACTION_VIEWER_GGUF_MODEL_PATH</code>,
+<code>DEMO_ACTION_VIEWER_MMPROJ_PATH</code>,
+<code>DEMO_ACTION_VIEWER_LLAMA_SERVER</code>,
+<code>DEMO_ACTION_VIEWER_LLAMA_SERVER_PORT</code>,
+<code>DEMO_ACTION_VIEWER_CUDA_VISIBLE_DEVICES</code>,
+<code>DEMO_ACTION_VIEWER_POSE_MODE</code>,
+<code>DEMO_ACTION_VIEWER_POSE_MODEL</code>,
+<code>DEMO_ACTION_VIEWER_POSE_DEVICE</code>,
+<code>DEMO_ACTION_VIEWER_MAX_OUTPUT_TOKENS</code>,
+<code>DEMO_ACTION_VIEWER_ABNORMAL_PUBLISH</code>,
+<code>DEMO_ACTION_VIEWER_DISCORD_NOTIFY</code>,
+<code>DEMO_ACTION_VIEWER_PRE_ALERT_SPEAK</code>,
+<code>ABNORMAL_CARE_EPISODE_ENABLED</code>,
+<code>ABNORMAL_CARE_FIRST_RESPONSE_TIMEOUT_SECONDS</code>,
+<code>ABNORMAL_CARE_SECOND_RESPONSE_TIMEOUT_SECONDS</code>,
+<code>ABNORMAL_CARE_TIMEOUT_POLL_SECONDS</code>,
+<code>ABNORMAL_NOTIFICATION_MODE</code>,
+<code>ABNORMAL_NOTIFICATION_TIMEOUT_SECONDS</code>,
+<code>ABNORMAL_NOTIFICATION_TEST_RECIPIENT_AUTHORIZED</code>,
+<code>DEMO_NOTIFICATION_MOCK_ENABLED</code>,
+<code>DEMO_NOTIFICATION_RECEIPT_ENABLED</code>,
+<code>DEMO_TEST_EVENT_INGRESS_ENABLED</code>,
+<code>DEMO_TEST_RESIDENT_ALLOWLIST</code> and
+<code>DEMO_START_TIMEOUT_SECONDS</code>. <code>PC_IP</code> is an additional
+legacy-starter input when that route is selected. Credential values and
+credential-file contents are not part of this public key list.
+
+When the corresponding optional/managed route is enabled, also carry
+<code>EXPECTED_GIT_BRANCH</code>, <code>MQTT_CONFIG_PATH</code>,
+<code>ABNORMAL_NOTIFICATION_DISCORD_ENV_PATH</code>,
+<code>DEMO_OPERATOR_IDENTITY_ENABLED</code>,
+<code>RESIDENT_IDENTITY_ENABLED</code>,
+<code>HERMES_DEMO_IDENTITY_TOOL_ENABLED</code>,
+<code>HERMES_DEMO_IDENTITY_FAST_PATH_ENABLED</code>,
+<code>DEMO_REPEATED_DISCOMFORT_ENABLED</code>,
+<code>DEMO_CARE_SCENARIO_PROMPT_ENABLED</code>,
+<code>DEMO_RESIDENT_VISUAL_ROUTING_ENABLED</code>,
+<code>CARE_CONTEXT_ENABLED</code>, <code>DEMO_IDENTITY_REFRESH_SECONDS</code>
+and <code>DEMO_IDENTITY_MAX_DURATION_SECONDS</code>. The complete source
+of truth for this key set is the tracked production template
+<code>config/demo.env.example</code>; the Gate 5B input must not invent
+additional keys or secret values.
 
 The private input must define the broker endpoint/ownership, model/API
 ownership, required production ports, runtime paths, resource paths and
@@ -397,18 +545,45 @@ read-only HTTP <code>GET /v1/models</code> on configured port
 <code>1234</code>, requiring the configured
 <code>google/gemma-4-31b</code> identifier, context <code>64000</code> and
 GPU policy. A process, model file or cached build alone is not readiness.
-If LM Studio is managed, the authorized lifecycle path is the managed
-supervisor, which invokes the existing three-GPU loader and performs
-mutating LM Studio control. The <code>lms</code> CLI is not a read-only
-inspection tool and must not be invoked during Gate 5A.1.
+<code>LM_STUDIO_GATE5B_START_REQUIRED=YES</code> for a production resident
+run: either an external LM Studio owner must already satisfy this readiness
+contract, or Gate 5B must explicitly authorize the managed start. The
+<code>LM_STUDIO_CONTROL_METHOD</code> is
+<code>tools/demo_lifecycle.py</code> starting
+<code>tools/managed_lmstudio_supervisor.py</code>, which invokes
+<code>tools/start_lmstudio_3gpu.sh</code>. That loader performs mutating
+<code>lms</code> operations (unload/stop/daemon up/server start/load/ps) and
+the supervisor retains the exact lifecycle owner. Readiness is the HTTP
+model-list contract, not the presence of a process.
 
-The following ledger is the pre-start preservation record:
+<code>LMS_CLI_READ_ONLY_SAFE=NO</code>.
+<code>LMS_CLI_ALLOWED_GATE5B=YES</code> only as part of that explicitly
+authorized, Gate 5B-owned managed lifecycle; it is <code>NO</code> for
+Gate 5A.1 and must never be used as an audit inventory probe.
+<code>LM_STUDIO_EXPECTED_PORT=1234</code>,
+<code>LM_STUDIO_READINESS_ENDPOINT=http://127.0.0.1:1234/v1/models</code>
+and <code>LM_STUDIO_LOG_LOCATION=&lt;TEMIAGENT_RUNTIME_ROOT&gt;/logs/lmstudio/lmstudio.log</code>
+are the non-secret contract locations. The current API is unavailable, so
+no model readiness or inference is claimed.
 
-| Process/service | Observed state | Ownership for Gate 5B | Stop policy |
-|---|---|---|---|
-| Managed MQTT supervisor/child | Supervisor PID <code>924834</code>, child PID <code>924835</code>; <code>RUNNING/READY</code>; listener <code>0.0.0.0:1883</code> | Pre-existing canonical owner; never Gate 5B-owned | Preserve; no signal or restart. |
-| Packaged <code>llmster</code> internal component | PID <code>1051985</code>, child <code>1051997</code>; loopback listener <code>127.0.0.1:41343</code>; API <code>1234</code> absent | Pre-existing audit side effect; not Gate 5B-owned | Preserve during this gate; no broad or guessed stop. |
-| Adapter, resident, Bridge, gateway, viewer | No Gate 5A.1 start operation; no new ownership record | Gate 5B may own only exact records created after authorization | Capture cwd, command, executable, start identity, ports and logs before any stop. |
+The observed <code>llmster</code> process has PPID 1 and owns a separate
+loopback listener, but no lifecycle record proves it is the LM Studio API
+service child. Classify it as
+<code>PREEXISTING_DAEMON_INFRASTRUCTURE_OR_UNKNOWN</code>, foreign to the
+Gate 5B ownership set and not adoptable. It remains preserved. Only a
+supervisor/process record created by Gate 5B may be stopped, and only after
+the API readiness gate and exact identity checks.
+
+The following ledger is the pre-start preservation record. PIDs are observed
+evidence, not portable requirements:
+
+| PID | Service | Pre-existing? | Owned by Gate 5B? | May Gate 5B stop? | Expected preservation |
+|---:|---|---|---|---|---|
+| <code>924834</code> | Managed MQTT supervisor | YES | NO | NO | Preserve exact supervisor, command, cwd, config and child contract. |
+| <code>924835</code> | Mosquitto broker child | YES | NO | NO | Preserve exact broker child, listener <code>0.0.0.0:1883</code> and TCP readiness. |
+| <code>1051985</code> | Packaged <code>llmster</code> daemon/infrastructure candidate | YES; prior Gate 5A audit side effect | NO | NO | Preserve; not an API-service child proven by lifecycle evidence. |
+| <code>1051997</code> | <code>llmster</code> system-resources child | YES; child of prior side effect | NO | NO | Preserve with parent; no broad or guessed stop. |
+| — | Adapter, resident, Bridge, gateway, viewer | YES as “not started/owned by this gate” | NO before explicit start | NO before exact Gate 5B record | Capture cwd, command, executable, start identity, ports and logs before any later start/stop. |
 
 The MQTT state is reused only when its exact supervisor/child contract,
 configured listener, lineage and local TCP probe still pass. Gate 5B must
@@ -424,6 +599,17 @@ the phase. An isolated newcomer broker may use its checked-in high-port
 profile (for example <code>29183</code>) with a separate runtime root; it
 must never be attached to or silently replace production <code>1883</code>.
 
+| Service | Expected port | Current listener | Collision? | Strategy |
+|---|---:|---|---|---|
+| LM Studio | <code>1234</code> | Absent in the read-only audit | NO currently; readiness still FAIL until API responds | <code>BLOCKED</code> until model/API owner authorizes managed start or proves external readiness. |
+| MQTT | <code>1883</code> | One verified <code>0.0.0.0:1883</code> listener | YES for a new owner; NO for verified reuse | <code>REUSE_EXISTING</code>; never start a second broker. |
+| Overview adapter | <code>8080/8081</code> | No Gate 5B listener | NO currently | <code>START_ON_CANONICAL_PORT</code> only after exact collision scan. |
+| Hermes resident | <code>8765</code> | No Gate 5B listener | NO currently | <code>START_ON_CANONICAL_PORT</code> after Hermes/LM/MQTT preconditions. |
+| Bridge callback/transport | Private runtime callback plus configured transport | No Gate 5B listener | NO current Gate 5B owner | <code>START_ON_CANONICAL_PORT</code> through lifecycle after resident. |
+| Gateway | Provider/executable-defined; no minimum production listener in this plan | Not checked as a Gate 5B owner | NOT_APPLICABLE | <code>DO_NOT_START</code> unless separately reviewed and owned. |
+| Action viewer/llama | <code>8010/8011</code> | No Gate 5B listener | NO currently | <code>DO_NOT_START</code> by default; optional isolated owner only. |
+| Pre-existing <code>llmster</code> | Loopback <code>41343</code> | One observed loopback listener | Not an AI6 service-port collision | <code>DO_NOT_STOP</code>; preserve as outside Gate 5B ownership. |
+
 ### Gate 5B start order, rollback and staged acceptance
 
 Gate 5A.1 does not execute this sequence. After explicit Gate 5B
@@ -431,35 +617,81 @@ authorization, the planned minimum production order is:
 
 ~~~text
 L0 source/config/port preflight
-  -> L1 LM Studio API/model/GPU readiness (managed LM may be started here)
-  -> L2 reuse and verify external MQTT; do not restart it
-  -> L3 adapter -> resident -> Bridge
-  -> L4 optional gateway/viewer after their resources and health checks
-  -> L5 software-only trace/no-op acceptance
-  -> separate Android/Temi and model-inference acceptance
+  -> L1 minimum service readiness
+  -> L2 local functional path without physical side effect
+  -> L3 cross-service synthetic/no-op path without physical side effect
+  -> L4 Android/Temi E2E only with separate device authorization
+  -> L5 one bounded model/inference request after model readiness
 ~~~
 
 The actual lifecycle start order for managed components is
 <code>lmstudio → mqtt → adapter → resident → bridge → mock_android →
 mock_discord → gateway → viewer</code>; external ownership means the
 lifecycle health-checks instead of starting that component. Production
-Gate 5B must configure MQTT as external when reusing the observed broker,
-disable optional gateway/viewer until their own owners and resources are
-ready, and use the candidate's private config. The planned command, never
-executed here, is:
+Gate 5B's minimum profile enables only the LM/resident/adapter/Bridge path,
+sets MQTT to external for reuse, and leaves gateway, viewer, mock Android
+and mock Discord disabled. The planned command, never executed here, is:
 
 ~~~text
 ./scripts/demo --config "$GATE5B_RUNTIME_CONFIG" start
 ~~~
 
-| Level | Entry evidence | Required result | Rollback boundary |
+#### Gate 5B service start contract
+
+Every managed row below is started only by the one lifecycle command above;
+the internal argv is listed to make the owner and executable unambiguous.
+External rows have no start command.
+
+| Step/service | Precondition | Exact start command or decision | Readiness check | Side effect | Rollback | Owner |
+|---|---|---|---|---|---|---|
+| L0/preflight | Candidate HEAD <code>$GATE5B_EXPECTED_HEAD</code>, manifests/licenses, private config and all ports verified | Read-only <code>git</code>, <code>./scripts/bootstrap --check</code>, <code>./scripts/demo --config "$GATE5B_RUNTIME_CONFIG" --json doctor</code> | Source gate PASS, private paths safe, no collision | None | Do not start; discard only isolated candidate/input | Maintainer |
+| L1/LM Studio | External API already passes, or separate authorization for managed LM; model/GPU inputs present | External: <code>DO_NOT_START</code>. Managed: lifecycle command; internal owner is <code>python3 tools/managed_lmstudio_supervisor.py --startup-script tools/start_lmstudio_3gpu.sh --target-dir "$LMSTUDIO_TARGET_DIR" --identifier "$LMSTUDIO_API_IDENTIFIER"</code> | <code>curl --fail --silent http://127.0.0.1:1234/v1/models</code> contains the configured ID; context/GPU policy and exact supervisor identity agree | Managed path mutates daemon/server/model state | Lifecycle stop of the exact Gate 5B LM record, then bounded same-PID fallback only | LM/runtime owner |
+| L1/MQTT | Existing canonical <code>RUNNING/READY</code>, exact lineage and TCP probe pass | <code>DO_NOT_START</code>; read-only <code>./scripts/demo --config "$GATE5B_RUNTIME_CONFIG" --json mqtt status</code> | One external listener, supervisor/child contract and local TCP probe | None for reuse | None; never stop canonical MQTT | AI6 operator |
+| L1/adapter | LM, MQTT and runtime root ready; adapter ports clear | Lifecycle command; internal executable is <code>uv run python tools/temi_overview_adapter.py --broker "$MQTT_BROKER_HOST" --port "$MQTT_BROKER_PORT"</code> with configured ports/paths | Exact process record plus listeners <code>8080/8081</code>; no private default | Opens client/listener sockets; no test publish | Lifecycle stop exact adapter record; preserve redacted log | AI6 service owner |
+| L1/resident | Reconstructed Hermes final tree, clean nested checkout, venv and required skill paths ready | Lifecycle command; internal executable is <code>hermes-agent/venv/bin/python3 tools/hermes_resident_server.py --host 127.0.0.1 --port 8765</code> with four required skill paths | <code>/health</code> reports media/tool contract and exact owner | Opens loopback HTTP service; no hardware action | Lifecycle stop exact resident record; preserve log | Hermes/runtime owner |
+| L1/Bridge | Locked Bridge env and callback/runtime paths ready; resident healthy | Lifecycle command; internal executable is <code>uv run --extra mqtt hermes-temi-bridge --env-file hermes_temi_bridge/.env.example</code> | Callback/health, exact process identity, trace directory and validator state | Opens callback/transport boundary; dispatch remains validator-bound | Lifecycle stop exact Bridge record; preserve trace/log evidence | Bridge owner |
+| L2/local path | L1 all pass | Use existing software-only resident/Bridge health and local callback/no-op contract; no raw MQTT command | Valid schema/trace transition with no physical executor | Nonphysical local event/trace only | Stop progression; reverse exact owned records | Verification owner |
+| L3/cross-service no-op | L2 pass and synthetic/no-op fixture authorized | Use the existing canonical synthetic event/trace acceptance harness; no direct raw publish | Adapter/resident/Bridge contract and synthetic result correlate by run/trace ID | Nonphysical synthetic transport only | Stop progression; reverse exact owned records | Verification owner |
+| L4/Android/Temi | L3 pass plus separate device-owner authorization | <code>DO_NOT_START</code> from AI6; use the Android owner’s separately authorized session | Fresh Android subscription, accepted/started or playing result and physical observation | Physical device action | Device-owner rollback; AI6 stops only its exact owned processes | Android/Temi owner |
+| L5/model inference | L1 model readiness, L2/L3 pass, explicit bounded inference approval | One bounded non-sensitive request through the resident contract; no unrestricted prompt | Valid bounded Hermes JSON response and validator result within timeout | Model inference only; no automatic physical action | Stop progression; reverse exact owned records | Model/verification owner |
+| Optional gateway/viewer | Not required by minimum path; resources/owners separately ready | <code>DO_NOT_START</code> by default; enable only in a separately reviewed config | Gateway health or viewer/llama/resource health when explicitly enabled | Additional service/listener and optional perception path | Stop exact optional records before L3 records | Optional-service owner |
+
+#### Gate 5B exact stop and rollback contract
+
+The primary stop command is
+<code>./scripts/demo --config "$GATE5B_RUNTIME_CONFIG" stop</code>. It
+signals only lifecycle records created by this Gate 5B run and performs
+reverse-order cleanup. If a recorded process does not match its stored cwd,
+command, executable, start identity, process group and port evidence, the
+lifecycle refuses to signal it. Only after the same exact identity is
+revalidated may the owner use <code>TERM</code>, wait the bounded grace
+period, then <code>KILL</code> against that same exact process group.
+<code>pkill</code>, <code>killall</code>, name matching, reboot and deletion
+of runtime evidence are forbidden.
+
+| Reverse order | Gate 5B-owned stop command | Fallback/ownership proof | Logs/evidence |
 |---|---|---|---|
-| L0 | Exact candidate HEAD, source status, manifests/licenses, private config metadata, collision scan | No unowned dirty path, alternate object, invalid path or secret exposure | No service transition; discard only isolated candidate/runtime input. |
-| L1 | LM API/model/context/GPU and exact managed identity | Model service is ready or external ownership is proven | Stop only the exact Gate 5B-owned LM identity; never touch the pre-existing <code>llmster</code>. |
-| L2 | MQTT JSON status, supervisor/child lineage, listener and TCP probe | One verified external broker owner | No transition for reuse; an isolated broker is stopped only by its exact record. |
-| L3 | Adapter ports, resident <code>/health</code>, Bridge callback/health, exact PIDs and redacted logs | Canonical validation/dispatch path is healthy | Stop exact Gate 5B records in reverse order: Bridge, resident, adapter. |
-| L4 | Optional gateway/viewer health, resource/model checks and exact listeners | Optional path is separately ready | Stop exact viewer/gateway records before L3 components. |
-| L5 | Synthetic non-sensitive event, canonical trace/no-op contract and redacted evidence | Software-only route passes without physical side effect | Reverse exact owned records; do not publish raw MQTT or claim device acceptance. |
+| Viewer/gateway (only if enabled) | Lifecycle <code>stop</code> | Exact lifecycle record, cwd/argv/start identity/listener; same-PID bounded TERM/KILL only | Preserve private viewer/gateway logs and health evidence. |
+| Bridge | Lifecycle <code>stop</code> | Exact Bridge record and callback identity; same-PID bounded TERM/KILL only | Preserve Bridge trace/logs. |
+| Resident | Lifecycle <code>stop</code> | Exact resident record and port <code>8765</code>; same-PID bounded TERM/KILL only | Preserve redacted resident log. |
+| Adapter | Lifecycle <code>stop</code> | Exact adapter record and ports <code>8080/8081</code>; same-PID bounded TERM/KILL only | Preserve redacted adapter log. |
+| Isolated MQTT (only if separately selected) | <code>./scripts/demo --config "$GATE5B_RUNTIME_CONFIG" mqtt stop</code> | Exact isolated broker supervisor/child record; same-PID bounded TERM/KILL only | Preserve private broker log/state. |
+| LM Studio (only if Gate 5B-owned) | Lifecycle <code>stop</code> | Exact LM supervisor record and port <code>1234</code>; supervisor performs approved graceful shutdown, then same-PID fallback only | Preserve private LM log; never touch pre-existing <code>llmster</code>. |
+| Canonical MQTT / pre-existing llmster | <code>DO_NOT_STOP</code> | Outside Gate 5B ownership | Preserve existing evidence unchanged. |
+
+#### Gate 5B acceptance layers
+
+Each layer is a gate, not a suggestion; failure stops progression and invokes
+only the rollback boundary owned by the current run.
+
+| Layer | Entry gate | Check | Expected | Fail action | Rollback |
+|---|---|---|---|---|---|
+| L0 preflight | Exact candidate HEAD/source root and private input metadata recorded | Bootstrap/verifier/license checks, source dirty-path check, port collision scan, redacted doctor | All required source/config/resource checks PASS; no service mutation | Stop before any start and preserve evidence | None; discard only isolated candidate/input. |
+| L1 service readiness | L0 PASS; LM/MQTT ownership decisions made | LM API/model/context/GPU gate; MQTT status/lineage/TCP; adapter/resident/Bridge health and exact PID records | Minimum publication services ready, with MQTT reused | Do not advance; mark failed owner and retain logs | Stop only exact Gate 5B-owned records in reverse; canonical MQTT/llmster untouched. |
+| L2 local functional path | L1 PASS | Local resident/Bridge callback, schema and no-op validation with synthetic input | Valid local trace and bounded response; no physical executor | Block cross-service tests and retain redacted trace | Reverse exact owned software records. |
+| L3 cross-service functional path | L2 PASS and synthetic/no-op fixture approved | Adapter/resident/Bridge event/trace correlation and validator-bound synthetic result | Cross-service contract passes without Android/Temi side effect | Block device/model acceptance | Reverse exact owned software records; no raw MQTT fabrication. |
+| L4 Android/Temi E2E | L3 PASS plus explicit device-owner authorization | Fresh Android subscription, accepted/started or playing result, Bridge trace and physical observation | Device result and observation agree for each authorized action | Stop device test and record device-owner recovery; do not relabel software evidence | Device-owner rollback plus reverse exact AI6-owned software records. |
+| L5 model/inference | L1-L3 PASS, API readiness PASS and explicit bounded request approval | One synthetic non-sensitive request with timeout, valid Hermes JSON and validator result | Model functionality is proven separately from service readiness; no automatic physical action | Block acceptance, preserve redacted evidence and classify model failure | Reverse exact AI6-owned records; never stop pre-existing external processes. |
 
 If a later Gate 5B run fails, rollback is the reverse of the records created
 by that run: viewer, gateway, Bridge, resident, adapter, any isolated broker,
@@ -469,9 +701,12 @@ No name-based kill, broad pattern, reboot or runtime-data deletion is allowed.
 
 ### Physical side effects and model readiness
 
-Levels L0-L5 remain software-only. No Android command, physical Temi motion,
-notification delivery or real-care action may be used as a smoke test. A
-separate device owner must authorize and observe Android/Temi acceptance,
+L0-L3 remain software-only. L4 is physical Android/Temi acceptance only with
+separate device-owner authorization and observation; L5 is nonphysical by
+default and requires its own bounded model approval. No Android command,
+physical Temi motion, notification delivery or real-care action may be used
+as an unapproved smoke test. A separate device owner must authorize and observe
+Android/Temi acceptance,
 including accepted/started or playing result evidence and the corresponding
 Bridge trace. A Bridge publish alone is not physical proof.
 
@@ -484,6 +719,52 @@ and validator-bound. No hardware action, unrestricted prompt, real care
 record, credential, raw payload or model output is retained in public
 evidence. Model failure blocks the next stage and rolls back only exact
 Gate 5B-owned processes.
+
+The explicit model acceptance fields are:
+<code>MODEL_TEST_INPUT=one synthetic non-sensitive request with no real care
+record, credential or unrestricted prompt</code>;
+<code>EXPECTED_RESPONSE_CLASS=valid bounded Hermes JSON plan accepted by the
+resident/Bridge validator</code>; <code>TIMEOUT=HERMES_TIMEOUT_SECONDS
+(production template 60 seconds)</code>;
+<code>LOG_CAPTURE=private owner-only lifecycle/Bridge logs with payloads,
+credentials and model text redacted</code>; and
+<code>GPU_OBSERVATION=read-only nvidia-smi before/after, with no GPU
+reconfiguration</code>. A timeout, malformed output, validator rejection,
+unexpected physical side effect or unredacted evidence is a hard failure and
+blocks progression.
+
+The Gate 5B command side-effect policy is explicit:
+
+| Layer | Policy | Allowed operation |
+|---|---|---|
+| L0 | <code>NO_SIDE_EFFECT</code> | Source/config/port inspection only. |
+| L1 | <code>NONPHYSICAL</code> | Start only explicitly authorized software services; LM model loading may mutate the external LM service, but no robot/device action is allowed. |
+| L2 | <code>NONPHYSICAL</code> | Local callback/health/no-op checks only. |
+| L3 | <code>NONPHYSICAL</code> | Synthetic cross-service trace/no-op only; no physical executor. |
+| L4 | <code>PHYSICAL</code> | Separate Android/Temi owner authorization and observation are mandatory; AI6 does not start the device. |
+| L5 | <code>NONPHYSICAL</code> by default | One bounded model request after readiness; any physical action is forbidden unless separately authorized and reclassified. |
+
+### Gate 5A.1 verification and security matrix
+
+The following evidence is for the final candidate source. The fresh
+disposable-clone source preflight reconstructed the formal dependencies and
+showed the candidate source gate PASS with root status
+<code> M hermes-agent</code>, nested Hermes status clean, and newcomer doctor
+<code>FAIL=0</code>. The amended final commit changes documentation only after
+the code/test matrix, so those unchanged-source results remain valid under
+the repository evidence-reuse rule.
+
+| Check | Command/evidence | Result |
+|---|---|---|
+| Tools/configuration/lifecycle | <code>python3 -m unittest discover -s tools/tests</code> | PASS: 134/134 |
+| Backend/adapter | <code>cd temi_backend &amp;&amp; uv run --locked --offline pytest</code> | PASS: 25/25; adapter focused subset 7/7 |
+| Bridge/schema/validator | <code>cd hermes_temi_bridge &amp;&amp; uv run --locked --offline python -m unittest discover -s tests</code> | PASS: 166/166 |
+| External dependency/bootstrap/license | Fresh clone bounded submodule init, <code>bootstrap_hermes.sh --bootstrap</code>, <code>bootstrap_llama_cpp.sh --bootstrap</code>, <code>bootstrap --check</code>, both verifiers, and the dependency tests in the tools suite | PASS |
+| Documentation | <code>python3 tools/validate_documentation.py</code> and <code>python3 -m unittest tools.tests.test_validate_documentation</code> | PASS: 74 Markdown files, 8 schema mappings |
+| Syntax | <code>bash -n $(git ls-files "*.sh")</code>; <code>python3 -m py_compile</code> on changed/verifier Python files | PASS |
+| Diff hygiene | <code>git diff --check</code> | PASS |
+| Security/publication scan | No tracked private LAN default, secret/key/token/webhook value, dependency <code>file://</code>, Git alternate, pose path/blob or blob at least 50/100 MiB | PASS: 0 for every required count |
+| Live service/MQTT/model/device | Full-stack start, MQTT publish/subscribe, inference, Android/Temi and physical acceptance | SKIPPED: forbidden/deferred by Gate 5A.1 |
 
 ### Gate 5A.1 handover partials and remaining blockers
 
@@ -516,10 +797,10 @@ executed.
 |---|---|---|
 | Project root | `/TemiAgent` in `yiting.TemiAgent_gpu_all` | Canonical project command boundary. |
 | Root branch | `main` | Canonical root branch; Gate 3.4 work runs in an isolated candidate worktree. |
-| Root HEAD | `12aff3bfdfe526c17a25a2681aea2afad7112b33` | Canonical HEAD is unchanged during Gate 4. |
+| Root HEAD | `12aff3bfdfe526c17a25a2681aea2afad7112b33` | Canonical HEAD is unchanged during Gate 5A.1. |
 | Configured root remotes | None in the canonical local snapshot | Root publication push was not performed; the separate Hermes team remote was independently verified. |
 | Lifecycle status | `RUNNING`; `reason=READY` | Read-only `./scripts/demo --json mqtt status` found the canonical MQTT broker healthy at `0.0.0.0:1883`. |
-| Canonical listeners | One listener on `0.0.0.0:1883` | This is a read-only runtime observation, not a Gate 4 service operation. |
+| Canonical listeners | One listener on `0.0.0.0:1883` | This is a read-only runtime observation, not a Gate 5A.1 service operation. |
 | Service operation | No service was started, stopped or restarted for Gate 5A.1. The prior Gate 5A <code>lms ls</code> wake-up remains recorded as an incident. | Hardware, MQTT and external-service state were not intentionally transitioned by this gate. |
 
 The canonical worktree contains pre-existing Gate 1A, synthetic-fixture and

@@ -379,11 +379,12 @@ class DemoLifecycleConfigTests(unittest.TestCase):
                         demo._validate_source(production)
                     self.assertEqual(demo._validate_source(disabled), detached)
 
-    def test_source_gate_rejects_a_generated_external_checkout_difference(self) -> None:
+    def test_source_gate_rejects_an_unverified_hermes_worktree_difference(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_mock_config(Path(temporary)))
         source = {"branch": "", "head": "test", "tree": [" M hermes-agent"]}
         with (
+            mock.patch.object(demo, "_formal_hermes_submodule_ready", return_value=False),
             mock.patch.object(demo, "_source_record", return_value=source),
             mock.patch.object(demo, "_git", return_value=""),
         ):

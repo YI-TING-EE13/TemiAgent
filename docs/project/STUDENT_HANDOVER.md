@@ -211,7 +211,7 @@ decide separately whether to perform any root publication push. The canonical
 <code>main</code> checkout and the release ref are not handover targets for an
 unreviewed documentation change. No root push is part of this gate.
 
-Gate 5A created a separate, uncommitted documentation-only candidate on branch
+Gate 5A created a separate candidate on branch
 <code>codex/github-v1-live-environment-audit</code>, based on
 <code>release/github-v1@654110f621c6eff5e4defaa54f0722b2a916f50a</code>. It records
 observed deployment provenance, runtime blockers, publication/runtime parity and
