@@ -2,7 +2,7 @@
 
 最後審查日期：2026-08-28
 
-## Gate 5B.3 handover entry points
+## Gate 5B.5 handover entry points
 
 For a new student, use this short path rather than browsing the full document
 inventory:

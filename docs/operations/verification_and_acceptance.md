@@ -1,11 +1,11 @@
 # Verification and Acceptance Guide
 
-Status: <code>CURRENT_AUTHORITY</code>. Last reviewed for Gate 5B.3: 2026-08-28.
+Status: <code>CURRENT_AUTHORITY</code>. Last reviewed for Gate 5B.5: 2026-08-28.
 
 This guide distinguishes executable hardware-free verification from external
 acceptance. Run every project command in the designated container from
-`/TemiAgent`. Gate 5B.3 is a non-live Hermes failure-path remediation: its
-tests use
+`/TemiAgent`. Gate 5B.5 is a non-live resident HTTP boundary remediation layered
+on the Gate 5B.3 Hermes failure-path work: its tests use
 fake/stub providers and do not start LM Studio or any other long-running Demo
 service, send MQTT/Discord messages, alter private configuration, or use a
 robot. Do not turn a skipped external gate into a PASS claim.
@@ -30,12 +30,13 @@ git status --short
 
 ## Authoritative test matrix
 
-Run project commands inside the designated container. The Gate 5B.3 remediation
-does not authorize live services, MQTT publication, Android control,
-GPU inference or Discord delivery.
+Run project commands inside the designated container. The Gate 5B.5 remediation
+and its inherited Gate 5B.3 work do not authorize live services, MQTT
+publication, Android control, GPU inference or Discord delivery.
 
 | Test | Purpose | Command | Hardware required? | Network required? | GPU required? | Expected baseline | Failure meaning |
 |---|---|---|---|---|---|---|---|
+| Resident HTTP boundary tests | Inference-impossible malformed probe, valid-request compatibility, client disconnect and response-writer error boundaries. | <code>python3 -m unittest tools.tests.test_hermes_resident_http</code> | No | No | No | PASS with fake resident and local socket pairs only. | Resident validation or client-disconnect regression; no LM or service operation is authorized. |
 | Tools suite | Cross-module helpers, lifecycle, bounded processes and test contracts. | <code>python3 -m unittest discover -s tools/tests</code> | No | No for the hardware-free tests | No | PASS for the current checkout and available external fixtures. | Preserve the first failing test; distinguish missing external checkout/environment from a regression. |
 | Lifecycle unit tests | Config parsing, ownership, readiness, exact-PID and MQTT-only semantics. | <code>python3 -m unittest tools.tests.test_demo_lifecycle tools.tests.test_managed_mosquitto_supervisor</code> | No | No | No | PASS; no long-running service is required. | Lifecycle contract or fixture mismatch; do not repair by changing runtime state. |
 | External dependency publication tests | Manifest, source boundary, generated checkout and no-fallback rules. | <code>python3 -m unittest tools.tests.test_external_dependency_publication</code> | No | No | No | PASS against tracked manifests and scripts. | Publication/reconstruction contract drift. |
@@ -49,7 +50,7 @@ GPU inference or Discord delivery.
 | Media fake E2E | Media v1.1 lifecycle, result linkage and replay with fake Android. | <code>python3 tools/media_v11_fake_e2e.py</code> | No | No | No | PASS with in-memory/local fakes. | Contract or fake-consumer regression; no real playback claim follows. |
 | Documentation validation | Relative links, fences and reader-schema byte equality. | <code>python3 tools/validate_documentation.py</code> | No | No | No | PASS with zero broken links/schema drift. | Fix the referenced document or schema mapping; do not suppress the finding. |
 | Shell syntax | Tracked shell parser validation. | <code>bash -n scripts/demo scripts/bootstrap scripts/bootstrap_hermes.sh scripts/bootstrap_llama_cpp.sh tools/start_lmstudio_3gpu.sh tools/validate_temi_e2e_stack.sh</code> | No | No | No | PASS for the checked entrypoints. | Shell syntax regression. |
-| Python compilation | Syntax-only check for changed Python tools. | <code>python3 -m py_compile tools/demo_lifecycle.py tools/managed_lmstudio_supervisor.py tools/validate_documentation.py</code> | No | No | No | PASS without importing services. | Python syntax regression. |
+| Python compilation | Syntax-only check for changed Python tools. | <code>python3 -m py_compile tools/hermes_resident_server.py tools/tests/test_hermes_resident_http.py tools/validate_documentation.py</code> | No | No | No | PASS without importing services. | Python syntax regression. |
 | Clean-clone source bootstrap | Formal submodule plus ten-patch and llama reconstruction, including idempotency. | <code>./scripts/bootstrap --sources</code> twice after bounded submodule initialization | No | Yes for source acquisition | No | PASS in two independent clean clones; Gate 3 evidence is carried forward. | Missing publication URL, team source, environment or manifest identity; do not fall back. |
 | Full production readiness | External LM Studio, Hermes, generated binaries, ports and configured runtime. | <code>./scripts/bootstrap --check</code> and read-only <code>./scripts/demo --json doctor</code> | No for checks; external service may be required | Provisioning-dependent | Production model path may require GPU | PASS only when every required check is healthy. | A missing external prerequisite is not a documentation or hardware-free test failure. |
 
@@ -111,6 +112,56 @@ normal successful response remains unchanged. This result is
 backend context compatible with Hermes before a separately authorized Gate 5B
 retry.
 
+## Gate 5B.5 resident probe and client-disconnect boundary
+
+Gate 5B Retry #3 did not execute a valid malformed L2 probe. The exact request
+was an HTTP `POST` to `/invoke` with `Content-Type: application/json`, a
+five-second client timeout, and this body:
+
+```json
+{"prompt":"synthetic-invalid-active-resident"}
+```
+
+The body contained a valid non-empty `prompt` and omitted the optional
+`active_resident` field. The resident therefore accepted the request, built an
+invocation context with an empty resident ID, and called
+`RequestHandler.do_POST()` → `ResidentHermes.invoke()` → Hermes/model. The
+resident request count changed from `0` to `1`; the client disconnected before
+the valid request completed. This event is
+`L2_PROBE_FAILURE_CLASS=ACCEPTANCE_HARNESS_DEFECT`, not
+`RESIDENT_VALIDATION_DEFECT`, and it is not L5 acceptance evidence. The event
+must not be counted as a malformed-probe rejection or as a successful L5
+model-request budget result.
+
+The resident response path previously wrote the successful response, caught
+the resulting `BrokenPipeError` in the broad invocation handler, logged an
+invocation traceback, and attempted a second HTTP 500 response. The second
+write raised another `BrokenPipeError`, producing an unhandled request-thread
+traceback. The remediation catches only expected client transport disconnects
+around the response emission, records a bounded log entry, and does not retry a
+response on a closed socket. The resident does not cancel or roll back an
+inference that already started. A normal response-writer exception remains an
+error.
+
+For a separately authorized future live retry, use the exact malformed request
+below for L2. Its expected result is HTTP `400` with
+`invalid active_resident`; validation must occur before
+`ResidentHermes.invoke()`, with resident inference count `0` and LM HTTP call
+count `0`:
+
+```bash
+cd /TemiAgent
+curl -sS --max-time 5 -D - \
+  -H 'Content-Type: application/json' \
+  --data '{"prompt":"gate5b5-malformed-active-resident-probe","active_resident":"malformed"}' \
+  http://127.0.0.1:8765/invoke
+```
+
+The future retry must use a 60-second timeout only for a valid L5 inference
+request. Its model-request budget is exactly one request: L2 and L3 remain at
+zero, and L5 may increase the count from zero to one. This Gate 5B.5 task does
+not run that retry, start any resident, or contact LM Studio/MQTT.
+
 ## Documentation and source-structure checks
 
 Run these for a documentation or comment-only change:
@@ -136,7 +187,10 @@ bash -n anomaly_detection/restart_action_viewer_8010.sh anomaly_detection/stop_a
 Check changed Python files without importing or starting services:
 
 ```bash
-python3 -m py_compile tools/demo_lifecycle.py tools/validate_documentation.py
+python3 -m py_compile \
+  tools/hermes_resident_server.py \
+  tools/tests/test_hermes_resident_http.py \
+  tools/validate_documentation.py
 ```
 
 ## Bootstrap and dependency boundary

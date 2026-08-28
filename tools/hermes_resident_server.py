@@ -587,14 +587,22 @@ class RequestHandler(BaseHTTPRequestHandler):
         """Route BaseHTTPRequestHandler access logs through logging."""
         logging.info("%s - %s", self.address_string(), fmt % args)
 
-    def _write_json(self, status_code: int, payload: dict[str, Any]) -> None:
-        """Write a UTF-8 JSON response."""
+    def _write_json(self, status_code: int, payload: dict[str, Any]) -> bool:
+        """Write a UTF-8 JSON response unless the client has disconnected."""
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(status_code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as exc:
+            logging.info(
+                "resident client disconnected before response delivery (%s)",
+                type(exc).__name__,
+            )
+            return False
+        return True
 
 
 class ResidentServer(ThreadingHTTPServer):

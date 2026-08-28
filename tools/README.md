@@ -267,6 +267,31 @@ Health check：
 curl -s http://127.0.0.1:8765/health
 ```
 
+The resident accepts `POST /invoke` only when `prompt` is a non-empty string.
+When `active_resident` is present, the handler requires a JSON object before it
+calls `ResidentHermes.invoke()`. During a separately authorized future Gate 5B
+retry, the inference-impossible structural L2 probe is this exact request:
+
+```bash
+curl -sS --max-time 5 -D - \
+  -H 'Content-Type: application/json' \
+  --data '{"prompt":"gate5b5-malformed-active-resident-probe","active_resident":"malformed"}' \
+  http://127.0.0.1:8765/invoke
+```
+
+The expected result is HTTP `400` with `invalid active_resident`. The handler
+rejects this payload before `ResidentHermes.invoke()`, so the probe must record
+zero resident inference calls and zero LM HTTP calls. A non-empty prompt with
+no `active_resident` is valid under the current API and must not be used as a
+malformed-probe case.
+
+If a client disconnects while a valid invocation is still running, the
+resident does not invent cancellation. The invocation may finish, but the
+HTTP writer treats `BrokenPipeError`, `ConnectionResetError`, and
+`ConnectionAbortedError` as expected delivery failures, logs one bounded class
+name, and does not attempt a second HTTP 500 response. Other response-writer
+exceptions remain visible.
+
 在 private Demo env 同時設 `MEDIA_V11_ENABLED=true`、`HERMES_MEDIA_TOOL_ENABLED=true`、
 `HERMES_MEDIA_FAST_PATH_ENABLED=true` 與絕對 Unix callback socket 後，Resident 會在 LLM 前只
 匹配受控手部運動播放／暫停／繼續／停止字句。這條路仍是 native tool → local Unix socket →

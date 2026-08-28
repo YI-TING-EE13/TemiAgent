@@ -943,6 +943,69 @@ the loaded model context is compatible with the configured Hermes context.
 | Full upstream Hermes test inventory | INCOMPLETE/ENVIRONMENT_BASELINE: the 19,736-case runner exposed unrelated existing failures and did not complete within the bounded observation; focused Hermes compressor, agent-loop and 0010 suites passed. |
 | Live LM/MQTT/service/device acceptance | SKIPPED: Gate 5B.3 forbids a live retry, model inference, service operation, MQTT publication/subscription, Android/Temi and physical action. |
 
+## Gate 5B.5 resident probe safety and client-disconnect remediation
+
+Review date: 2026-08-28. This is a non-live remediation on the publication
+candidate based at <code>release/github-v1@657b39e0064c45c2346f0cdff35581eb01e01d08</code>.
+The candidate does not rerun Gate 5B, start or stop a service, invoke LM Studio,
+publish or subscribe MQTT, or contact Android/Temi.
+
+Gate 5B Retry #3's intended malformed L2 request was actually:
+
+```json
+{"prompt":"synthetic-invalid-active-resident"}
+```
+
+The request was an HTTP <code>POST</code> to <code>/invoke</code> with a
+non-empty string prompt, no <code>active_resident</code> field, and a five-second
+client timeout. The current handler treats <code>active_resident</code> as
+optional, so validation passed and the resident called Hermes/model. The
+resident request count changed <code>0 -&gt; 1</code> before the client
+disconnected. The correct classification is
+<code>L2_PROBE_FAILURE_CLASS=ACCEPTANCE_HARNESS_DEFECT</code>; it is not a
+resident validation defect and is not L5 acceptance evidence.
+
+The old response path caught the first <code>BrokenPipeError</code> from the
+successful response write in the broad invocation exception handler, then
+attempted a second HTTP 500 write. That write raised another
+<code>BrokenPipeError</code> and emitted an unhandled request-thread traceback.
+The resident boundary now catches only expected client transport disconnects
+while emitting a response, records the exception class without payloads, and
+does not retry a response on a closed socket. The resident does not invent
+cancellation; an already-started inference may finish. Other response-writer
+exceptions remain visible.
+
+The exact future inference-impossible L2 request is:
+
+```bash
+cd /TemiAgent
+curl -sS --max-time 5 -D - \
+  -H 'Content-Type: application/json' \
+  --data '{"prompt":"gate5b5-malformed-active-resident-probe","active_resident":"malformed"}' \
+  http://127.0.0.1:8765/invoke
+```
+
+It must return HTTP <code>400</code> with <code>invalid active_resident</code>
+before <code>ResidentHermes.invoke()</code>, with zero resident inference and
+zero LM HTTP calls. A future L5 request alone may use a 60-second timeout and
+the total future retry budget is exactly one model request; L2 and L3 remain at
+zero. This contract is documented for a separately authorized retry only.
+
+### Gate 5B.5 non-live verification matrix
+
+| Check | Result |
+|---|---|
+| Resident HTTP boundary | PASS: 5/5 focused tests; malformed probe rejected before invoke, valid prompt compatibility preserved, BrokenPipe/ConnectionReset handling covered, delayed client disconnect leaves health available, and normal writer errors remain visible. The combined HTTP and health command ran 8/8. |
+| Hermes compression failure contract | PASS: 6/6 inherited focused tests; no Hermes source or patch changed. |
+| Root tools/lifecycle suite | PASS: 155 tests. |
+| HermesTemiBridge suite | PASS: 166 tests. |
+| temi_backend and adapter | PASS: 25 tests and focused adapter 7 tests. |
+| anomaly_detection suite | PASS: 34 tests. |
+| Mock E2E and Media fake E2E | PASS: both software-only routes. |
+| External dependency/publication tests | PASS: 23 tests; formal Hermes verifier reports the pinned base, ten patches and final tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. |
+| Documentation, shell and Python checks | PASS: documentation validator, required shell syntax, changed-file compilation and <code>git diff --check</code>. |
+| Live LM/MQTT/service/device acceptance | SKIPPED: this gate forbids live inference, lifecycle operations, MQTT publication/subscription, Android/Temi and physical action. |
+
 ## Snapshot
 
 | Item | Snapshot | Meaning |
