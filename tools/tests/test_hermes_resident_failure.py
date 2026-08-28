@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import threading
 import unittest
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -65,6 +66,24 @@ class ResidentFailureContractTests(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         return server, thread
+
+    def test_resident_invoke_preserves_successful_raw_output(self) -> None:
+        resident = object.__new__(resident_server.ResidentHermes)
+        resident._lock = threading.Lock()
+        resident._agent = SimpleNamespace(chat=lambda prompt: "safe response")
+        resident.request_count = 0
+        resident.identity_fast_path_enabled = False
+        resident.repeated_discomfort_fast_path_enabled = False
+        resident.media_fast_path_enabled = False
+        resident._identity_tools = None
+        resident._repeated_discomfort_tools = None
+        resident._media_tools = None
+
+        result = resident.invoke("hello", {"event_id": "evt"})
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["raw_output"], "safe response")
+        self.assertEqual(result["request_count"], 1)
 
     def test_success_response_is_unchanged(self) -> None:
         server, thread = self._serve(_FakeResident())

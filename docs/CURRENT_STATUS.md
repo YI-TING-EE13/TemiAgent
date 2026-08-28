@@ -921,6 +921,28 @@ The implementation state is <code>IMPLEMENTED_NONLIVE</code>, not
 <code>LIVE_VERIFIED</code>. A future live retry requires external evidence that
 the loaded model context is compatible with the configured Hermes context.
 
+### Gate 5B.3 non-live verification matrix
+
+| Check | Result |
+|---|---|
+| Hermes compression/failure contract | PASS: 6/6 with mocked provider failures, missing response field, success responses, parser-category preservation and one-turn compression no-op. |
+| Hermes compressor regression | PASS: 72/72; <code>tests/agent/test_context_compressor.py</code>. |
+| Hermes agent-loop regression | PASS: 22/22; mocked tool/text loop and tool-pool behavior. |
+| Resident contract | PASS: 6/6; direct success output, HTTP success response, typed HTTP 500 failure response, health after failure and no raw provider text. |
+| Root tools/lifecycle suite | PASS: 150/150. |
+| HermesTemiBridge suite | PASS: 166/166. |
+| temi_backend and adapter | PASS: 25/25, including adapter-focused 7/7. |
+| anomaly_detection suite | PASS: 34/34. |
+| Mock E2E and Media fake E2E | PASS: both software-only routes. |
+| External dependency, submodule and license tests | PASS: 23/23; formal team URL, pinned base, ten patch hashes, new tree and MIT license. |
+| Fresh Hermes A/B reconstruction | PASS: both initialized from the team remote at the pinned base, applied 0001–0010, passed second bootstrap, matched final tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>, had clean nested checkouts and no alternates. |
+| Source bootstrap | PASS: <code>./scripts/bootstrap --sources</code> twice; Hermes and llama source pins reconstructed. |
+| Full <code>./scripts/bootstrap --check</code> | FAIL/ENVIRONMENT_GAP: source and license checks passed; the candidate environment does not contain the separately provisioned generated <code>llama-server</code> binary. |
+| Documentation, shell and Python checks | PASS: 74 first-party Markdown files, 8 schema mappings, changed shell syntax, changed Python compilation and <code>git diff --check</code>. |
+| Security/publication scan | PASS: 0 active private-LAN defaults, 0 tracked secret matches, 0 file-URL dependencies, no current pose path/blob, 0 reachable blobs at or above 50/100 MiB and no Git alternates. |
+| Full upstream Hermes test inventory | INCOMPLETE/ENVIRONMENT_BASELINE: the 19,736-case runner exposed unrelated existing failures and did not complete within the bounded observation; focused Hermes compressor, agent-loop and 0010 suites passed. |
+| Live LM/MQTT/service/device acceptance | SKIPPED: Gate 5B.3 forbids a live retry, model inference, service operation, MQTT publication/subscription, Android/Temi and physical action. |
+
 ## Snapshot
 
 | Item | Snapshot | Meaning |
