@@ -304,16 +304,139 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             argv = demo._service_argv(config, "mqtt")
         self.assertIn("managed_mosquitto_supervisor.py", " ".join(argv))
 
-    def test_managed_lmstudio_uses_exact_identity_supervisor(self) -> None:
+    def test_production_lmstudio_managed_ownership_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             config_path = self.make_config(root)
             with config_path.open("a", encoding="utf-8") as handle:
                 handle.write("LMSTUDIO_OWNERSHIP=managed\n")
-            config = demo.load_config(config_path)
-            argv = demo._service_argv(config, "lmstudio")
-        self.assertIn("managed_lmstudio_supervisor.py", " ".join(argv))
-        self.assertIn(config.lmstudio_api_identifier, argv)
+            with self.assertRaisesRegex(demo.DemoError, "LMSTUDIO_OWNERSHIP=managed is unsupported"):
+                demo.load_config(config_path)
+
+    def test_external_lmstudio_context_check_uses_http_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            with (
+                mock.patch.object(demo, "_lmstudio_ready", return_value=True) as ready,
+                mock.patch.object(demo, "_lmstudio_lms") as lms,
+            ):
+                self.assertTrue(demo._lmstudio_context_ready(config))
+        ready.assert_called_once_with(config)
+        lms.assert_not_called()
+
+    def test_external_lmstudio_readiness_rejects_unready_listener_without_control(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            with (
+                mock.patch.object(demo, "_listener_count", return_value=1),
+                mock.patch.object(demo, "_lmstudio_ready", return_value=False),
+                mock.patch.object(demo, "_lmstudio_lms") as lms,
+                mock.patch.object(demo.os, "kill") as kill,
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "external LM Studio endpoint"):
+                    demo._external_dependency_ready(config)
+        lms.assert_not_called()
+        kill.assert_not_called()
+
+    def test_external_lmstudio_does_not_create_a_service_spec(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            managed_shape = replace(config, lmstudio_ownership="managed")
+
+        self.assertNotIn("lmstudio", demo._specs(managed_shape))
+
+    def test_external_lmstudio_stop_preserves_a_legacy_record(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            demo.ensure_runtime_layout(config)
+            record = {
+                "name": "lmstudio",
+                "ownership": "owned",
+                "leader": {"pid": 777, "start_ticks": 1},
+                "members": [],
+                "ports": [config.lmstudio_server_port],
+            }
+            demo._atomic_json(
+                config.state_path,
+                {"status": demo.STATE_HEALTHY, "services": {"lmstudio": record}},
+            )
+            with (
+                mock.patch.object(demo, "_stop_record") as stop_record,
+                mock.patch.object(demo, "_lmstudio_lms") as lms,
+            ):
+                result = demo.stop(config)
+
+            self.assertEqual(result["state"], "STOP_INCOMPLETE_OWNERSHIP")
+            self.assertTrue(config.state_path.exists())
+        stop_record.assert_not_called()
+        lms.assert_not_called()
+
+    def test_malformed_lmstudio_state_fails_closed_before_any_stop(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            demo.ensure_runtime_layout(config)
+            demo._atomic_json(
+                config.state_path,
+                {"status": demo.STATE_HEALTHY, "services": {"lmstudio": "ambiguous"}},
+            )
+            with (
+                mock.patch.object(demo, "_stop_record") as stop_record,
+                mock.patch.object(demo, "_lmstudio_lms") as lms,
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "invalid service record"):
+                    demo.stop(config)
+        stop_record.assert_not_called()
+        lms.assert_not_called()
+
+    def test_unknown_mock_lmstudio_ownership_fails_closed_before_any_stop(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_mock_config(Path(temporary)))
+            demo.ensure_runtime_layout(config)
+            demo._atomic_json(
+                config.state_path,
+                {
+                    "status": demo.STATE_HEALTHY,
+                    "services": {
+                        "lmstudio": {
+                            "name": "lmstudio",
+                            "ownership": "unknown",
+                            "leader": {"pid": 777, "start_ticks": 1},
+                            "members": [],
+                            "ports": [config.lmstudio_server_port],
+                        }
+                    },
+                },
+            )
+            with (
+                mock.patch.object(demo, "_stop_record") as stop_record,
+                mock.patch.object(demo.os, "kill") as kill,
+            ):
+                result = demo.stop(config)
+        self.assertEqual(result["state"], "STOP_INCOMPLETE_OWNERSHIP")
+        self.assertIn("lmstudio", result["findings"][0]["service"])
+        stop_record.assert_not_called()
+        kill.assert_not_called()
+
+    def test_external_lmstudio_start_precondition_never_controls_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            with (
+                mock.patch.object(demo, "_validate_source", return_value={"branch": "main", "head": "test"}),
+                mock.patch.object(demo, "_validate_resource_manifest", return_value={}),
+                mock.patch.object(demo, "_reconcile_archived_callback_socket"),
+                mock.patch.object(demo, "_assert_start_ports_clear"),
+                mock.patch.object(
+                    demo,
+                    "_external_dependency_ready",
+                    side_effect=demo.DemoError("external LM Studio endpoint is unavailable"),
+                ),
+                mock.patch.object(demo, "_lmstudio_lms") as lms,
+                mock.patch.object(demo.os, "kill") as kill,
+            ):
+                with self.assertRaisesRegex(demo.DemoError, "external LM Studio endpoint"):
+                    demo.start(config)
+        lms.assert_not_called()
+        kill.assert_not_called()
 
     def test_newcomer_mock_profile_uses_isolated_ports_and_formal_test_doubles(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -429,7 +552,11 @@ class DemoLifecycleConfigTests(unittest.TestCase):
                 mock.patch.object(demo, "_validate_source", return_value={"branch": "main", "head": "test"}),
                 mock.patch.object(demo, "_git", return_value=""),
                 mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
-                mock.patch.object(demo, "_listener_count", side_effect=lambda port: 1 if port == 1883 else 0),
+                mock.patch.object(
+                    demo,
+                    "_listener_count",
+                    side_effect=lambda port: 1 if port in {config.mqtt_port, config.lmstudio_server_port} else 0,
+                ),
                 mock.patch.object(
                     demo,
                     "_http_health",
@@ -481,6 +608,31 @@ class DemoLifecycleConfigTests(unittest.TestCase):
         item = next(check for check in result["checks"] if check["name"] == "lm_studio")
         self.assertEqual((item["status"], item["code"]), ("FAIL", "ENDPOINT_TIMEOUT"))
 
+    def test_doctor_rejects_multiple_external_lmstudio_listeners(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_config(Path(temporary)))
+            with (
+                mock.patch.object(demo, "_validate_source", return_value={"branch": "main", "head": "test"}),
+                mock.patch.object(demo, "_git", return_value=""),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
+                mock.patch.object(
+                    demo,
+                    "_listener_count",
+                    side_effect=lambda port: 2 if port == config.lmstudio_server_port else 1,
+                ),
+                mock.patch.object(
+                    demo,
+                    "_http_health",
+                    return_value=({"data": [{"id": config.lmstudio_api_identifier}]}, "HEALTHY", "ok"),
+                ),
+                mock.patch.object(demo, "_http_json", return_value=None),
+                mock.patch.object(demo, "_broker_sessions", return_value={"loopback_sessions": 0, "remote_sessions": 0}),
+            ):
+                result = demo.doctor(config)
+        item = next(check for check in result["checks"] if check["name"] == "lm_studio")
+        self.assertEqual((item["status"], item["code"]), ("FAIL", "LM_LISTENER_CONFLICT"))
+        self.assertTrue(item["required"])
+
     def test_doctor_marks_a_missing_required_entrypoint_as_fail(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = demo.load_config(self.make_mock_config(Path(temporary)))
@@ -524,7 +676,11 @@ class DemoLifecycleConfigTests(unittest.TestCase):
                 mock.patch.object(demo, "_validate_source", return_value={"branch": "", "head": "test"}),
                 mock.patch.object(demo, "_git", return_value=""),
                 mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
-                mock.patch.object(demo, "_listener_count", side_effect=lambda port: 1 if port == config.mqtt_port else 0),
+                mock.patch.object(
+                    demo,
+                    "_listener_count",
+                    side_effect=lambda port: 1 if port in {config.mqtt_port, config.lmstudio_server_port} else 0,
+                ),
                 mock.patch.object(demo, "_http_health", side_effect=health),
                 mock.patch.object(demo, "_http_json", return_value={"status": "ok", "media_tool_enabled": True, "media_fast_path_enabled": True, "media_tool_names": list(demo.MEDIA_TOOLS)}),
                 mock.patch.object(demo, "_broker_sessions", return_value={"loopback_sessions": 0, "remote_sessions": 0}),
@@ -748,7 +904,7 @@ class MqttOnlyLifecycleTests(unittest.TestCase):
                 "--run-id",
                 "mqtt-test",
             ],
-            "cmdline_sha256": "leader-digest",
+            "cmdline_sha256": "a" * 64,
         }
         return {
             "name": "mqtt",
@@ -1004,7 +1160,7 @@ class MqttOnlyLifecycleTests(unittest.TestCase):
                 "cwd": "/tmp/reviewed-operational-checkout",
                 "executable": "/usr/sbin/mosquitto",
                 "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
-                "cmdline_sha256": "child-digest",
+                "cmdline_sha256": "b" * 64,
             }
             record["members"] = [child]
             self.write_state(config, status=demo.MQTT_STATE_RUNNING, record=record)
@@ -1048,7 +1204,7 @@ class MqttOnlyLifecycleTests(unittest.TestCase):
                 "cwd": str(demo.ROOT),
                 "executable": "/usr/sbin/mosquitto",
                 "cmdline": ["mosquitto", "-c", str(config.mqtt_config_path)],
-                "cmdline_sha256": "child-digest",
+                "cmdline_sha256": "b" * 64,
             }]
             self.write_state(config, status=demo.MQTT_STATE_RUNNING, record=record)
             occupied = self.make_evidence(
@@ -1744,7 +1900,13 @@ class DemoLifecycleRecordTests(unittest.TestCase):
         self.assertFalse(demo._identity_matches(record))
 
     def test_stop_signals_only_the_recorded_exact_pid(self) -> None:
-        record = {"name": "bridge", "leader": {"pid": 731}, "members": [], "ports": []}
+        record = {
+            "name": "bridge",
+            "ownership": "owned",
+            "leader": {"pid": 731, "start_ticks": 1, "cwd": "/tmp", "executable": "/usr/bin/python3", "cmdline_sha256": "a" * 64},
+            "members": [],
+            "ports": [],
+        }
         with (
             mock.patch.object(demo, "_identity_matches", side_effect=[True, False, False]),
             mock.patch.object(demo.os, "kill") as kill,
@@ -1753,7 +1915,13 @@ class DemoLifecycleRecordTests(unittest.TestCase):
         kill.assert_called_once_with(731, demo.signal.SIGTERM)
 
     def test_stop_waits_for_exact_listener_release(self) -> None:
-        record = {"name": "resident", "leader": {"pid": 732}, "members": [], "ports": [8765]}
+        record = {
+            "name": "resident",
+            "ownership": "owned",
+            "leader": {"pid": 732, "start_ticks": 1, "cwd": "/tmp", "executable": "/usr/bin/python3", "cmdline_sha256": "a" * 64},
+            "members": [],
+            "ports": [8765],
+        }
         with (
             mock.patch.object(demo, "_identity_matches", side_effect=[True, False, False]),
             mock.patch.object(demo.os, "kill"),
@@ -1761,6 +1929,13 @@ class DemoLifecycleRecordTests(unittest.TestCase):
         ):
             self.assertEqual(demo._stop_record(record, timeout_seconds=1), "stopped_term")
         listener_count.assert_called_with(8765)
+
+    def test_stop_rejects_pid_only_identity_before_any_signal(self) -> None:
+        record = {"name": "resident", "ownership": "owned", "leader": {"pid": 733}, "members": [], "ports": []}
+        with mock.patch.object(demo.os, "kill") as kill:
+            with self.assertRaisesRegex(demo.DemoError, "exact leader identity"):
+                demo._stop_record(record, timeout_seconds=1)
+        kill.assert_not_called()
 
     def test_callback_socket_cleanup_requires_a_stopped_recorded_bridge(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

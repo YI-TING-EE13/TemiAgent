@@ -21,7 +21,7 @@ START_GATEWAY="${START_GATEWAY:-1}"
 GATEWAY_CONNECT_TIMEOUT_SECONDS="${GATEWAY_CONNECT_TIMEOUT_SECONDS:-90}"
 HERMES_BIN="${HERMES_BIN:-$ROOT/hermes-agent/venv/bin/hermes}"
 RESTART_SERVICES="${RESTART_SERVICES:-1}"
-RESTART_LMSTUDIO="${RESTART_LMSTUDIO:-1}"
+RESTART_LMSTUDIO="${RESTART_LMSTUDIO:-0}"
 RUN_HARDWARE_CHECKS="${RUN_HARDWARE_CHECKS:-1}"
 RUN_UNIT_TESTS="${RUN_UNIT_TESTS:-1}"
 RUN_LOCAL_E2E="${RUN_LOCAL_E2E:-1}"
@@ -181,33 +181,39 @@ require_cmd mosquitto_sub
 require_cmd python3
 
 if [ "$RESTART_LMSTUDIO" = "1" ]; then
-  run_logged start_lmstudio env \
-    LMSTUDIO_MODEL_ID="$MODEL_LOAD_ID" \
-    LMSTUDIO_API_IDENTIFIER="$MODEL_IDENTIFIER" \
-    LMSTUDIO_CONTEXT_LENGTH="$CONTEXT_LENGTH" \
-    LMSTUDIO_VISIBLE_GPUS="$LMSTUDIO_VISIBLE_GPUS" \
-    "$ROOT/tools/start_lmstudio_3gpu.sh"
+  fail "LM Studio is externally managed; this validation helper never starts or stops the provider"
 else
-  log "Skipping LM Studio restart because RESTART_LMSTUDIO=$RESTART_LMSTUDIO"
+  log "Using the externally managed LM Studio provider; no provider lifecycle operation was requested"
 fi
 
 wait_http "http://127.0.0.1:1234/v1/models" 120 "LM Studio API"
-export PATH="$ROOT/.lmstudio-data/bin:$PATH"
-if command -v lms > /dev/null 2>&1; then
-  lms ps > "$LOG_ROOT/lms_ps.log" 2>&1 || true
-  if ! grep -q "$MODEL_IDENTIFIER" "$LOG_ROOT/lms_ps.log"; then
-    cat "$LOG_ROOT/lms_ps.log" >&2 || true
-    fail "LM Studio does not show expected model: $MODEL_IDENTIFIER"
-  fi
-  if ! grep -q "$CONTEXT_LENGTH" "$LOG_ROOT/lms_ps.log"; then
-    cat "$LOG_ROOT/lms_ps.log" >&2 || true
-    fail "LM Studio does not show expected context length: $CONTEXT_LENGTH"
-  fi
-  if grep -q "${MODEL_IDENTIFIER}:2" "$LOG_ROOT/lms_ps.log"; then
-    cat "$LOG_ROOT/lms_ps.log" >&2 || true
-    fail "Duplicate LM Studio model instance detected: ${MODEL_IDENTIFIER}:2"
-  fi
-fi
+LMSTUDIO_MODELS_FILE="$LOG_ROOT/lmstudio_models.json"
+curl -fsS "http://127.0.0.1:1234/v1/models" > "$LMSTUDIO_MODELS_FILE" \
+  || fail "LM Studio model-list request failed"
+python3 - "$LMSTUDIO_MODELS_FILE" "$MODEL_IDENTIFIER" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+models_path = Path(sys.argv[1])
+expected_identifier = sys.argv[2]
+try:
+    payload = json.loads(models_path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"invalid LM Studio model-list response: {exc}")
+
+models = payload.get("data") if isinstance(payload, dict) else None
+matches = [
+    item
+    for item in models or []
+    if isinstance(item, dict) and item.get("id") == expected_identifier
+]
+if len(matches) != 1:
+    raise SystemExit(
+        f"expected exactly one LM Studio model {expected_identifier!r}; "
+        f"found {len(matches)}"
+    )
+PY
 
 if [ "$RESTART_SERVICES" = "1" ]; then
   if [ "$START_GATEWAY" = "1" ]; then

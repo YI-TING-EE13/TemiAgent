@@ -1,12 +1,14 @@
 # TemiAgent Demo 操作入口
 
-最後更新日期：2026-08-27
+最後更新日期：2026-08-28
 
 狀態：CURRENT；Demo-only。`scripts/demo` 是目前 checkout 唯一的 canonical lifecycle。private env 為每個
 service 明確宣告 `managed`、`external` 或 `disabled` ownership；`managed` 服務會由同一
 lifecycle 啟動、記錄 exact PID identity、health-check 與停止，`external` 服務只 health-check
-且永不由 lifecycle 停止。正式 software-only profile 可管理 LM Studio、Mosquitto、Overview
-adapter、resident Hermes、Bridge、Hermes gateway 與 viewer；Android 預設 external。
+且永不由 lifecycle 停止。Production LM Studio is required but externally
+managed; only the `newcomer_mock` profile manages a local LM test double.
+The production lifecycle can manage Mosquitto, Overview adapter, resident
+Hermes, Bridge, Hermes gateway and viewer; Android 預設 external。
 
 所有操作必須在指定 container 的 `/TemiAgent` 執行：
 
@@ -29,7 +31,7 @@ For new maintainers, use the [developer setup](developer_setup.md) first and
 the [deployment handover](demo_deployment_handover.md) for the host/service
 matrix. The [configuration reference](demo_configuration_reference.md) is the
 single key and secret inventory. This guide owns lifecycle actions; it does
-not authorize them during Gate 4 documentation work.
+not authorize them during Gate 5B.1 non-live remediation.
 
 ## Current canonical lifecycle
 
@@ -102,6 +104,25 @@ The exact grammar is implemented by <code>tools/demo_lifecycle.py</code>.
 Global <code>--config</code> and <code>--json</code> options appear before the
 selector, for example
 <code>./scripts/demo --config &lt;private-demo-env&gt; --json doctor</code>.
+
+### Production LM Studio ownership
+
+Production configuration must set `LMSTUDIO_OWNERSHIP=external`. The LM
+provider and its model/cache/GPU setup belong to the external runtime owner.
+Before `scripts/demo start`, `doctor` or the explicit preflight must show one
+configured LM API listener and a ready HTTP model-list response containing the
+configured `LMSTUDIO_API_IDENTIFIER` (normally `google/gemma-4-31b`). The
+lifecycle never invokes `lms`, starts a real LM process, loads or unloads a
+model, or stops/reconfigures a provider. It fails closed when the endpoint is
+absent, malformed, duplicated or not model-compatible.
+
+The production stop path does not stop LM Studio. A legacy LM record is
+preserved and produces `STOP_INCOMPLETE_OWNERSHIP`; an external provider that
+was already running remains running. Direct `lms ls`, `lms ps`, `lms unload
+--all`, `lms server stop`, and `lms daemon down` commands are not read-only
+audits and must not be used as routine recovery. The retained LM helper names
+are compatibility guards that fail closed. The local `newcomer_mock` profile
+is the only profile allowed to manage the tracked mock LM server.
 
 The MQTT-only commands use the primary worktree's canonical private config and
 `/TemiAgent/.runtime/demo` owner-only runtime root. They operate only the
@@ -323,7 +344,8 @@ synthetic abnormal event。viewer `/health` 的
 `notification_bridge_owned=true` 表示 viewer 不讀取 webhook、也不送出 Discord。不要執行
 viewer `--discord-delivery-test`，它會明確拒絕，且不會測試任何 delivery route。
 
-正常停止順序為 viewer → gateway → Bridge → resident → adapter → MQTT → LM Studio。每一項
+正常停止順序為 viewer → gateway → Bridge → resident → adapter → MQTT。Production LM Studio
+is external and is intentionally absent from this sequence. 每一項
 只接受 lifecycle state 裡同時匹配 PID、start time、cwd、executable 與 command digest 的
 record；stale 或不明 PID 會 fail closed，不會以 name-based kill 處理。
 

@@ -1,19 +1,19 @@
 # LM Studio Headless 啟動手冊：HDD 專案路徑與指定 GPU 組合
 
-> Status: machine-dependent reference. The current managed Demo profile is
-> defined by `config/demo.env.example` and
-> [demo_configuration_reference.md](demo_configuration_reference.md): it
-> requires context `64000` and visible GPUs `0,1`. The exploratory 16K/32K
-> examples below must not be used with `scripts/demo`; that lifecycle rejects
-> context or GPU-policy drift. This manual does not authorize changing a live
-> model service.
+> Status: supplemental historical, machine-dependent reference. Production
+> LM Studio is externally managed; the current contract is defined by
+> [DEMO_OPERATOR_GUIDE.md](DEMO_OPERATOR_GUIDE.md) and
+> [demo_configuration_reference.md](demo_configuration_reference.md). The
+> `lms` startup, unload, daemon and model-loading examples below are retained
+> as historical evidence only and must not be executed as a current Demo or
+> recovery procedure. The compatibility helper now fails closed.
 
 本手冊用於在 **Linux / headless / container-like environment** 中啟動 LM Studio local server，並將 LM Studio 的資料目錄固定在專案 HDD 路徑 `/TemiAgent/.lmstudio-data`，同時用 LMSTUDIO_VISIBLE_GPUS 控制 LM Studio daemon 與模型 worker 使用單卡、雙卡或三卡。
 
 路徑說明：`/TemiAgent` 是 TemiAgent GPU container 內的專案路徑；host workspace 對應路徑是 `<host-workspace>`。
-目前預設：載入 QAT 模型 `temi/gemma-4-31b-it-qat`，並用 `--identifier google/gemma-4-31b` 保持 Hermes / Bridge 既有 API model 名稱相容。下載命令：`lms get https://huggingface.co/unsloth/gemma-4-31B-it-qat-GGUF --gguf -y`；底層來源為 `unsloth/gemma-4-31B-it-qat-GGUF` 的 `UD-Q4_K_XL`。
+歷史版本預設載入 QAT 模型 `temi/gemma-4-31b-it-qat`，並用 `--identifier google/gemma-4-31b` 保持 Hermes / Bridge 既有 API model 名稱相容。下載命令：`lms get https://huggingface.co/unsloth/gemma-4-31B-it-qat-GGUF --gguf -y`；底層來源為 `unsloth/gemma-4-31B-it-qat-GGUF` 的 `UD-Q4_K_XL`。目前 production provisioning 由外部 owner 負責，AI6 lifecycle 不執行這些命令。
 
-`temi/gemma-4-31b-it-qat` 是專案提供的 LM Studio virtual model。`tools/start_lmstudio_3gpu.sh` 會把 `tools/lmstudio_model_definitions/gemma-4-31b-it-qat.model.yaml` 安裝到 LM Studio hub 目錄；它保留 Google 2026-07-09 canonical template 的 null、thinking、tool response、continuation 與 generation-prompt 修正，同時使用 LM Studio 相容的 tool-schema formatter，避免直接載入 Unsloth GGUF 時出現 Jinja `UndefinedValue` 錯誤。
+`temi/gemma-4-31b-it-qat` 是歷史版本提供的 LM Studio virtual model。歷史版本的 `tools/start_lmstudio_3gpu.sh` 曾把 `tools/lmstudio_model_definitions/gemma-4-31b-it-qat.model.yaml` 安裝到 LM Studio hub 目錄；它保留 Google 2026-07-09 canonical template 的 null、thinking、tool response、continuation 與 generation-prompt 修正，同時使用 LM Studio 相容的 tool-schema formatter，避免直接載入 Unsloth GGUF 時出現 Jinja `UndefinedValue` 錯誤。目前 compatibility helper fail-closed，production provisioning 不由 AI6 執行。
 
 目標架構如下：
 

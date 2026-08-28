@@ -2,6 +2,8 @@
 
 > Status: HISTORICAL dated checklist. Re-run the current verification matrix
 > before treating any item as present acceptance evidence.
+> The historical `lms ps` item is obsolete for the current lifecycle; use the
+> external LM HTTP model-list readiness check and never use global `lms` cleanup.
 
 最後更新日期：2026-06-12
 

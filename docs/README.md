@@ -1,8 +1,8 @@
 # TemiAgent Documentation Index
 
-最後審查日期：2026-08-27
+最後審查日期：2026-08-28
 
-## Gate 4 handover entry points
+## Gate 5B.1 handover entry points
 
 For a new student, use this short path rather than browsing the full document
 inventory:
@@ -114,7 +114,7 @@ authoritative when any prose conflicts with them.
 | [DEMO_QUICK_REFERENCE.md](operations/DEMO_QUICK_REFERENCE.md) | CURRENT companion; Demo-only | Demo operator | Compact copy of current commands, status meanings and recovery first actions; not a second authority. |
 | [demo_operations_runbook.md](operations/demo_operations_runbook.md) | LEGACY reference; Demo-only | Demo operator | Retained expert aliases and Android-evidence background; explicit legacy notice, not a current procedure. |
 | [temi_integration_runbook.md](operations/temi_integration_runbook.md) | CURRENT supplemental | Integration | Hardware-free integration checks and external acceptance boundaries; no lifecycle ownership. |
-| [lmstudio_headless_3gpu_hdd_manual.md](operations/lmstudio_headless_3gpu_hdd_manual.md) | Maintained, machine-dependent | LM Studio runtime | Headless model service startup, health and recovery. |
+| [lmstudio_headless_3gpu_hdd_manual.md](operations/lmstudio_headless_3gpu_hdd_manual.md) | Supplemental historical, machine-dependent | LM Studio runtime | Historical provider notes only; production ownership/readiness is defined by the current operator guide. |
 | [lmstudio_gpu_selection.md](operations/lmstudio_gpu_selection.md) | Experimental evidence | ML runtime | GPU selection observations; not a portable default. |
 | [temi_streaming_manual.md](operations/temi_streaming_manual.md) | LEGACY external-Android reference | Temi streaming | Historical Android build, ADB and streaming procedure; not the current lifecycle. |
 | [temi_streaming_local_runbook.md](operations/temi_streaming_local_runbook.md) | LEGACY machine-specific reference | Temi streaming | Local ADB, MQTT and WebSocket observations; historical evidence only. |

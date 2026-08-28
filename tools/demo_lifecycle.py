@@ -108,6 +108,10 @@ CANONICAL_CONTEXT_LENGTH = 64_000
 CANONICAL_LMSTUDIO_VISIBLE_GPUS = "0,1"
 CANONICAL_LMSTUDIO_MODEL = "temi/gemma-4-31b-it-qat"
 CANONICAL_LMSTUDIO_IDENTIFIER = "google/gemma-4-31b"
+LMSTUDIO_EXTERNAL_OWNERSHIP_ERROR = (
+    "LM Studio is an externally managed dependency; the lifecycle cannot safely "
+    "start, stop, unload, or reconfigure its global runtime"
+)
 RESOURCE_MANIFEST_PATH = ROOT / "config" / "demo_resources.json"
 PROFILE_PRODUCTION = "production"
 PROFILE_NEWCOMER_MOCK = "newcomer_mock"
@@ -139,6 +143,10 @@ STATE_UNHEALTHY = "UNHEALTHY"
 STATE_START_FAILED = "START_FAILED"
 STATE_STOPPED = "STOPPED"
 MQTT_STATE_RUNNING = "RUNNING"
+STOPPABLE_RECORD_OWNERSHIP = frozenset({"owned", "adopted_for_explicit_restart"})
+LIFECYCLE_SERVICE_NAMES = frozenset(
+    {"lmstudio", "mqtt", "adapter", "resident", "bridge", "mock_android", "mock_discord", "gateway", "viewer"}
+)
 MQTT_STATE_VALUES = {
     STATE_STARTING,
     MQTT_STATE_RUNNING,
@@ -732,6 +740,16 @@ def load_config(raw_path: str | Path, *, mqtt_only: bool = False) -> DemoConfig:
         raise DemoError(f"LMSTUDIO_VISIBLE_GPUS must be {CANONICAL_LMSTUDIO_VISIBLE_GPUS}")
     lmstudio_ownership = _ownership(values, "LMSTUDIO_OWNERSHIP", default="external")
     mqtt_ownership = _ownership(values, "MQTT_OWNERSHIP", default="external")
+    if profile == PROFILE_PRODUCTION and lmstudio_ownership == "managed":
+        raise DemoError(
+            "LMSTUDIO_OWNERSHIP=managed is unsupported for production; "
+            + LMSTUDIO_EXTERNAL_OWNERSHIP_ERROR
+        )
+    if profile == PROFILE_PRODUCTION and lmstudio_ownership == "disabled":
+        raise DemoError(
+            "production LMSTUDIO_OWNERSHIP must be external because the LM API "
+            "is a required readiness precondition"
+        )
     if mqtt_only and is_canonical_mqtt_runtime and profile != PROFILE_PRODUCTION:
         raise DemoError("canonical MQTT-only operation requires the production profile")
     gateway_enabled = _truthy(values.get("HERMES_GATEWAY_ENABLED", "false"))
@@ -1158,7 +1176,39 @@ def _mosquitto_executable_identity() -> tuple[str, str] | None:
         return None
 
 
+def _exact_identity_valid(identity: object) -> bool:
+    """Require the immutable fields needed to prove one exact process identity."""
+    if not isinstance(identity, dict):
+        return False
+    pid = identity.get("pid")
+    start_ticks = identity.get("start_ticks")
+    if (
+        isinstance(pid, bool)
+        or not isinstance(pid, int)
+        or pid <= 0
+        or isinstance(start_ticks, bool)
+        or not isinstance(start_ticks, int)
+        or start_ticks < 0
+    ):
+        return False
+    if not all(
+        isinstance(identity.get(field), str) and os.path.isabs(identity[field])
+        for field in ("cwd", "executable")
+    ):
+        return False
+    digest = identity.get("cmdline_sha256")
+    if not isinstance(digest, str) or len(digest) != 64 or digest != digest.lower():
+        return False
+    try:
+        int(digest, 16)
+    except ValueError:
+        return False
+    return True
+
+
 def _identity_matches(record: dict[str, Any]) -> bool:
+    if not _exact_identity_valid(record):
+        return False
     try:
         current = _identity(int(record["pid"]))
     except (FileNotFoundError, PermissionError, ProcessLookupError, DemoError, ValueError):
@@ -1697,16 +1747,9 @@ def _mqtt_readiness_evidence(
 
 
 def _lmstudio_lms(config: DemoConfig, *args: str, timeout: int = 20) -> subprocess.CompletedProcess[str]:
-    executable = config.lmstudio_target_dir / "bin" / "lms"
-    if not executable.is_file():
-        raise DemoError("LM Studio CLI is unavailable under LMSTUDIO_TARGET_DIR")
-    return subprocess.run(
-        [str(executable), *args],
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=timeout,
+    del config, args, timeout
+    raise DemoError(
+        "LM Studio CLI control is disabled; use the external owner and HTTP readiness contract"
     )
 
 
@@ -1724,18 +1767,8 @@ def _lmstudio_ready(config: DemoConfig) -> bool:
 
 
 def _lmstudio_context_ready(config: DemoConfig) -> bool:
-    if config.is_newcomer_mock:
-        return _lmstudio_ready(config)
-    try:
-        completed = _lmstudio_lms(config, "ps", timeout=15)
-    except (OSError, subprocess.TimeoutExpired, DemoError):
-        return False
-    if completed.returncode:
-        return False
-    return (
-        config.lmstudio_api_identifier in completed.stdout
-        and str(config.lmstudio_context_length) in completed.stdout
-    )
+    """Use only the model-list API; context/GPU policy stays external and immutable."""
+    return _lmstudio_ready(config)
 
 
 def _gateway_ready(config: DemoConfig) -> bool:
@@ -1808,13 +1841,18 @@ class ServiceSpec:
     log_path: Path
 
 
+def _lmstudio_service_is_managed(config: DemoConfig) -> bool:
+    """Return whether LM Studio is a local test double owned by this run."""
+    return config.is_newcomer_mock and config.lmstudio_ownership == "managed"
+
+
 def _specs(config: DemoConfig) -> dict[str, ServiceSpec]:
     specs: dict[str, ServiceSpec] = {}
-    if config.lmstudio_ownership == "managed":
+    if _lmstudio_service_is_managed(config):
         specs["lmstudio"] = ServiceSpec(
             "lmstudio",
             ROOT,
-            "mock_lmstudio_server.py" if config.is_newcomer_mock else "managed_lmstudio_supervisor.py",
+            "mock_lmstudio_server.py",
             (config.lmstudio_server_port,),
             config.runtime_root / "logs" / "lmstudio" / "lmstudio.log",
         )
@@ -2188,15 +2226,14 @@ def _record_mqtt_child_contract(config: DemoConfig, record: dict[str, Any]) -> d
 
 def _stop_record(record: dict[str, Any], *, timeout_seconds: int) -> str:
     name = str(record.get("name", "unknown"))
-    identities = [record.get("leader"), *(record.get("members") or [])]
+    if not _stoppable_record_is_valid(name, record):
+        raise DemoError(f"{name} ownership record lacks positive ownership or an exact leader identity")
+    identities = [record["leader"], *record["members"]]
     valid: list[dict[str, Any]] = []
     for identity in identities:
-        if isinstance(identity, dict) and identity.get("pid") is not None:
-            if not any(item.get("pid") == identity.get("pid") for item in valid):
-                valid.append(identity)
-    leader = record.get("leader")
-    if not isinstance(leader, dict):
-        raise DemoError(f"{name} ownership record has no leader")
+        if not any(item.get("pid") == identity.get("pid") for item in valid):
+            valid.append(identity)
+    leader = record["leader"]
     if _identity_matches(leader):
         os.kill(int(leader["pid"]), signal.SIGTERM)
     deadline = time.monotonic() + timeout_seconds
@@ -2342,8 +2379,10 @@ def _mqtt_record_shape(config: DemoConfig, record: object) -> bool:
         record.get("name") == "mqtt"
         and record.get("ownership") == "owned"
         and record.get("ports") == [config.mqtt_port]
-        and isinstance(record.get("leader"), dict)
-        and isinstance(record.get("process_start_identity"), dict)
+        and _exact_identity_valid(record.get("leader"))
+        and _exact_identity_valid(record.get("process_start_identity"))
+        and isinstance(record.get("members"), list)
+        and all(_exact_identity_valid(member) for member in record["members"])
         and isinstance(record.get("command_fingerprint"), str)
         and isinstance(record.get("lifecycle_run_id"), str)
     )
@@ -2446,13 +2485,15 @@ def _mqtt_record_members_have_live_lineage(record: dict[str, Any]) -> bool:
 
     leader = record.get("leader")
     members = record.get("members")
-    if not isinstance(leader, dict) or not isinstance(members, list):
+    if not _exact_identity_valid(leader) or not isinstance(members, list):
         return False
     leader_pid = leader.get("pid")
     if not isinstance(leader_pid, int):
         return False
     for member in members:
         if not isinstance(member, dict):
+            return False
+        if not _exact_identity_valid(member):
             return False
         if not _identity_matches(member):
             continue
@@ -2537,6 +2578,8 @@ def mqtt_only_status(config: DemoConfig) -> dict[str, Any]:
     _mqtt_only_spec(config)
     state_record = _read_mqtt_state(config)
     record, evidence = _mqtt_observation(config, state_record)
+    if record is not None and not _mqtt_record_shape(config, record):
+        raise DemoError("MQTT_ONLY_OWNERSHIP_UNRESOLVED: recorded MQTT identity is malformed")
     raw_state = str(state_record.get("status")) if state_record else None
     foreign = _mqtt_state_is_foreign(evidence)
     if state_record is None:
@@ -2626,6 +2669,8 @@ def mqtt_only_start(config: DemoConfig) -> dict[str, Any]:
     existing = _read_mqtt_state(config)
     if existing is not None:
         existing_record, existing_evidence = _mqtt_observation(config, existing)
+        if existing_record is not None and not _mqtt_record_shape(config, existing_record):
+            raise DemoError("MQTT_ONLY_OWNERSHIP_UNRESOLVED: recorded MQTT identity is malformed")
         if (
             existing.get("status") == MQTT_STATE_RUNNING
             and _mqtt_record_shape(config, existing_record)
@@ -2758,6 +2803,8 @@ def mqtt_only_stop(config: DemoConfig) -> dict[str, Any]:
     _mqtt_only_spec(config)
     state = _read_mqtt_state(config)
     record, evidence = _mqtt_observation(config, state)
+    if record is not None and not _mqtt_record_shape(config, record):
+        raise DemoError("MQTT_ONLY_OWNERSHIP_UNRESOLVED: recorded MQTT identity is malformed")
     foreign = _mqtt_state_is_foreign(evidence)
     if state is None:
         return _mqtt_only_summary(
@@ -2886,7 +2933,7 @@ def _viewer_notification_argv(config: DemoConfig) -> list[str]:
 def _service_argv(config: DemoConfig, name: str, *, run_id: str | None = None) -> list[str]:
     skills = ROOT / "hermes-agent" / "skills"
     if name == "lmstudio":
-        if config.is_newcomer_mock:
+        if _lmstudio_service_is_managed(config):
             return [
                 sys.executable,
                 str(ROOT / "tools" / "mocks" / "mock_lmstudio_server.py"),
@@ -2894,16 +2941,7 @@ def _service_argv(config: DemoConfig, name: str, *, run_id: str | None = None) -
                 "--port", str(config.lmstudio_server_port),
                 "--model-id", config.lmstudio_api_identifier,
             ]
-        return [
-            sys.executable,
-            str(ROOT / "tools" / "managed_lmstudio_supervisor.py"),
-            "--startup-script",
-            str(ROOT / "tools" / "start_lmstudio_3gpu.sh"),
-            "--target-dir",
-            str(config.lmstudio_target_dir),
-            "--identifier",
-            config.lmstudio_api_identifier,
-        ]
+        raise DemoError(LMSTUDIO_EXTERNAL_OWNERSHIP_ERROR)
     if name == "mqtt":
         if config.mqtt_config_path is None:
             raise DemoError("managed MQTT has no verified config path")
@@ -3160,7 +3198,32 @@ def _state_records(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
     raw = state.get("services", {})
     if not isinstance(raw, dict):
         raise DemoError("lifecycle state has invalid service records")
-    return {name: record for name, record in raw.items() if isinstance(record, dict)}
+    invalid = [name for name, record in raw.items() if not isinstance(record, dict)]
+    if invalid:
+        raise DemoError(
+            "lifecycle state has invalid service record(s): "
+            + ", ".join(str(name) for name in invalid)
+        )
+    return dict(raw)
+
+
+def _invalid_stoppable_records(records: dict[str, dict[str, Any]]) -> list[str]:
+    return [str(name) for name, record in records.items() if not _stoppable_record_is_valid(str(name), record)]
+
+
+def _stoppable_record_is_valid(name: str, record: object) -> bool:
+    """Validate every field needed before a lifecycle state may be removed."""
+    if not isinstance(record, dict):
+        return False
+    members = record.get("members")
+    return bool(
+        name in LIFECYCLE_SERVICE_NAMES
+        and record.get("name") == name
+        and record.get("ownership") in STOPPABLE_RECORD_OWNERSHIP
+        and _exact_identity_valid(record.get("leader"))
+        and isinstance(members, list)
+        and all(_exact_identity_valid(member) for member in members)
+    )
 
 
 def _managed_like_unrecorded_services(
@@ -3212,25 +3275,21 @@ def _external_dependency_ready(config: DemoConfig) -> None:
         _listener_count(config.mqtt_port) != 1 or not _mqtt_tcp_ready(config)
     ):
         raise DemoError("external MQTT Broker endpoint is unavailable")
-    if config.lmstudio_ownership == "external" and not _lmstudio_ready(config):
-        raise DemoError("external LM Studio endpoint is unavailable")
+    if config.lmstudio_ownership == "external" and (
+        _listener_count(config.lmstudio_server_port) != 1 or not _lmstudio_ready(config)
+    ):
+        raise DemoError(
+            "external LM Studio endpoint is unavailable or is not a single "
+            "compatible listener"
+        )
     if config.gateway_ownership == "external" and not _gateway_ready(config):
         raise DemoError("external Hermes gateway is unavailable")
 
 
 def _stop_lmstudio(config: DemoConfig) -> None:
-    """Ask LM Studio to release its model, server and daemon before PID cleanup."""
-    for args in (
-        ("unload", config.lmstudio_api_identifier),
-        ("server", "stop"),
-        ("daemon", "down"),
-    ):
-        try:
-            _lmstudio_lms(config, *args, timeout=30)
-        except (OSError, subprocess.TimeoutExpired, DemoError):
-            # Exact process cleanup below remains authoritative when the CLI
-            # is already unavailable or the daemon is already gone.
-            continue
+    """Reject legacy attempts to stop an externally managed LM runtime."""
+    del config
+    raise DemoError(LMSTUDIO_EXTERNAL_OWNERSHIP_ERROR)
 
 
 def start(config: DemoConfig) -> dict[str, Any]:
@@ -3240,6 +3299,18 @@ def start(config: DemoConfig) -> dict[str, Any]:
     ensure_runtime_layout(config)
     existing = _read_json(config.state_path)
     if existing:
+        existing_records = _state_records(existing)
+        if "lmstudio" in existing_records and not _lmstudio_service_is_managed(config):
+            raise DemoError(
+                "LMSTUDIO_OWNERSHIP_STATE_UNSUPPORTED: external LM Studio state "
+                "cannot be adopted or stopped by this lifecycle"
+            )
+        invalid_records = _invalid_stoppable_records(existing_records)
+        if invalid_records:
+            raise DemoError(
+                "LIFECYCLE_OWNERSHIP_STATE_INVALID: records are not positively "
+                "owned: " + ", ".join(invalid_records)
+            )
         existing_status = str(existing.get("status", ""))
         if existing_status in HEALTHY_STATE_VALUES:
             health = runtime_health(config, existing)
@@ -3413,6 +3484,29 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
             "results": [],
         }
     records = _state_records(state)
+    if "lmstudio" in records and not _lmstudio_service_is_managed(config):
+        return {
+            "state": "STOP_INCOMPLETE_OWNERSHIP",
+            "already_stopped": False,
+            "warning": (
+                "external LM Studio ownership has no lifecycle stop contract; "
+                "the legacy record was preserved and no PID was signalled"
+            ),
+            "findings": [{"service": "lmstudio", "ports": [config.lmstudio_server_port]}],
+            "results": [],
+        }
+    invalid_records = _invalid_stoppable_records(records)
+    if invalid_records:
+        return {
+            "state": "STOP_INCOMPLETE_OWNERSHIP",
+            "already_stopped": False,
+            "warning": (
+                "lifecycle state contains records without positive ownership "
+                "or exact leader identity; no PID was signalled"
+            ),
+            "findings": [{"service": name} for name in invalid_records],
+            "results": [],
+        }
     findings = _managed_like_unrecorded_services(specs, records)
     if findings:
         return {
@@ -3430,8 +3524,6 @@ def stop(config: DemoConfig, *, adopt_for_restart: bool = False, dry_run: bool =
         if dry_run:
             results.append({"service": name, "outcome": "would_stop_exact_owned_pid"})
             continue
-        if name == "lmstudio":
-            _stop_lmstudio(config)
         outcome = _stop_record(record, timeout_seconds=30)
         if name == "bridge":
             _remove_owned_callback_sockets(config, record)
@@ -3490,8 +3582,8 @@ def runtime_health(config: DemoConfig, state: dict[str, Any] | None = None) -> d
     viewer = _http_json(config.viewer_health_url) if config.viewer_enabled else None
     listeners = {str(port): _listener_count(port) for port in config.lifecycle_ports}
     broker = {"tcp_ready": _mqtt_tcp_ready(config), "listener_count": listeners[str(config.mqtt_port)], **_broker_sessions(config)}
-    lmstudio_ok = _lmstudio_ready(config) and (
-        config.lmstudio_ownership != "managed" or service_identity.get("lmstudio", False)
+    lmstudio_ok = listeners[str(config.lmstudio_server_port)] == 1 and _lmstudio_ready(config) and (
+        not _lmstudio_service_is_managed(config) or service_identity.get("lmstudio", False)
     )
     mqtt_ok = broker["tcp_ready"] and broker["listener_count"] == 1 and (
         config.mqtt_ownership != "managed" or service_identity.get("mqtt", False)
@@ -3608,6 +3700,15 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
         add("lifecycle_state", "WARNING", "LIFECYCLE_NOT_HEALTHY", "recorded lifecycle state is not healthy", required=False)
     else:
         add("lifecycle_state", "PASS", "LIFECYCLE_STATE_CLEAR", "no incomplete lifecycle ownership state", required=True)
+    invalid_records = _invalid_stoppable_records(records)
+    if invalid_records:
+        add(
+            "ownership_records",
+            "FAIL",
+            "INVALID_OWNERSHIP_RECORD",
+            "records lack positive ownership or an exact leader: " + ", ".join(invalid_records),
+            required=True,
+        )
 
     guarded(
         "repository",
@@ -3703,9 +3804,26 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
     )
     guarded("resource_manifest", lambda: json.dumps(_validate_resource_manifest(), sort_keys=True))
 
-    def endpoint(name: str, url: str, validator: Callable[[dict[str, Any]], bool], *, ownership: str, managed_name: str | None = None) -> None:
-        payload, code, message = _http_health(url)
+    def endpoint(
+        name: str,
+        url: str,
+        validator: Callable[[dict[str, Any]], bool],
+        *,
+        ownership: str,
+        managed_name: str | None = None,
+        listener_port: int | None = None,
+    ) -> None:
         running = managed_name is not None and managed_name in records and _identity_matches(records[managed_name].get("leader", {}))
+        if listener_port is not None:
+            listener_count = _listener_count(listener_port)
+            if listener_count != 1:
+                if ownership == "managed" and not running:
+                    add(name, "WARNING", "MANAGED_ENDPOINT_NOT_STARTED", "managed endpoint is configured but has no single owned listener", required=False)
+                else:
+                    code = "LM_LISTENER_CONFLICT" if listener_count > 1 else "LM_LISTENER_UNAVAILABLE"
+                    add(name, "FAIL", code, f"LM Studio listener count is {listener_count}; expected exactly one", required=True)
+                return
+        payload, code, message = _http_health(url)
         if payload is None:
             if ownership == "managed" and not running:
                 add(name, "WARNING", "MANAGED_ENDPOINT_NOT_STARTED", message, required=False)
@@ -3731,7 +3849,8 @@ def doctor(config: DemoConfig) -> dict[str, Any]:
             for item in payload["data"]
         ),
         ownership=config.lmstudio_ownership,
-        managed_name="lmstudio" if config.lmstudio_ownership == "managed" else None,
+        managed_name="lmstudio" if _lmstudio_service_is_managed(config) else None,
+        listener_port=config.lmstudio_server_port,
     )
     endpoint(
         "resident",

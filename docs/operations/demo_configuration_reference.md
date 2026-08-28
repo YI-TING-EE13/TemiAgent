@@ -1,7 +1,7 @@
 # Demo Configuration Reference
 
-Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 4:
-2026-08-27.
+Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5B.1:
+2026-08-28.
 
 This is the non-secret reference for the complete key set in
 [`config/demo.env.example`](../../config/demo.env.example). The default private
@@ -65,7 +65,7 @@ classification is about where a value may come from:
 | <code>TEMI_SHARED_BRIDGE_PATH</code>, <code>TEMI_SHARED_HERMES_PATH</code> | PUBLIC_TEMPLATE / PRIVATE_RUNTIME | Shared metadata root; canonical profile resolves both to the same private root. | Placeholder paths only. | Runtime data; lifecycle requires absolute matching roots under the selected runtime root. |
 | <code>HERMES_MEDIA_CALLBACK_SOCKET</code>, <code>HERMES_DEMO_IDENTITY_CALLBACK_SOCKET</code>, <code>HERMES_DEMO_CARE_CALLBACK_SOCKET</code>, <code>DEMO_IDENTITY_STATE_DIR</code> | PRIVATE_RUNTIME | Private Unix sockets/state paths; identity/care paths are conditional. | Placeholder paths only. | Runtime state; required and checked when the corresponding feature gates are enabled. |
 | <code>LMSTUDIO_OWNERSHIP</code>, <code>MQTT_OWNERSHIP</code>, <code>HERMES_GATEWAY_OWNERSHIP</code>, <code>MANAGE_ANDROID</code> | PUBLIC_TEMPLATE | Ownership is <code>managed</code>, <code>external</code> or <code>disabled</code>; Android is <code>0</code>. | Tracked safe values. | Private env; lifecycle requires ownership/enablement agreement and rejects Android management. |
-| <code>LMSTUDIO_TARGET_DIR</code>, <code>LMSTUDIO_MODEL_ID</code>, <code>LMSTUDIO_API_IDENTIFIER</code>, <code>LMSTUDIO_SERVER_PORT</code> | REQUIRED_USER_INPUT / PUBLIC_DEFAULT | Production uses the external LM Studio location, canonical model ID, API identifier and port <code>1234</code>. | Identifier/default is tracked; local target is external/private. | LM Studio supervisor and health; model/cache must be provisioned externally. |
+| <code>LMSTUDIO_TARGET_DIR</code>, <code>LMSTUDIO_MODEL_ID</code>, <code>LMSTUDIO_API_IDENTIFIER</code>, <code>LMSTUDIO_SERVER_PORT</code> | REQUIRED_USER_INPUT / PUBLIC_DEFAULT | Production uses the external LM Studio location, canonical model ID, API identifier and port <code>1234</code>. | Identifier/default is tracked; local target is external/private. | External owner provisions the model/cache; lifecycle checks one listener and HTTP model-list readiness only. |
 | <code>CONTEXT_LENGTH</code>, <code>LMSTUDIO_CONTEXT_LENGTH</code>, <code>LMSTUDIO_VISIBLE_GPUS</code> | PUBLIC_DEFAULT | <code>64000</code>, matching context values and visible devices <code>0,1</code>. | Tracked defaults. | Lifecycle rejects drift; GPU/driver remains an external pin gap. |
 | <code>MQTT_BROKER_HOST</code>, <code>MQTT_BROKER_PORT</code>, <code>MQTT_CONFIG_PATH</code> | PUBLIC_DEFAULT / REQUIRED_USER_INPUT | Client default is loopback, port <code>1883</code>; managed production config must be an existing absolute broker config. | Host/port/config shape tracked; deployment endpoint is private. | Private env and broker supervisor; canonical MQTT-only mode additionally requires the tracked <code>mqtt/mosquitto.conf</code>. |
 | <code>HERMES_GATEWAY_ENABLED</code> | PUBLIC_DEFAULT | Disabled in newcomer; production may explicitly enable it. | Tracked. | Lifecycle derives service inclusion; health is not Discord delivery proof. |
@@ -158,17 +158,17 @@ paths, raw care records, images, full prompts, runtime exports or payload-bearin
 logs. Never use a credential as a public default, and never claim notification
 delivery from the presence of a credential or a healthy viewer.
 
-## Managed dependency profile
+## Dependency profile
 
 | Key | Canonical sample value / role | Validation boundary |
 |---|---|---|
-| `LMSTUDIO_OWNERSHIP` | `managed` unless another documented owner is responsible. | Managed supervisor records its PID; external mode is never stopped. |
-| `LMSTUDIO_TARGET_DIR` | LM Studio installation/data location. | Must support the reviewed startup helper. |
+| `LMSTUDIO_OWNERSHIP` | `external` for production; `managed` only for the `newcomer_mock` LM test double. | Production lifecycle records no LM owner and never stops or reconfigures the provider. |
+| `LMSTUDIO_TARGET_DIR` | External LM Studio installation/data location; mock data root for `newcomer_mock`. | Production lifecycle does not access or mutate this path. |
 | `LMSTUDIO_MODEL_ID` | Logical Demo model ID. | Lifecycle checks the canonical model policy. |
 | `LMSTUDIO_API_IDENTIFIER` | OpenAI-compatible model identifier. | Must match the reviewed Demo profile. |
-| `LMSTUDIO_SERVER_PORT` | LM Studio API listener, normally `1234`. | Health is a service gate, not model-quality evidence. |
-| `CONTEXT_LENGTH` / `LMSTUDIO_CONTEXT_LENGTH` | Both `64000` for the canonical Demo. | Must agree; the lifecycle rejects drift. |
-| `LMSTUDIO_VISIBLE_GPUS` | `0,1` for the canonical Demo. | The lifecycle rejects a different GPU policy. |
+| `LMSTUDIO_SERVER_PORT` | External LM Studio API listener, normally `1234`. | Production requires one listener and a compatible `/v1/models` response; the lifecycle never binds or reclaims the port. |
+| `CONTEXT_LENGTH` / `LMSTUDIO_CONTEXT_LENGTH` | Both `64000` for the canonical Demo. | Must agree; the lifecycle rejects drift. The external owner provisions the model context. |
+| `LMSTUDIO_VISIBLE_GPUS` | `0,1` for the canonical Demo. | The lifecycle rejects policy drift but does not assign or reconfigure GPUs. |
 | `MQTT_OWNERSHIP` | `managed` or explicitly `external`. | Exactly one reachable broker listener is required. |
 | `MQTT_BROKER_HOST` / `MQTT_BROKER_PORT` | Broker endpoint and port, normally `1883`. | Do not commit a deployment-specific value. |
 | `MQTT_CONFIG_PATH` | Managed Mosquitto config path. | Needed only when MQTT is managed. |

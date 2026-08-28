@@ -208,13 +208,13 @@ override the production port or attach a second owner to <code>1883</code>.
 | Stage / owner | Required evidence before advancing | Side effect and rollback boundary |
 |---|---|---|
 | Source/config preflight — maintainer | Isolated clean candidate at the reviewed release ref; formal Hermes/llama tree and license checks; frozen environments; private config metadata; no alternate objects | No service or MQTT operation. Discard only the isolated candidate after evidence review. |
-| LM Studio — LM/runtime owner | <code>GET /v1/models</code> succeeds; identifier <code>google/gemma-4-31b</code>, context <code>64000</code>, configured GPU policy, exact lifecycle identity and port <code>1234</code> agree | Requires separate authorization. Stop only the recorded exact LM Studio identity; preserve MQTT and dependent state. |
+| LM Studio — external LM/runtime owner | <code>GET /v1/models</code> succeeds; identifier <code>google/gemma-4-31b</code>, context <code>64000</code>, configured GPU policy, and exactly one compatible listener on port <code>1234</code> agree | AI6 does not start, stop, unload, or reconfigure production LM Studio. Preserve external state and create a fresh ownership ledger on any future retry. |
 | MQTT — AI6 operator | Either read-only <code>./scripts/demo --json mqtt status</code> proves the external <code>1883</code> lineage, or the disposable <code>29183</code> profile proves its own exact managed lineage and TCP readiness | Default has no transition. An isolated broker may be stopped only through its exact owner record, never by name or port alone. |
 | Adapter/resident/Bridge — AI6 service owner | Adapter listeners <code>8080/8081</code>, resident <code>/health</code> on <code>8765</code>, Bridge callback socket, exact PIDs, and redacted logs all pass; synthetic no-op route remains validator-bound | Start in canonical order only after authorization. Roll back in reverse exact-PID order; do not bypass Bridge with raw commands. |
 | Gateway/viewer — optional owners | Gateway health/status, viewer <code>/health</code> on <code>8010</code>, llama listener <code>8011</code> and model/resource checks pass when enabled | Optional and no Discord claim. Stop exact recorded identities in reverse order; keep the main route separately classified. |
 | Synthetic software-only acceptance — verification owner | Canonical event/trace and no-op contract checks pass without physical Android, real notification or unrestricted model inference | Use the isolated runtime/evidence root only; no raw MQTT command/result fabrication and no change to canonical MQTT. |
 | Android/Temi acceptance — device owner | Fresh Android session, subscription, accepted/started or playing result, and physical observation for each authorized action | Separate hardware authorization and device-owner rollback. A Bridge publish alone cannot advance this stage. |
-| Rollback — lifecycle owner | Final redacted status, protected-port inventory, exact lifecycle records and retained evidence | Reverse order: viewer, gateway, Bridge, resident, adapter, isolated MQTT, LM Studio. The canonical external MQTT broker remains running. |
+| Rollback — lifecycle owner | Final redacted status, protected-port inventory, exact lifecycle records and retained evidence | Reverse order: viewer, gateway, Bridge, resident, adapter and isolated MQTT. Production LM Studio and the canonical external MQTT broker remain running. |
 
 Gate 5B remains blocked by the missing root publication URL/remote, the
 unavailable LM Studio API and unpinned LM Studio version, the full-stack
@@ -540,31 +540,27 @@ retained as a public fixture.
 
 ### LM Studio, MQTT and process ledger
 
-LM Studio is a separate Gate 5B readiness boundary. The first check is
+LM Studio is an external Gate 5B readiness boundary. The first check is
 read-only HTTP <code>GET /v1/models</code> on configured port
 <code>1234</code>, requiring the configured
 <code>google/gemma-4-31b</code> identifier, context <code>64000</code> and
 GPU policy. A process, model file or cached build alone is not readiness.
-<code>LM_STUDIO_GATE5B_START_REQUIRED=YES</code> for a production resident
-run: either an external LM Studio owner must already satisfy this readiness
-contract, or Gate 5B must explicitly authorize the managed start. The
-<code>LM_STUDIO_CONTROL_METHOD</code> is
-<code>tools/demo_lifecycle.py</code> starting
-<code>tools/managed_lmstudio_supervisor.py</code>, which invokes
-<code>tools/start_lmstudio_3gpu.sh</code>. That loader performs mutating
-<code>lms</code> operations (unload/stop/daemon up/server start/load/ps) and
-the supervisor retains the exact lifecycle owner. Readiness is the HTTP
-model-list contract, not the presence of a process.
+Production uses <code>LMSTUDIO_OWNERSHIP=external</code>: the lifecycle
+requires one listener and a compatible model-list response, then starts only
+the other explicitly managed AI6 services. It never starts, stops, unloads,
+loads or reconfigures the real LM provider.
 
-<code>LMS_CLI_READ_ONLY_SAFE=NO</code>.
-<code>LMS_CLI_ALLOWED_GATE5B=YES</code> only as part of that explicitly
-authorized, Gate 5B-owned managed lifecycle; it is <code>NO</code> for
-Gate 5A.1 and must never be used as an audit inventory probe.
+<code>LMS_CLI_READ_ONLY_SAFE=NO</code>. Direct <code>lms</code> inventory and
+global cleanup are unsafe and are not part of any lifecycle or audit path.
+<code>LMS_CLI_ALLOWED_GATE5B=NO</code> for the production lifecycle; the
+retained supervisor and startup-helper names are fail-closed compatibility
+guards only.
 <code>LM_STUDIO_EXPECTED_PORT=1234</code>,
 <code>LM_STUDIO_READINESS_ENDPOINT=http://127.0.0.1:1234/v1/models</code>
 and <code>LM_STUDIO_LOG_LOCATION=&lt;TEMIAGENT_RUNTIME_ROOT&gt;/logs/lmstudio/lmstudio.log</code>
 are the non-secret contract locations. The current API is unavailable, so
-no model readiness or inference is claimed.
+no model readiness or inference is claimed. The newcomer mock may use the
+managed high-port test double; it is not a real LM provider.
 
 The observed <code>llmster</code> process has PPID 1 and owns a separate
 loopback listener, but no lifecycle record proves it is the LM Studio API
@@ -601,7 +597,7 @@ must never be attached to or silently replace production <code>1883</code>.
 
 | Service | Expected port | Current listener | Collision? | Strategy |
 |---|---:|---|---|---|
-| LM Studio | <code>1234</code> | Absent in the read-only audit | NO currently; readiness still FAIL until API responds | <code>BLOCKED</code> until model/API owner authorizes managed start or proves external readiness. |
+| LM Studio | <code>1234</code> | Absent in the read-only audit | NO currently; readiness still FAIL until API responds | <code>BLOCKED</code> until the external model/API owner proves readiness; AI6 lifecycle start is not an option. |
 | MQTT | <code>1883</code> | One verified <code>0.0.0.0:1883</code> listener | YES for a new owner; NO for verified reuse | <code>REUSE_EXISTING</code>; never start a second broker. |
 | Overview adapter | <code>8080/8081</code> | No Gate 5B listener | NO currently | <code>START_ON_CANONICAL_PORT</code> only after exact collision scan. |
 | Hermes resident | <code>8765</code> | No Gate 5B listener | NO currently | <code>START_ON_CANONICAL_PORT</code> after Hermes/LM/MQTT preconditions. |
@@ -624,13 +620,14 @@ L0 source/config/port preflight
   -> L5 one bounded model/inference request after model readiness
 ~~~
 
-The actual lifecycle start order for managed components is
-<code>lmstudio → mqtt → adapter → resident → bridge → mock_android →
-mock_discord → gateway → viewer</code>; external ownership means the
-lifecycle health-checks instead of starting that component. Production
-Gate 5B's minimum profile enables only the LM/resident/adapter/Bridge path,
-sets MQTT to external for reuse, and leaves gateway, viewer, mock Android
-and mock Discord disabled. The planned command, never executed here, is:
+The newcomer mock lifecycle start order is
+<code>lmstudio(mock) → mqtt → adapter → resident → bridge → mock_android →
+mock_discord → gateway → viewer</code>. Production uses external LM readiness
+as a precondition, then starts only the managed MQTT/adapter/resident/Bridge
+path selected by its private config; the real LM provider has no lifecycle
+service spec. Gate 5B's minimum profile therefore leaves LM external, reuses
+the existing MQTT listener, and leaves gateway, viewer, mock Android and mock
+Discord disabled. The planned command, never executed here, is:
 
 ~~~text
 ./scripts/demo --config "$GATE5B_RUNTIME_CONFIG" start
@@ -645,7 +642,7 @@ External rows have no start command.
 | Step/service | Precondition | Exact start command or decision | Readiness check | Side effect | Rollback | Owner |
 |---|---|---|---|---|---|---|
 | L0/preflight | Candidate HEAD <code>$GATE5B_EXPECTED_HEAD</code>, manifests/licenses, private config and all ports verified | Read-only <code>git</code>, <code>./scripts/bootstrap --check</code>, <code>./scripts/demo --config "$GATE5B_RUNTIME_CONFIG" --json doctor</code> | Source gate PASS, private paths safe, no collision | None | Do not start; discard only isolated candidate/input | Maintainer |
-| L1/LM Studio | External API already passes, or separate authorization for managed LM; model/GPU inputs present | External: <code>DO_NOT_START</code>. Managed: lifecycle command; internal owner is <code>python3 tools/managed_lmstudio_supervisor.py --startup-script tools/start_lmstudio_3gpu.sh --target-dir "$LMSTUDIO_TARGET_DIR" --identifier "$LMSTUDIO_API_IDENTIFIER"</code> | <code>curl --fail --silent http://127.0.0.1:1234/v1/models</code> contains the configured ID; context/GPU policy and exact supervisor identity agree | Managed path mutates daemon/server/model state | Lifecycle stop of the exact Gate 5B LM record, then bounded same-PID fallback only | LM/runtime owner |
+| L1/LM Studio | External API already passes; model/GPU inputs are provisioned by its owner | <code>DO_NOT_START</code>; production lifecycle has no real-LM start command | One configured listener and <code>curl --fail --silent http://127.0.0.1:1234/v1/models</code> contains the configured ID; context/GPU policy is checked as external configuration | None by AI6; no global model/daemon mutation | <code>DO_NOT_STOP</code>; preserve external/legacy state and escalate ambiguous ownership | LM/runtime owner |
 | L1/MQTT | Existing canonical <code>RUNNING/READY</code>, exact lineage and TCP probe pass | <code>DO_NOT_START</code>; read-only <code>./scripts/demo --config "$GATE5B_RUNTIME_CONFIG" --json mqtt status</code> | One external listener, supervisor/child contract and local TCP probe | None for reuse | None; never stop canonical MQTT | AI6 operator |
 | L1/adapter | LM, MQTT and runtime root ready; adapter ports clear | Lifecycle command; internal executable is <code>uv run python tools/temi_overview_adapter.py --broker "$MQTT_BROKER_HOST" --port "$MQTT_BROKER_PORT"</code> with configured ports/paths | Exact process record plus listeners <code>8080/8081</code>; no private default | Opens client/listener sockets; no test publish | Lifecycle stop exact adapter record; preserve redacted log | AI6 service owner |
 | L1/resident | Reconstructed Hermes final tree, clean nested checkout, venv and required skill paths ready | Lifecycle command; internal executable is <code>hermes-agent/venv/bin/python3 tools/hermes_resident_server.py --host 127.0.0.1 --port 8765</code> with four required skill paths | <code>/health</code> reports media/tool contract and exact owner | Opens loopback HTTP service; no hardware action | Lifecycle stop exact resident record; preserve log | Hermes/runtime owner |
@@ -676,7 +673,7 @@ of runtime evidence are forbidden.
 | Resident | Lifecycle <code>stop</code> | Exact resident record and port <code>8765</code>; same-PID bounded TERM/KILL only | Preserve redacted resident log. |
 | Adapter | Lifecycle <code>stop</code> | Exact adapter record and ports <code>8080/8081</code>; same-PID bounded TERM/KILL only | Preserve redacted adapter log. |
 | Isolated MQTT (only if separately selected) | <code>./scripts/demo --config "$GATE5B_RUNTIME_CONFIG" mqtt stop</code> | Exact isolated broker supervisor/child record; same-PID bounded TERM/KILL only | Preserve private broker log/state. |
-| LM Studio (only if Gate 5B-owned) | Lifecycle <code>stop</code> | Exact LM supervisor record and port <code>1234</code>; supervisor performs approved graceful shutdown, then same-PID fallback only | Preserve private LM log; never touch pre-existing <code>llmster</code>. |
+| LM Studio | <code>DO_NOT_STOP</code> | External owner and HTTP readiness contract; no AI6 LM supervisor record | Preserve external provider evidence and never touch pre-existing <code>llmster</code>. |
 | Canonical MQTT / pre-existing llmster | <code>DO_NOT_STOP</code> | Outside Gate 5B ownership | Preserve existing evidence unchanged. |
 
 #### Gate 5B acceptance layers
@@ -694,9 +691,10 @@ only the rollback boundary owned by the current run.
 | L5 model/inference | L1-L3 PASS, API readiness PASS and explicit bounded request approval | One synthetic non-sensitive request with timeout, valid Hermes JSON and validator result | Model functionality is proven separately from service readiness; no automatic physical action | Block acceptance, preserve redacted evidence and classify model failure | Reverse exact AI6-owned records; never stop pre-existing external processes. |
 
 If a later Gate 5B run fails, rollback is the reverse of the records created
-by that run: viewer, gateway, Bridge, resident, adapter, any isolated broker,
-then the Gate 5B-owned LM supervisor. The canonical MQTT supervisor and the
-pre-existing <code>llmster</code> audit process are outside that ownership set.
+by that run: viewer, gateway, Bridge, resident, adapter and any isolated
+broker. Production LM Studio, the canonical MQTT supervisor and the
+pre-existing <code>llmster</code> audit process are external to that ownership
+set and remain untouched.
 No name-based kill, broad pattern, reboot or runtime-data deletion is allowed.
 
 ### Physical side effects and model readiness
@@ -738,7 +736,7 @@ The Gate 5B command side-effect policy is explicit:
 | Layer | Policy | Allowed operation |
 |---|---|---|
 | L0 | <code>NO_SIDE_EFFECT</code> | Source/config/port inspection only. |
-| L1 | <code>NONPHYSICAL</code> | Start only explicitly authorized software services; LM model loading may mutate the external LM service, but no robot/device action is allowed. |
+| L1 | <code>NONPHYSICAL</code> | Start only explicitly authorized software services; production LM Studio is externally managed and not mutated by AI6, and no robot/device action is allowed. |
 | L2 | <code>NONPHYSICAL</code> | Local callback/health/no-op checks only. |
 | L3 | <code>NONPHYSICAL</code> | Synthetic cross-service trace/no-op only; no physical executor. |
 | L4 | <code>PHYSICAL</code> | Separate Android/Temi owner authorization and observation are mandatory; AI6 does not start the device. |
@@ -790,6 +788,83 @@ Temi evidence, external artifact provenance and the unresolved redacted
 review-ready only; it is not a live acceptance and must not be described as
 production-ready until the separate Gate 5B contract is authorized and
 executed.
+
+## Gate 5B failure and Gate 5B.1 LM ownership remediation
+
+Review date: 2026-08-28. Gate 5B stopped at the L1 ownership-safety gate with
+<code>AI6_TEMIAGENT_GATE5B_RUNTIME_SAFETY_FAILED</code>. L0 and individual
+endpoint health passed; L1 ownership protection failed. L2, L3 and L5 were
+skipped, L4 was not run by scope, and the model request count was zero. No
+physical Temi action, Android action, MQTT publication/subscription or external
+notification occurred. All Gate 5B-owned processes were rolled back and the
+canonical MQTT broker was preserved.
+
+The root cause was the former managed real-LM startup/rollback path issuing
+global <code>lms unload --all</code>, <code>lms server stop</code> and
+<code>lms daemon down</code>. Those commands cannot establish exclusive
+ownership of a global LM Studio daemon, server or model state. They affected
+historical pre-Gate5B <code>llmster</code> evidence: parent PID
+<code>1051985</code>, child PID <code>1051997</code>, and internal listener
+<code>127.0.0.1:41343</code>. These are incident records only. They must not be
+recreated, restored or treated as current required PIDs.
+
+Gate 5B.1 selects <code>EXTERNAL_MANAGEMENT</code> for production LM Studio
+and is labeled <code>IMPLEMENTATION_REMEDIATED_NONLIVE</code>. The corrected
+invariant is:
+
+- a pre-existing or foreign LM process/model/listener is not owned by the
+  lifecycle and is never stopped, unloaded or globally cleaned up;
+- a lifecycle process is owned only after positive identity/readiness proof;
+- production start requires one configured LM listener and a compatible
+  <code>/v1/models</code> response, then starts only other explicitly managed
+  AI6 services;
+- production stop excludes LM Studio. A legacy/ambiguous LM record is
+  preserved and returns <code>STOP_INCOMPLETE_OWNERSHIP</code> rather than
+  signalling a PID;
+- the newcomer mock remains the only lifecycle-managed LM implementation, on
+  its isolated high port and with fake-provider tests.
+
+The retired real-LM supervisor and startup helper are fail-closed compatibility
+guards. They do not invoke <code>lms</code> or start a provider. Direct
+<code>lms ls</code>/<code>lms ps</code> inventory is not a read-only audit and
+must not be used to recover this incident. A future Gate 5B retry must capture
+a new process ledger from the state that exists at that time; it must not reuse
+this historical ledger.
+
+The accepted private-input pattern is a mode <code>0700</code> runtime root
+containing the mode <code>0600</code> runtime config. A config placed directly
+under a shared parent such as <code>/tmp</code> remains invalid. No live LM
+verification is part of Gate 5B.1.
+
+## Gate 5B.1 non-live verification evidence
+
+The isolated remediation candidate was based on
+<code>release/github-v1</code> at
+<code>0a104d3200f6619b4120b357ca2c17fa8728057e</code>. All project commands
+below ran inside <code>yiting.TemiAgent_gpu_all</code>; none started or stopped
+LM Studio, MQTT, Hermes, Bridge, resident, viewer, gateway or adapter, and
+none published/subscribed MQTT or contacted Android, Discord or a physical
+Temi.
+
+| Check | Result |
+|---|---|
+| Focused lifecycle and LM helper tests | PASS: <code>python3 -m unittest tools.tests.test_demo_lifecycle tools.tests.test_lmstudio_start_helper</code>; 113 tests |
+| Complete tools suite | PASS: <code>python3 -m unittest discover -s tools/tests</code>; 147 tests |
+| HermesTemiBridge suite | PASS: 166 tests |
+| temi_backend suite | PASS: 25 tests, including the 7 adapter tests |
+| anomaly_detection suite | PASS: 34 tests; negative MQTT/viewer diagnostics are expected fixtures |
+| Mock and media fake E2E | PASS: software-only command route and media replay/cached-replay evidence |
+| External dependency tests/verifiers | PASS: 23 tests; reconstructed Hermes state, MIT license, and llama.cpp manifest checks |
+| Source bootstrap | PASS: <code>./scripts/bootstrap --hermes</code> and <code>./scripts/bootstrap --llama-cpp</code> reconstructed the reviewed trees |
+| Full <code>./scripts/bootstrap --check</code> | FAIL/ENVIRONMENT_GAP: source checks pass, but the fresh candidate lacks the externally provisioned Hermes virtual environment and generated llama-server binary; the LM Studio CLI is no longer a prerequisite |
+| Documentation, shell and Python checks | PASS: 74 Markdown files/8 schema mappings; changed shell syntax; changed Python compilation; <code>git diff --check</code> |
+| Publication/security scans | PASS for changed active source/config: no new private-LAN default, secret value, private user path, file URL, generated checkout, alternate or pose path/blob; the historical deleted pose object remains known history evidence |
+| Live LM/MQTT/service/device acceptance | SKIPPED by Gate 5B.1 scope; no live readiness or inference claim follows |
+
+The environment gap is a provisioning/readiness result, not a reason to
+weaken the external LM ownership contract. The implementation result remains
+<code>IMPLEMENTATION_REMEDIATED_NONLIVE</code>; a future live Gate 5B retry
+requires a new process ledger and separate authorization.
 
 ## Snapshot
 

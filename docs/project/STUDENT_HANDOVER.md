@@ -1,12 +1,29 @@
 # AI6 TemiAgent Student Handover
 
-Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5A.1: 2026-08-28.
+Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5B.1: 2026-08-28.
 
 This page is the short handover contract for a new maintainer. Start here
 after reading the [repository README](../../README.md), then follow the
 [developer setup](../operations/developer_setup.md). It does not replace
 runtime schemas, executable validators, module READMEs or the
 [Demo operator guide](../operations/DEMO_OPERATOR_GUIDE.md).
+
+## Gate 5B.1 LM ownership repair
+
+Gate 5B stopped at the L1 ownership-safety gate because the former managed LM
+path used global `lms` cleanup against pre-existing provider state. Production
+LM Studio is now `LMSTUDIO_OWNERSHIP=external`: the lifecycle requires one
+configured listener and a compatible HTTP `/v1/models` response, but never
+starts, stops, unloads, or reconfigures the provider. Only the newcomer mock
+LM server is lifecycle-managed. A legacy/unknown LM record is preserved and
+causes `STOP_INCOMPLETE_OWNERSHIP`; a future live retry must create a fresh
+process ledger. The historical PIDs `1051985` and `1051997` are incident
+evidence only and must not be recreated or treated as current requirements.
+
+This repair is `IMPLEMENTATION_REMEDIATED_NONLIVE`. Direct `lms ls`, `lms ps`,
+`lms unload --all`, `lms server stop`, and `lms daemon down` are not read-only
+audits. The accepted ephemeral-input security pattern remains a mode `0700`
+private runtime root containing the mode `0600` config file.
 
 ## Start here
 
@@ -104,11 +121,11 @@ external owner or maintainer input. There are no <code>MISSING</code> items.
 | 14 | Where do secrets go? | ANSWERED | Credentials belong only in owner-only private env files, especially the separately referenced Discord env file; mode <code>0600</code>, owner-only parent, never tracked or printed. |
 | 15 | What must never be committed? | ANSWERED | Real credentials, webhook URLs, private LAN addresses, user paths, real care records, images, logs, runtime state, model caches/weights, recordings, checkpoints and generated source checkouts. |
 | 16 | Where do models go? | ANSWERED | LM Studio cache and viewer GGUF/mmproj are external under configured private locations; model identifiers are tracked, model bytes are not. Optional pose weights require provenance approval. |
-| 17 | Which services exist? | ANSWERED | Managed candidates are LM Studio, MQTT, overview adapter, resident Hermes, Bridge, optional gateway and viewer; newcomer mock adds local mock Android/Discord and model/resident/viewer doubles. |
+| 17 | Which services exist? | ANSWERED | Production LM Studio is an external dependency; managed AI6 services include MQTT, overview adapter, resident Hermes, Bridge, optional gateway and viewer. The newcomer mock additionally manages local Android/Discord/model/resident/viewer doubles. |
 | 18 | Which machine runs each service? | ANSWERED | The AI6 container runs the software stack; the AI6 host provides Docker/mount; Temi Android runs outside AI6; LAB606 is a development/control host; external providers own their services. See [deployment handover](../operations/demo_deployment_handover.md). |
 | 19 | How do I check service status? | ANSWERED | Use read-only <code>./scripts/demo --json doctor</code>, <code>./scripts/demo --json status</code>, or the MQTT-only <code>./scripts/demo --json mqtt status</code> where its canonical production config applies. |
-| 20 | How do I start services? | ANSWERED | Only an authorized operator may run <code>./scripts/demo start</code>; the exact ownership and readiness contract is in [DEMO_OPERATOR_GUIDE](../operations/DEMO_OPERATOR_GUIDE.md). MQTT-only has its separate <code>mqtt start</code> selector. |
-| 21 | How do I safely stop services? | ANSWERED | Use <code>./scripts/demo stop</code> or the exact MQTT-only <code>mqtt stop</code>; the lifecycle signals only recorded verified identities and refuses foreign/unowned processes. |
+| 20 | How do I start services? | ANSWERED | Only an authorized operator may run <code>./scripts/demo start</code>; production LM readiness must already pass as an external precondition and the lifecycle starts no real LM provider. The exact contract is in [DEMO_OPERATOR_GUIDE](../operations/DEMO_OPERATOR_GUIDE.md). MQTT-only has its separate <code>mqtt start</code> selector. |
+| 21 | How do I safely stop services? | ANSWERED | Use <code>./scripts/demo stop</code> or the exact MQTT-only <code>mqtt stop</code>; the lifecycle signals only recorded verified identities, refuses foreign/unowned processes, and never stops production LM Studio. |
 | 22 | How do I diagnose failures? | ANSWERED | Preserve the read-only JSON, run the checks named in [troubleshooting](../operations/demo_troubleshooting.md), inspect exact PID/port/log evidence, and escalate without broad process control. |
 | 23 | What ports/interfaces matter? | ANSWERED | Production defaults are LM Studio <code>1234</code>, MQTT <code>1883</code>, adapter <code>8080/8081</code>, resident <code>8765</code>, viewer <code>8010/8011</code>; newcomer uses isolated high ports. Unix callback sockets remain private runtime paths. |
 | 24 | How does Temi reach MQTT? | ANSWERED | The Android app connects to the deployment-configured AI6 broker endpoint; AI6 client defaults are loopback and do not publish a lab address. The broker and Android owner must agree on reachability. |
@@ -120,14 +137,14 @@ external owner or maintainer input. There are no <code>MISSING</code> items.
 | 30 | How does anomaly detection fit in? | ANSWERED | It is an optional experimental perception/event producer and viewer; it is not a general hardware dispatcher or medical/fall-detection service. |
 | 31 | Which tests run without hardware? | ANSWERED | Bridge, backend, anomaly, tools, lifecycle, schema, external-dependency, docs, mock E2E and media-fake suites are hardware-free when their locked environments are present. |
 | 32 | Which tests require hardware? | PARTIAL | Real Android/Temi session, playback, camera, microphone, device result and physical observation require the Android/device owner and are not AI6-local tests. |
-| 33 | What is currently verified? | ANSWERED | Gate 3 recorded clean-clone Hermes/llama reproducibility, licenses, source manifests and the hardware-free matrix; current real Android, LM Studio/GPU, Discord, Temi and perception claims remain live-unverified. |
+| 33 | What is currently verified? | ANSWERED | Gate 3 recorded clean-clone Hermes/llama reproducibility, licenses, source manifests and the hardware-free matrix; Gate 5B.1 verifies the non-live LM ownership repair with fakes. Current real Android, LM Studio/GPU, Discord, Temi and perception claims remain live-unverified. |
 | 34 | What remains experimental? | ANSWERED | Optional anomaly viewer, pose preprocessing, local model/viewer deployment and feature-gated media/identity/care Demo paths remain bounded or external; see [CURRENT_STATUS](../CURRENT_STATUS.md). |
 | 35 | What is legacy? | ANSWERED | Dated first-year, streaming, direct-service and broad historical runbooks are retained as evidence and marked <code>LEGACY</code>; current lifecycle authority remains <code>scripts/demo</code>. |
 | 36 | Which docs are current authority? | ANSWERED | Use this authority map, [README](../../README.md), [CURRENT_STATUS](../CURRENT_STATUS.md), [REPOSITORY_MAP](../REPOSITORY_MAP.md), [developer setup](../operations/developer_setup.md), [operator guide](../operations/DEMO_OPERATOR_GUIDE.md), deployment, configuration, testing and troubleshooting. |
 | 37 | How do I update dependencies? | ANSWERED | Change the owning project declaration and lockfile together, run affected tests and docs/security checks, update authority/status documentation, and obtain maintainer review. |
 | 38 | How do I make a release? | PARTIAL | Prepare an isolated candidate from the publication ref, run the required validation, have a maintainer review/adopt the ref, then perform any separately authorized root push. Gate 4's final retry adopted the reviewed ref locally; root push remains separate and unauthorized here. |
 | 39 | How do I prove a fresh clone is healthy? | ANSWERED | Follow all ten [developer setup](../operations/developer_setup.md) steps, verify submodule/final trees and licenses, run the focused/full hardware-free matrix, then use read-only doctor/status. |
-| 40 | What should I check before a Demo? | ANSWERED | Confirm branch/config/runtime ownership, <code>doctor</code>, status, exact ports/PIDs, LM Studio/model/GPU if production, fresh Android evidence if claiming <code>DEMO_READY</code>, and the acceptance checklist. |
+| 40 | What should I check before a Demo? | ANSWERED | Confirm branch/config/runtime ownership, <code>doctor</code>, status, exact ports/PIDs, external LM Studio model/API/GPU readiness if production, fresh Android evidence if claiming <code>DEMO_READY</code>, and the acceptance checklist. Do not use the LM CLI as an audit. |
 
 Handover result: <code>ANSWERED=35</code>,
 <code>PARTIAL=5</code>, <code>MISSING=0</code>. Each partial answer has an

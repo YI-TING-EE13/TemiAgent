@@ -35,7 +35,6 @@ test -x hermes-agent/venv/bin/python3
 test -x hermes-agent/venv/bin/hermes
 test -x anomaly_detection/.venv/bin/python
 test -x anomaly_detection/third_party/llama.cpp/build/bin/llama-server
-test -x .lmstudio-data/bin/lms
 test -f mqtt/mosquitto.conf
 test -f config/demo.env.example
 test -f config/demo_resources.json

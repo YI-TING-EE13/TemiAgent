@@ -1,6 +1,6 @@
 # Developer Setup and Environment Contract
 
-Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 4: 2026-08-27.
+Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5B.1: 2026-08-28.
 
 This is the one current clean-clone setup path for a new TemiAgent maintainer.
 It prepares source, locked Python environments, private configuration and
@@ -27,7 +27,7 @@ docker exec -it yiting.TemiAgent_gpu_all bash
 
 The host owns Docker/container availability and the mount. The container owns
 project reads, source reconstruction, dependency environments, tests and
-runtime commands. The observed Gate 4 container versions are evidence snapshots,
+runtime commands. The observed container versions are evidence snapshots,
 not project pins:
 
 | Tool | Observed snapshot | Repository contract |
@@ -194,7 +194,7 @@ Provision the following through the owner-approved external systems:
 | Artifact | Required for | Provisioning truth | Ready evidence |
 |---|---|---|---|
 | Hermes <code>venv/bin/python3</code> and <code>venv/bin/hermes</code> | Production resident/gateway | Team-owned Hermes runtime environment; no root installer or version pin exists. | Executables exist and <code>./scripts/bootstrap --check</code> passes the Hermes checks. |
-| LM Studio and <code>temi/gemma-4-31b-it-qat</code> | Production LM route | Installed LM Studio plus the configured model and <code>lms</code>; no portable download recipe or version pin is tracked. | <code>/v1/models</code>, identifier <code>google/gemma-4-31b</code>, context/GPU policy and lifecycle health pass. |
+| LM Studio and <code>temi/gemma-4-31b-it-qat</code> | Production LM route | External LM Studio installation, model/cache and GPU owner; no portable download recipe or version pin is tracked. The lifecycle does not invoke <code>lms</code>. | Exactly one configured listener, <code>/v1/models</code>, identifier <code>google/gemma-4-31b</code>, and externally provisioned context/GPU policy pass. |
 | llama.cpp <code>llama-server</code> build | Production action viewer | Build the generated pinned checkout using the approved environment; build flags are not pinned by the root manifest. | Configured executable exists and viewer health reports <code>llama_server_ready</code>. |
 | Viewer GGUF/mmproj | Production action viewer | External model/cache provision; source and redistribution authority are external. | Configured regular files exist and viewer health passes. |
 | <code>yolo26x-pose.pt</code> | Optional pose preprocessing | Optional external weight; the resource manifest records size/hash observations only. Source, version, license and redistribution restrictions remain maintainer inputs. | Maintainer-approved provenance plus configured file; otherwise keep the optional viewer path disabled. |
@@ -214,12 +214,13 @@ git submodule status --recursive
 ~~~
 
 <code>./scripts/bootstrap --check</code> is a production-oriented readiness
-gate. It currently checks for the Hermes environment, anomaly <code>.venv</code>,
-generated llama-server, <code>.lmstudio-data/bin/lms</code>, Mosquitto, the
-tracked broker config and resource/config manifests even when the selected Demo
-profile is <code>newcomer_mock</code>. That missing mock-aware check is a
-<code>HANDOVER_RUNTIME_GAP</code>; a failed check must not be hidden by changing
-the documentation or by claiming that a mock profile is production-ready.
+gate. It checks the Hermes environment, anomaly <code>.venv</code>, generated
+llama-server, Mosquitto, the tracked broker config and resource/config manifests.
+It deliberately does not require or invoke an LM Studio CLI: production LM
+Studio is externally managed and its API/listener readiness is checked by the
+selected Demo lifecycle profile. A missing provisioned environment or generated
+binary remains a readiness failure; it must not be hidden by changing the
+documentation or by claiming that a mock profile is production-ready.
 
 <code>doctor</code> is read-only. Before any authorized service operation it
 should report the private configuration, source, entrypoints, artifact, port and
@@ -305,8 +306,8 @@ invitation to invent one.
 | Python lockfiles | Bridge/backend/anomaly dependencies | Required for corresponding suites | Lockfile pins are authoritative | <code>uv sync --frozen</code> in each project | Commands in step 8 | Project dependency floors are not substitutes for the lockfiles. |
 | Formal Hermes submodule | Resident/gateway source base | Required for production and Hermes tests | Base commit and final tree pinned in manifest | <code>git submodule update</code> then <code>./scripts/bootstrap --hermes</code> | <code>./scripts/bootstrap --check</code> | External team remote plus root-owned patches; no fallback. |
 | Hermes virtual environment | Resident/gateway execution | Required for production | Version not pinned: <code>ENVIRONMENT_PIN_GAP</code> | Maintainer-approved Hermes setup | <code>test -x hermes-agent/venv/bin/hermes</code> | Root bootstrap verifies presence but does not install it. |
-| LM Studio / <code>lms</code> | Production local model service | Required for production; not needed by fake E2E | Version not pinned: <code>ENVIRONMENT_PIN_GAP</code> | External installed application and model cache | <code>test -x .lmstudio-data/bin/lms</code> and lifecycle health | Model/cache/license are external; no model is published. |
-| CUDA driver/GPU | Production LM Studio and optional viewer | Required for production model/viewer paths | GPU/driver/CUDA not pinned: <code>ENVIRONMENT_PIN_GAP</code> | Host/maintainer provisioning | Lifecycle GPU policy check | Production policy names visible devices <code>0,1</code>; viewer config names device <code>3</code>; no Gate 4 inference. |
+| LM Studio API | Production external model service | Required for production; not needed by fake E2E | Version not pinned: <code>ENVIRONMENT_PIN_GAP</code> | External owner provisions the installed application and model cache | External owner’s API readiness; AI6 checks one listener and <code>/v1/models</code> and never invokes the CLI | Model/cache/license are external; no model is published or lifecycle-owned. |
+| CUDA driver/GPU | Production LM Studio and optional viewer | Required for production model/viewer paths | GPU/driver/CUDA not pinned: <code>ENVIRONMENT_PIN_GAP</code> | Host/maintainer provisioning | Lifecycle GPU policy check | Production policy names visible devices <code>0,1</code>; viewer config names device <code>3</code>; no Gate 5B.1 inference. |
 | llama.cpp | Optional action viewer server | Optional feature, but current bootstrap check expects its binary | Commit <code>0b715406...</code>; tree <code>1020a771...</code> | <code>./scripts/bootstrap --llama-cpp</code>, then approved build | <code>test -x anomaly_detection/third_party/llama.cpp/build/bin/llama-server</code> | Generated ignored checkout; build toolchain/flags are not pinned. |
 | Android/Temi dependencies | Device-side executor and asset mapping | External acceptance gate | AI6 does not own Android version pins | Android repository/device owner | Android owner’s tests and fresh runtime snapshot | AI6 defines only the cross-system MQTT/schema boundary. |
 | Node/npm | Other repository tooling | Not required by current lifecycle | Observed only | Not installed for this contract | None | Do not add it to a new-student prerequisite list without a source-backed feature. |

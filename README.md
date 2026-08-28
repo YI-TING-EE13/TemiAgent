@@ -202,7 +202,7 @@ not a parallel production entrypoint and is not the canonical lifecycle.
 - New-student setup and environment contract: [Developer setup](docs/operations/developer_setup.md)
 - Forty-question student handover and release routing: [STUDENT_HANDOVER](docs/project/STUDENT_HANDOVER.md)
 - Complete document authority inventory: [DOCUMENT_AUTHORITY_MAP](docs/DOCUMENT_AUTHORITY_MAP.md)
-- LM Studio headless operation: [LM Studio runbook](docs/operations/lmstudio_headless_3gpu_hdd_manual.md)
+- LM Studio external-provider notes: [LM Studio runbook](docs/operations/lmstudio_headless_3gpu_hdd_manual.md); production ownership/readiness is defined by the [Demo operator guide](docs/operations/DEMO_OPERATOR_GUIDE.md)
 - Safe service targeting, rollback and incident evidence: [Safe service operations](docs/operations/safe_service_operations.md)
 - First-year Demo execution: [Demo runbook](docs/operations/first_year_demo_runbook.md)
 - Documentation index: [docs/README.md](docs/README.md)

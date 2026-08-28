@@ -1,6 +1,6 @@
 # Cross-Module Contract Traceability
 
-最後審查日期：2026-08-26
+最後審查日期：2026-08-28
 
 This document identifies the authoritative source, producers, consumers, validation owner, tests and synchronization rule for TemiAgent cross-module contracts. It does not replace runtime code or schemas.
 
@@ -120,7 +120,7 @@ The filenames differ for three reader copies. Compare the mapped files by conten
 
 | Port | Owner and purpose | Current source |
 |---:|---|---|
-| `1234` | LM Studio OpenAI-compatible API | `tools/start_lmstudio_3gpu.sh` and LM Studio runbook |
+| `1234` | Externally managed LM Studio OpenAI-compatible API | `tools/demo_lifecycle.py`, `config/demo.env.example` and the current operator/configuration guides; the retained startup helper is fail-closed compatibility only |
 | `1883` | Mosquitto MQTT | `mqtt/mosquitto.conf`, Compose and scripts |
 | `8000` | Experimental live viewer HTTP | `anomaly_detection/README.md` and CLI |
 | `8010` | Action viewer HTTP/health | action viewer CLI and restart script |

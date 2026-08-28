@@ -1,12 +1,13 @@
 # Verification and Acceptance Guide
 
-Status: <code>CURRENT_AUTHORITY</code>. Last reviewed for Gate 4: 2026-08-27.
+Status: <code>CURRENT_AUTHORITY</code>. Last reviewed for Gate 5B.1: 2026-08-28.
 
 This guide distinguishes executable hardware-free verification from external
 acceptance. Run every project command in the designated container from
-`/TemiAgent`. None of the commands below intentionally starts a long-running
-Demo service, sends MQTT/Discord messages, alters private configuration, or
-uses a robot. Do not turn a skipped external gate into a PASS claim.
+`/TemiAgent`. Gate 5B.1 is a non-live LM ownership remediation: its tests use
+fake/stub providers and do not start LM Studio or any other long-running Demo
+service, send MQTT/Discord messages, alter private configuration, or use a
+robot. Do not turn a skipped external gate into a PASS claim.
 
 ## Preconditions and evidence vocabulary
 
@@ -28,8 +29,8 @@ git status --short
 
 ## Authoritative test matrix
 
-Run project commands inside the designated container. The Gate 4 documentation
-change does not authorize live services, MQTT publication, Android control,
+Run project commands inside the designated container. The Gate 5B.1 remediation
+does not authorize live services, MQTT publication, Android control,
 GPU inference or Discord delivery.
 
 | Test | Purpose | Command | Hardware required? | Network required? | GPU required? | Expected baseline | Failure meaning |
@@ -46,8 +47,8 @@ GPU inference or Discord delivery.
 | Mock E2E | Hardware-free Bridge/backend smoke route. | <code>python3 tools/e2e_test_runner.py</code> | No | No | No | PASS with local bounded doubles. | Software integration failure; it is not real Android acceptance. |
 | Media fake E2E | Media v1.1 lifecycle, result linkage and replay with fake Android. | <code>python3 tools/media_v11_fake_e2e.py</code> | No | No | No | PASS with in-memory/local fakes. | Contract or fake-consumer regression; no real playback claim follows. |
 | Documentation validation | Relative links, fences and reader-schema byte equality. | <code>python3 tools/validate_documentation.py</code> | No | No | No | PASS with zero broken links/schema drift. | Fix the referenced document or schema mapping; do not suppress the finding. |
-| Shell syntax | Tracked shell parser validation. | <code>bash -n scripts/demo scripts/bootstrap scripts/bootstrap_hermes.sh scripts/bootstrap_llama_cpp.sh</code> | No | No | No | PASS for unchanged entrypoints. | Shell syntax regression. |
-| Python compilation | Syntax-only check for changed Python tools. | <code>python3 -m py_compile tools/demo_lifecycle.py tools/validate_documentation.py</code> | No | No | No | PASS without importing services. | Python syntax regression. |
+| Shell syntax | Tracked shell parser validation. | <code>bash -n scripts/demo scripts/bootstrap scripts/bootstrap_hermes.sh scripts/bootstrap_llama_cpp.sh tools/start_lmstudio_3gpu.sh tools/validate_temi_e2e_stack.sh</code> | No | No | No | PASS for the checked entrypoints. | Shell syntax regression. |
+| Python compilation | Syntax-only check for changed Python tools. | <code>python3 -m py_compile tools/demo_lifecycle.py tools/managed_lmstudio_supervisor.py tools/validate_documentation.py</code> | No | No | No | PASS without importing services. | Python syntax regression. |
 | Clean-clone source bootstrap | Formal submodule plus nine-patch and llama reconstruction, including idempotency. | <code>./scripts/bootstrap --sources</code> twice after bounded submodule initialization | No | Yes for source acquisition | No | PASS in two independent clean clones; Gate 3 evidence is carried forward. | Missing publication URL, team source, environment or manifest identity; do not fall back. |
 | Full production readiness | External LM Studio, Hermes, generated binaries, ports and configured runtime. | <code>./scripts/bootstrap --check</code> and read-only <code>./scripts/demo --json doctor</code> | No for checks; external service may be required | Provisioning-dependent | Production model path may require GPU | PASS only when every required check is healthy. | A missing external prerequisite is not a documentation or hardware-free test failure. |
 
@@ -55,6 +56,29 @@ Hardware-free PASS means only that the named software path passed. Real
 Android/Temi, camera/microphone, physical playback, LM Studio model behavior,
 GPU inference, Discord recipient delivery and live perception remain separate
 external acceptance gates.
+
+## Gate 5B.1 non-live LM ownership remediation
+
+Gate 5B stopped at its L1 ownership-safety gate after the managed LM path
+issued global provider commands. The remediation selects external management
+for production LM Studio because the local CLI/runtime cannot prove exclusive
+ownership of a global daemon, server or model state. The corrected invariant is:
+
+- pre-existing or foreign LM state is not owned by the lifecycle and is never
+  stopped or globally cleaned up;
+- lifecycle-owned processes exist only for the isolated newcomer mock, after
+  positive process/port/readiness proof;
+- production start requires one configured LM listener and a compatible HTTP
+  model-list response, then starts only the other explicitly managed services;
+- production stop preserves external/legacy LM records and fails closed with
+  `STOP_INCOMPLETE_OWNERSHIP` when ownership is ambiguous.
+
+The retired real-LM supervisor and startup helper are compatibility guards that
+return a non-zero result without invoking `lms`. The fake-LM tests log attempted
+subcommands and verify that normal start/stop and rejected compatibility paths
+issue zero global cleanup commands. Historical Gate 5B PIDs are incident
+evidence only; a future live retry must create a new process ledger. This
+implementation status is `IMPLEMENTATION_REMEDIATED_NONLIVE`, not live proof.
 
 ## Documentation and source-structure checks
 

@@ -1,8 +1,10 @@
 # LM Studio (lms server) 指定可用 GPU：可能解法整理
 
-> Status: SUPPLEMENTAL machine-specific/experimental evidence. It does not
-> define a portable GPU pin or override the current managed Demo contract.
-> Use the developer setup and configuration reference for current values.
+> Status: SUPPLEMENTAL historical machine-specific/experimental evidence. It
+> does not define a portable GPU pin or override the current external LM
+> Studio contract. Use the Demo operator guide and configuration reference
+> for current values; do not execute the `lms` examples below as lifecycle or
+> recovery commands.
 
 ## 重點結論
 - 目前 LM Studio / `lms server` 沒有內建的「指定 GPU 編號」參數。

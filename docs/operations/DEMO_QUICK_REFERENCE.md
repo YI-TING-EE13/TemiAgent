@@ -1,7 +1,7 @@
 # TemiAgent Demo 快速參考
 
 狀態：CURRENT companion；完整 lifecycle 只以 [Demo 操作入口](DEMO_OPERATOR_GUIDE.md) 為準。
-最後審查日期：2026-08-27
+最後審查日期：2026-08-28
 
 完整說明請看 [Demo 新手操作手冊](DEMO_OPERATOR_GUIDE.md)、
 [設定參考](demo_configuration_reference.md)與

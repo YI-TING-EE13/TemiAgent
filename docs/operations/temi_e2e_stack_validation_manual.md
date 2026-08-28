@@ -3,6 +3,8 @@
 > Historical / legacy reference. Do not use as the current canonical Demo lifecycle.
 > Its direct-service restart script and live acceptance sequence are retained as evidence; use
 > the [current Demo operator guide](DEMO_OPERATOR_GUIDE.md) for lifecycle commands.
+> Its LM Studio CLI examples are historical only; production LM Studio is external and the
+> current lifecycle never invokes `lms` or reclaims its port.
 
 最後更新日期：2026-06-04
 

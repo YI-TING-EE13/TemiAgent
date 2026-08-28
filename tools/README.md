@@ -1,6 +1,6 @@
 # Tools 模組 README
 
-最後更新日期：2026-08-27
+最後更新日期：2026-08-28
 
 ## 本文件維護規則
 
@@ -85,13 +85,20 @@ directory。腳本不啟動 MQTT broker、Hermes、Android 或 robot，也不保
 
 ### Canonical Demo lifecycle
 
+Gate 5B.1 current rule: production LM Studio is an external dependency. The
+production lifecycle only checks its configured HTTP API readiness and never
+starts, stops, unloads, or reconfigures the provider. The `newcomer_mock`
+profile alone owns a local LM test double.
+
 `scripts/demo` 是 current branch 的唯一 lifecycle。預設 private env 是 Git-ignore、mode
 `0600` 的 `/TemiAgent/.runtime/demo/demo.env`，由 `init-config` 建立；只有這個 exact
 worktree-local path 可作為預設。`TEMIAGENT_RUNTIME_ROOT`、Bridge `LOG_DIR`、memory、shared
 ASR artifact、PID、socket、logs 和 trace 都必須在該 owner-only root。每項服務使用 `managed`、`external` 或
-`disabled` ownership；managed profile 可管理 LM Studio、MQTT、adapter、resident、Bridge、
-gateway 和 viewer，而 external service 只會 health-check。stop 僅接受 recorded exact PID
-identity，並以 viewer → gateway → Bridge → resident → adapter → MQTT → LM Studio 順序執行。
+`disabled` ownership。Production LM Studio is always `external`; only the
+`newcomer_mock` profile manages a local LM test double. The lifecycle manages
+the remaining explicitly managed services, while an external service is only
+health-checked. Stop accepts recorded exact PID identity and never includes
+the externally managed production LM Studio in its stop order.
 
 After each verified managed spawn, the lifecycle immediately persists an
 owner-only `STARTING` record with exact process identity, command fingerprint,
@@ -143,6 +150,18 @@ PID metadata alone is not treated as unowned when the child contract is live.
 A visible contradictory listener PID, a wrong bind or port, a failed TCP probe,
 or an executable/path/digest mismatch fails closed. A foreign broker is never
 adopted or killed by name.
+
+Production LM Studio is an external dependency, not a lifecycle service. The
+production config uses `LMSTUDIO_OWNERSHIP=external`; `scripts/demo` never
+invokes the LM Studio CLI, creates a real LM service spec, loads or unloads a
+model, or stops a provider process. A full-stack start requires exactly one
+listener on the configured LM API port and a matching `/v1/models` response
+for the configured API identifier before any dependent managed service starts.
+If that readiness or listener contract fails, start fails closed. Stop leaves
+external LM infrastructure and any legacy LM record untouched and returns
+`STOP_INCOMPLETE_OWNERSHIP` when such a record is present. The retained
+`managed_lmstudio_supervisor.py` and `start_lmstudio_3gpu.sh` names are
+fail-closed compatibility entrypoints; they do not control a real provider.
 
 A publication checkout reconstructed from the formal Hermes submodule may
 intentionally report <code> M hermes-agent</code> at the root because the

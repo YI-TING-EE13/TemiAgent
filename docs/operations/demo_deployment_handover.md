@@ -1,7 +1,7 @@
 # Demo Deployment and Handover
 
-Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 4:
-2026-08-27. This document describes the canonical software
+Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5B.1:
+2026-08-28. This document describes the canonical software
 stack in `<TEMIAGENT_ROOT>` and does not authorize real care, emergency, or
 Discord notification tests.
 
@@ -73,21 +73,21 @@ copied into a tracked template.
 ## Service responsibility matrix
 
 The command column names the canonical lifecycle entry, not a permission to
-operate it during documentation work. The Gate 4 candidate did not start or
+operate it during documentation work. The Gate 5B.1 candidate did not start or
 stop these services. A status of <code>LIVE_NOT_VERIFIED</code> means that no
 current real-device/provider claim is made.
 
 | Service | Runs on | Started by | Canonical command | Port / interface | Health check | Log location | Stop command | Dependencies | Current status |
 |---|---|---|---|---|---|---|---|---|---|
-| LM Studio | AI6 container, with external model/cache and GPU | <code>scripts/demo</code> LM Studio supervisor when ownership is managed | <code>./scripts/demo start</code> | <code>127.0.0.1:1234</code> | Lifecycle model endpoint <code>/v1/models</code>, <code>lms</code>, model identifier, context and GPU policy | <code>&lt;runtime-root&gt;/logs/lmstudio/lmstudio.log</code> | <code>./scripts/demo stop</code> | LM Studio, configured model/cache, external GPU/driver | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 4. |
+| LM Studio | AI6 container, with external model/cache and GPU | External LM/runtime owner | <code>DO_NOT_START</code> from <code>scripts/demo</code>; provision separately | <code>127.0.0.1:1234</code> | One listener plus HTTP <code>/v1/models</code> containing the configured identifier; no CLI inventory | External owner’s private provider logs | <code>DO_NOT_STOP</code> from <code>scripts/demo</code> | External LM owner, configured model/cache and GPU/driver | <code>LIVE_NOT_VERIFIED</code>; not operated by this remediation. |
 | Mosquitto MQTT broker | AI6 container | <code>scripts/demo start</code> or the MQTT-only selector | <code>./scripts/demo mqtt start</code> | Canonical broker config listener <code>0.0.0.0:1883</code> | <code>./scripts/demo --json mqtt status</code>: one listener, expected bind/port, TCP ready and valid supervisor/child lineage | <code>&lt;runtime-root&gt;/logs/mqtt/mosquitto.log</code> | <code>./scripts/demo mqtt stop</code> | Python supervisor, Mosquitto, tracked broker config and private ownership state | Canonical main snapshot <code>RUNNING/READY</code>; candidate not operated. |
-| Overview adapter | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>8080</code> vision; <code>8081</code> frame broadcast | Lifecycle listener count and adapter/Bridge evidence | <code>&lt;runtime-root&gt;/logs/asr/overview_adapter.log</code> | <code>./scripts/demo stop</code> | MQTT, legacy ASR/camera inputs, shared runtime root | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 4. |
-| Resident Hermes | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>127.0.0.1:8765</code>; <code>/health</code> and <code>/invoke</code> | HTTP health plus exact lifecycle identity | <code>&lt;runtime-root&gt;/logs/hermes/resident.log</code> | <code>./scripts/demo stop</code> | Patched Hermes runtime, required skills and Bridge contract | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 4. |
-| HermesTemiBridge | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | No public TCP listener; private callback Unix sockets | Exact process identity, callback socket and MQTT readiness | <code>&lt;runtime-root&gt;/logs/bridge/bridge.log</code> | <code>./scripts/demo stop</code> | MQTT, resident Hermes, schemas, validators and private shared root | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 4. |
+| Overview adapter | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>8080</code> vision; <code>8081</code> frame broadcast | Lifecycle listener count and adapter/Bridge evidence | <code>&lt;runtime-root&gt;/logs/asr/overview_adapter.log</code> | <code>./scripts/demo stop</code> | MQTT, legacy ASR/camera inputs, shared runtime root | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 5B.1. |
+| Resident Hermes | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>127.0.0.1:8765</code>; <code>/health</code> and <code>/invoke</code> | HTTP health plus exact lifecycle identity | <code>&lt;runtime-root&gt;/logs/hermes/resident.log</code> | <code>./scripts/demo stop</code> | Patched Hermes runtime, required skills and Bridge contract | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 5B.1. |
+| HermesTemiBridge | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | No public TCP listener; private callback Unix sockets | Exact process identity, callback socket and MQTT readiness | <code>&lt;runtime-root&gt;/logs/bridge/bridge.log</code> | <code>./scripts/demo stop</code> | MQTT, resident Hermes, schemas, validators and private shared root | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 5B.1. |
 | Hermes gateway | AI6 container when enabled | <code>scripts/demo</code> | <code>./scripts/demo start</code> | No fixed AI6 service port in the lifecycle contract | <code>hermes gateway status</code> plus exact process identity | <code>&lt;runtime-root&gt;/logs/gateway/gateway.log</code> | <code>./scripts/demo stop</code> | Patched Hermes runtime and external provider credentials if used | Disabled in newcomer; real provider live-unverified. |
-| Action viewer | AI6 container when enabled | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>8010</code> HTTP; <code>8011</code> llama server in production | Viewer <code>/health</code> source/llama readiness and five redacted component objects | <code>&lt;runtime-root&gt;/logs/trace/action_viewer.log</code> | <code>./scripts/demo stop</code> | Adapter frame stream, external GGUF/mmproj, generated llama server and optional pose weight | Experimental and live-unverified; not operated by Gate 4. |
-| Newcomer mock LM/resident/viewer | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29134</code>, <code>29765</code>, <code>29010/29011</code> | Mock HTTP health and exact lifecycle identities | <code>&lt;runtime-root&gt;/logs/{lmstudio,hermes,trace}/</code> | <code>./scripts/demo stop</code> | Tracked mock servers and high-port profile | Not started by Gate 4; software-only path is hardware-free. |
-| Newcomer mock Android/Discord | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29012</code> Android health; <code>29013</code> Discord mock | Mock health and canonical fake event/result evidence | <code>&lt;runtime-root&gt;/logs/mock/</code> | <code>./scripts/demo stop</code> | MQTT, Bridge, isolated mock profile | Not started by Gate 4; no real device/provider contact. |
+| Action viewer | AI6 container when enabled | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>8010</code> HTTP; <code>8011</code> llama server in production | Viewer <code>/health</code> source/llama readiness and five redacted component objects | <code>&lt;runtime-root&gt;/logs/trace/action_viewer.log</code> | <code>./scripts/demo stop</code> | Adapter frame stream, external GGUF/mmproj, generated llama server and optional pose weight | Experimental and live-unverified; not operated by Gate 5B.1. |
+| Newcomer mock LM/resident/viewer | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29134</code>, <code>29765</code>, <code>29010/29011</code> | Mock HTTP health and exact lifecycle identities | <code>&lt;runtime-root&gt;/logs/{lmstudio,hermes,trace}/</code> | <code>./scripts/demo stop</code> | Tracked mock servers and high-port profile | Not started by Gate 5B.1; software-only path is hardware-free. |
+| Newcomer mock Android/Discord | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29012</code> Android health; <code>29013</code> Discord mock | Mock health and canonical fake event/result evidence | <code>&lt;runtime-root&gt;/logs/mock/</code> | <code>./scripts/demo stop</code> | MQTT, Bridge, isolated mock profile | Not started by Gate 5B.1; no real device/provider contact. |
 | Temi Android App | Temi robot/device | Android owner, outside AI6 lifecycle | Android owner’s application procedure; none in AI6 | Deployment-configured broker endpoint; command/result topics | Fresh Android runtime snapshot, subscriptions, command/result evidence and physical observation | Android owner’s private evidence store | Android owner’s controlled app/device procedure | Android source/APK, device and broker reachability | External and live-unverified. |
 | Discord provider | External provider | Bridge notification path only when explicitly authorized | No AI6 direct start command | Provider HTTPS endpoint, not an AI6 listener | Bridge redacted receipt; real success requires provider HTTP 204 evidence | Bridge notification receipt under private runtime | External owner/provider procedure | Owner-only credential env and explicit authorization | Disabled by default; live-unverified. |
 
@@ -127,7 +127,7 @@ Each service has an explicit ownership mode in the private config:
 
 | Service | Default formal profile | Start/stop owner | Health evidence |
 |---|---|---|---|
-| LM Studio | managed | lifecycle-owned LM Studio supervisor → existing startup script | `/v1/models`, `lms ps`, model context and exact supervisor PID identity |
+| LM Studio | external in production; managed only as a newcomer mock | External LM owner; lifecycle has no real-LM start/stop owner | `/v1/models`, configured identifier, one listener and immutable context/GPU policy |
 | MQTT | managed | lifecycle-owned Mosquitto supervisor | one listener, TCP probe and revalidated exact supervisor PID identity |
 | Overview adapter | managed | lifecycle | ports 8080 and 8081 |
 | Resident Hermes | managed | lifecycle | `GET /health` |
@@ -144,10 +144,12 @@ The managed broker keeps Mosquitto's normal privilege-drop behavior. A small
 lifecycle-owned supervisor remains as the recorded root process, relays TERM
 only to its direct broker child, and waits for the listener to close. This
 preserves exact lifecycle ownership without running the broker itself as root.
-LM Studio is similarly managed by a persistent lifecycle-owned supervisor: the
-existing startup script performs its reviewed model load, then the supervisor
-remains as the exact recorded PID until shutdown. It invokes the approved `lms`
-unload/server/daemon sequence; it does not alter model, GPU or context policy.
+Production LM Studio is different: the provider is external and immutable to
+this lifecycle. Readiness is established through one configured listener and
+the HTTP model-list contract. The lifecycle never invokes `lms`, never loads or
+unloads models, and never stops a provider process. The compatibility helper
+files fail closed if called directly. The newcomer mock remains lifecycle-owned
+on its isolated high port for software-only acceptance.
 
 ```bash
 ./scripts/demo --config <PRIVATE_CONFIG_PATH> doctor
@@ -157,9 +159,11 @@ unload/server/daemon sequence; it does not alter model, GPU or context policy.
 ./scripts/demo --config <PRIVATE_CONFIG_PATH> stop
 ```
 
-The start order is LM Studio, MQTT, adapter, resident, Bridge, gateway, viewer.
-The stop order is the reverse: viewer, gateway, Bridge, resident, adapter,
-MQTT, LM Studio. The lifecycle uses an owner-only `flock` and records every
+For production, external LM readiness is a precondition, followed by the
+managed start order MQTT, adapter, resident, Bridge, gateway, viewer. The
+newcomer mock adds its managed LM test double before MQTT. The production stop
+order is viewer, gateway, Bridge, resident, adapter, MQTT; external LM is not
+stopped. The lifecycle uses an owner-only `flock` and records every
 managed process's PID, start ticks, cwd, executable, command digest, config
 digest, log path, timestamp, and run ID. A stop operation targets only a
 recorded identity; it never uses `pkill` or `killall`.

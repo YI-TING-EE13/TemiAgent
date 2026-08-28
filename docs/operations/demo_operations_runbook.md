@@ -21,9 +21,10 @@ all environment-specific values through an ignored mode `0600` private config:
 
 The tool may start or reuse only its reviewed services. It records exact PID,
 start time, cwd, executable, and command line before stopping an owned process.
-It preserves a pre-existing LM Studio service and an explicitly configured
-`reviewed_external` Broker. It never adopts an unknown listener, uses no broad
-process pattern, and publishes no Demo MQTT event.
+It preserves a pre-existing external LM Studio service and an explicitly
+configured `reviewed_external` Broker. Production LM readiness is an external
+HTTP/API precondition; this lifecycle never invokes `lms`, adopts an unknown
+listener, uses a broad process pattern, or publishes a Demo MQTT event.
 
 ## Current operator lifecycle
 
