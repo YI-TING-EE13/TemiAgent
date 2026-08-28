@@ -1866,6 +1866,44 @@ def _source_record() -> dict[str, Any]:
     return _source_record_at(ROOT)
 
 
+def _formal_hermes_submodule_ready() -> bool:
+    """Accept only a clean, manifest-verified patched Hermes submodule."""
+
+    verifier = ROOT / "tools" / "verify_hermes_submodule.py"
+    manifest = ROOT / "third_party" / "hermes" / "manifest.json"
+    if not verifier.is_file() or not manifest.is_file():
+        return False
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(verifier),
+                "--root",
+                str(ROOT),
+                "--manifest",
+                str(manifest),
+            ],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return completed.returncode == 0 and "state=RECONSTRUCTED" in completed.stdout
+
+
+def _is_accepted_hermes_worktree_change(line: str) -> bool:
+    """Recognize the expected root status for a reconstructed submodule."""
+
+    return (
+        line[:2] == " M"
+        and line[3:] == "hermes-agent"
+        and _formal_hermes_submodule_ready()
+    )
+
+
 def _git_status_paths(root: Path) -> set[str]:
     """Return all changed paths from one checkout, including rename endpoints."""
 
@@ -3032,6 +3070,7 @@ def _validate_source(config: DemoConfig) -> dict[str, Any]:
         line
         for line in source["tree"]
         if line[3:] not in ALLOWED_DIRTY_FILES
+        and not _is_accepted_hermes_worktree_change(line)
     ]
     if unexpected:
         raise DemoError("repository has non-runtime dirty files: " + ", ".join(unexpected))

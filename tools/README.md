@@ -144,6 +144,16 @@ A visible contradictory listener PID, a wrong bind or port, a failed TCP probe,
 or an executable/path/digest mismatch fails closed. A foreign broker is never
 adopted or killed by name.
 
+A publication checkout reconstructed from the formal Hermes submodule may
+intentionally report <code> M hermes-agent</code> at the root because the
+root-owned patch overlay changes the checked-out submodule worktree while
+leaving the gitlink index unchanged. The full lifecycle source gate accepts
+only that exact root status after
+<code>tools/verify_hermes_submodule.py</code> succeeds with
+<code>state=RECONSTRUCTED</code> and the nested checkout is clean. An index
+change, an unverified/base-only/dirty Hermes checkout, or any other dirty path
+remains a hard failure.
+
 When the private Demo flags explicitly enable identity and repeated discomfort, these commands
 remain inside the same Bridge callback / memory boundary and do not raw-publish MQTT:
 

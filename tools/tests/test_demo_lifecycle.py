@@ -390,6 +390,26 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(demo.DemoError, "non-runtime dirty files"):
                 demo._validate_source(config)
 
+    def test_source_gate_accepts_verified_formal_hermes_reconstruction(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = demo.load_config(self.make_mock_config(Path(temporary)))
+        source = {
+            "branch": "codex/github-v1-live-environment-audit",
+            "head": "654110f621c6eff5e4defaa54f0722b2a916f50a",
+            "tree": [" M hermes-agent"],
+        }
+        with (
+            mock.patch.object(
+                demo,
+                "_formal_hermes_submodule_ready",
+                return_value=True,
+                create=True,
+            ),
+            mock.patch.object(demo, "_source_record", return_value=source),
+            mock.patch.object(demo, "_git", return_value=""),
+        ):
+            self.assertEqual(demo._validate_source(config), source)
+
     def test_stop_is_idempotent_without_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
