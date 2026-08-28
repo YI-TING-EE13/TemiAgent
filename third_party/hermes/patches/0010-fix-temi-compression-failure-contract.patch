@@ -1,0 +1,434 @@
+From 9c6a84fc840f40aa45ba1b5752291be2cd4eac39 Mon Sep 17 00:00:00 2001
+From: YI-TING <yiting.ee13@nycu.edu.tw>
+Date: Fri, 28 Aug 2026 12:09:37 +0000
+Subject: [PATCH] fix(temi): handle Hermes compression failure contract
+
+---
+ run_agent.py                                  | 213 ++++++++++++++----
+ .../test_compression_failure_contract.py      | 141 ++++++++++++
+ 2 files changed, 308 insertions(+), 46 deletions(-)
+ create mode 100644 tests/run_agent/test_compression_failure_contract.py
+
+diff --git a/run_agent.py b/run_agent.py
+index 919a587..7e98420 100644
+--- a/run_agent.py
++++ b/run_agent.py
+@@ -178,6 +178,96 @@ from utils import atomic_json_write, base_url_host_matches, base_url_hostname, e
+ from hermes_cli.config import cfg_get
+ 
+ 
++class HermesConversationError(RuntimeError):
++    """A safe, structured failure at the simple chat API boundary.
++
++    run_conversation returns diagnostic dictionaries because its callers
++    need the transcript and retry metadata. A failed dictionary is not a
++    successful chat response, however, so chat must not index a response
++    field that may not exist. This exception carries only bounded metadata;
++    provider error text and conversation contents remain outside the resident
++    HTTP response.
++    """
++
++    _SAFE_MESSAGES = {
++        "hermes_compression_exhausted": (
++            "Hermes could not produce a response after bounded context recovery."
++        ),
++        "hermes_conversation_failed": "Hermes could not produce a response.",
++        "hermes_missing_final_response": "Hermes completed without a final response.",
++    }
++
++    def __init__(
++        self,
++        *,
++        error_class: str,
++        safe_message: str,
++        retryable: bool,
++        original_failure_category: str,
++    ) -> None:
++        self.error_class = error_class
++        self.safe_message = safe_message
++        self.retryable = bool(retryable)
++        self.original_failure_category = original_failure_category
++        super().__init__(safe_message)
++
++    def to_dict(self) -> dict[str, object]:
++        """Return the bounded failure contract for an integration boundary."""
++        return {
++            "error_class": self.error_class,
++            "safe_message": self.safe_message,
++            "retryable": self.retryable,
++            "original_failure_category": self.original_failure_category,
++        }
++
++    @staticmethod
++    def _safe_category(value: object, fallback: str) -> str:
++        """Keep category metadata bounded and free of provider/raw text."""
++        if isinstance(value, str) and re.fullmatch(r"[a-z0-9_]{1,80}", value):
++            return value
++        return fallback
++
++    @classmethod
++    def from_result(cls, result: object) -> "HermesConversationError":
++        """Convert a failed conversation result without exposing its error text."""
++        if not isinstance(result, dict):
++            return cls(
++                error_class="hermes_conversation_failed",
++                safe_message=cls._SAFE_MESSAGES["hermes_conversation_failed"],
++                retryable=False,
++                original_failure_category="invalid_result",
++            )
++
++        failure = result.get("failure")
++        if not isinstance(failure, dict):
++            failure = {}
++        compression_exhausted = bool(result.get("compression_exhausted"))
++        default_error_class = (
++            "hermes_compression_exhausted"
++            if compression_exhausted
++            else "hermes_missing_final_response"
++        )
++        error_class = failure.get("error_class")
++        if not isinstance(error_class, str) or error_class not in cls._SAFE_MESSAGES:
++            error_class = default_error_class
++        default_category = (
++            "compression_exhausted" if compression_exhausted else "missing_final_response"
++        )
++        category = cls._safe_category(
++            failure.get("original_failure_category")
++            or result.get("failure_category"),
++            default_category,
++        )
++        retryable = failure.get("retryable")
++        if not isinstance(retryable, bool):
++            retryable = compression_exhausted
++        return cls(
++            error_class=error_class,
++            safe_message=cls._SAFE_MESSAGES[error_class],
++            retryable=retryable,
++            original_failure_category=category,
++        )
++
+ 
+ class _SafeWriter:
+     """Transparent stdio wrapper that catches OSError/ValueError from broken pipes.
+@@ -12633,15 +12723,15 @@ class AIAgent:
+                             self._vprint(f"{self.log_prefix}   💡 Try /new to start a fresh conversation, or /compress to retry compression.", force=True)
+                             logging.error(f"{self.log_prefix}413 compression failed after {max_compression_attempts} attempts.")
+                             self._persist_session(messages, conversation_history)
+-                            return {
+-                                "messages": messages,
+-                                "completed": False,
+-                                "api_calls": api_call_count,
+-                                "error": f"Request payload too large: max compression attempts ({max_compression_attempts}) reached.",
+-                                "partial": True,
+-                                "failed": True,
+-                                "compression_exhausted": True,
+-                            }
++                            return self._build_compression_failure_result(
++                                messages,
++                                api_call_count,
++                                error=(
++                                    f"Request payload too large: max compression attempts "
++                                    f"({max_compression_attempts}) reached."
++                                ),
++                                failure_category=FailoverReason.payload_too_large.value,
++                            )
+                         self._emit_status(f"⚠️  Request payload too large (413) — compression attempt {compression_attempts}/{max_compression_attempts}...")
+ 
+                         original_len = len(messages)
+@@ -12664,15 +12754,12 @@ class AIAgent:
+                             self._vprint(f"{self.log_prefix}   💡 Try /new to start a fresh conversation, or /compress to retry compression.", force=True)
+                             logging.error(f"{self.log_prefix}413 payload too large. Cannot compress further.")
+                             self._persist_session(messages, conversation_history)
+-                            return {
+-                                "messages": messages,
+-                                "completed": False,
+-                                "api_calls": api_call_count,
+-                                "error": "Request payload too large (413). Cannot compress further.",
+-                                "partial": True,
+-                                "failed": True,
+-                                "compression_exhausted": True,
+-                            }
++                            return self._build_compression_failure_result(
++                                messages,
++                                api_call_count,
++                                error="Request payload too large (413). Cannot compress further.",
++                                failure_category=FailoverReason.payload_too_large.value,
++                            )
+ 
+                     # Check for context-length errors BEFORE generic 4xx handler.
+                     # The classifier detects context overflow from: explicit error
+@@ -12717,15 +12804,15 @@ class AIAgent:
+                                 self._vprint(f"{self.log_prefix}   💡 Try /new to start a fresh conversation, or /compress to retry compression.", force=True)
+                                 logging.error(f"{self.log_prefix}Context compression failed after {max_compression_attempts} attempts.")
+                                 self._persist_session(messages, conversation_history)
+-                                return {
+-                                    "messages": messages,
+-                                    "completed": False,
+-                                    "api_calls": api_call_count,
+-                                    "error": f"Context length exceeded: max compression attempts ({max_compression_attempts}) reached.",
+-                                    "partial": True,
+-                                    "failed": True,
+-                                    "compression_exhausted": True,
+-                                }
++                                return self._build_compression_failure_result(
++                                    messages,
++                                    api_call_count,
++                                    error=(
++                                        f"Context length exceeded: max compression attempts "
++                                        f"({max_compression_attempts}) reached."
++                                    ),
++                                    failure_category=FailoverReason.context_overflow.value,
++                                )
+                             restart_with_compressed_messages = True
+                             break
+ 
+@@ -12790,15 +12877,15 @@ class AIAgent:
+                             self._vprint(f"{self.log_prefix}   💡 Try /new to start a fresh conversation, or /compress to retry compression.", force=True)
+                             logging.error(f"{self.log_prefix}Context compression failed after {max_compression_attempts} attempts.")
+                             self._persist_session(messages, conversation_history)
+-                            return {
+-                                "messages": messages,
+-                                "completed": False,
+-                                "api_calls": api_call_count,
+-                                "error": f"Context length exceeded: max compression attempts ({max_compression_attempts}) reached.",
+-                                "partial": True,
+-                                "failed": True,
+-                                "compression_exhausted": True,
+-                            }
++                            return self._build_compression_failure_result(
++                                messages,
++                                api_call_count,
++                                error=(
++                                    f"Context length exceeded: max compression attempts "
++                                    f"({max_compression_attempts}) reached."
++                                ),
++                                failure_category=FailoverReason.context_overflow.value,
++                            )
+                         self._emit_status(f"🗜️ Context too large (~{approx_tokens:,} tokens) — compressing ({compression_attempts}/{max_compression_attempts})...")
+ 
+                         original_len = len(messages)
+@@ -12823,15 +12910,15 @@ class AIAgent:
+                             self._vprint(f"{self.log_prefix}   💡 The conversation has accumulated too much content. Try /new to start fresh, or /compress to manually trigger compression.", force=True)
+                             logging.error(f"{self.log_prefix}Context length exceeded: {approx_tokens:,} tokens. Cannot compress further.")
+                             self._persist_session(messages, conversation_history)
+-                            return {
+-                                "messages": messages,
+-                                "completed": False,
+-                                "api_calls": api_call_count,
+-                                "error": f"Context length exceeded ({approx_tokens:,} tokens). Cannot compress further.",
+-                                "partial": True,
+-                                "failed": True,
+-                                "compression_exhausted": True,
+-                            }
++                            return self._build_compression_failure_result(
++                                messages,
++                                api_call_count,
++                                error=(
++                                    f"Context length exceeded ({approx_tokens:,} tokens). "
++                                    "Cannot compress further."
++                                ),
++                                failure_category=FailoverReason.context_overflow.value,
++                            )
+ 
+                     # Check for non-retryable client errors.  The classifier
+                     # already accounts for 413, 429, 529 (transient), context
+@@ -14170,6 +14257,36 @@ class AIAgent:
+ 
+         return result
+ 
++    def _build_compression_failure_result(
++        self,
++        messages: list,
++        api_call_count: int,
++        *,
++        error: str,
++        failure_category: str,
++    ) -> Dict[str, Any]:
++        """Build the stable result shape used when context recovery is exhausted."""
++        failure = HermesConversationError(
++            error_class="hermes_compression_exhausted",
++            safe_message=(
++                "Hermes could not produce a response after bounded context recovery."
++            ),
++            retryable=True,
++            original_failure_category=failure_category,
++        )
++        return {
++            "final_response": None,
++            "messages": messages,
++            "completed": False,
++            "api_calls": api_call_count,
++            "error": error,
++            "partial": True,
++            "failed": True,
++            "compression_exhausted": True,
++            "failure_category": failure_category,
++            "failure": failure.to_dict(),
++        }
++
+     def chat(self, message: str, stream_callback: Optional[callable] = None) -> str:
+         """
+         Simple chat interface that returns just the final response.
+@@ -14182,7 +14299,11 @@ class AIAgent:
+             str: Final assistant response
+         """
+         result = self.run_conversation(message, stream_callback=stream_callback)
+-        return result["final_response"]
++        if isinstance(result, dict) and "final_response" in result:
++            final_response = result["final_response"]
++            if final_response is not None:
++                return final_response
++        raise HermesConversationError.from_result(result)
+ 
+ 
+ def main(
+diff --git a/tests/run_agent/test_compression_failure_contract.py b/tests/run_agent/test_compression_failure_contract.py
+new file mode 100644
+index 0000000..2036c5f
+--- /dev/null
++++ b/tests/run_agent/test_compression_failure_contract.py
+@@ -0,0 +1,141 @@
++"""Regression tests for bounded compression failure handling."""
++
++from __future__ import annotations
++
++from types import SimpleNamespace
++from unittest.mock import MagicMock, patch
++
++import pytest
++
++import run_agent
++from run_agent import AIAgent, HermesConversationError
++
++
++def _make_context_error() -> Exception:
++    error = Exception(
++        "The prompt exceeds the available context length; please reduce the length"
++    )
++    error.status_code = 400
++    return error
++
++
++def _mock_response(content: str = "ok") -> SimpleNamespace:
++    message = SimpleNamespace(
++        content=content,
++        tool_calls=None,
++        reasoning_content=None,
++        reasoning=None,
++    )
++    choice = SimpleNamespace(message=message, finish_reason="stop")
++    return SimpleNamespace(choices=[choice], model="test/model", usage=None)
++
++
++@pytest.fixture()
++def agent() -> AIAgent:
++    with (
++        patch("run_agent.get_tool_definitions", return_value=[]),
++        patch("run_agent.check_toolset_requirements", return_value={}),
++        patch("run_agent.OpenAI"),
++    ):
++        candidate = AIAgent(
++            api_key="test-key",
++            base_url="https://example.invalid/v1",
++            provider="custom",
++            model="test/model",
++            quiet_mode=True,
++            skip_context_files=True,
++            skip_memory=True,
++        )
++    candidate.client = MagicMock()
++    candidate._cached_system_prompt = "You are helpful."
++    candidate._use_prompt_caching = False
++    candidate.tool_delay = 0
++    candidate.save_trajectories = False
++    candidate.compression_enabled = True
++    return candidate
++
++
++def test_three_context_compression_failures_preserve_original_category(agent: AIAgent) -> None:
++    """A bounded retry exhaustion must become a structured failure, not KeyError."""
++    error = _make_context_error()
++    agent.context_compressor.context_length = 64_000
++    agent.context_compressor.threshold_tokens = 32_000
++    agent.client.chat.completions.create.side_effect = [error, error, error, error]
++
++    compressed_messages = [{"role": "user", "content": "hello"}]
++    with (
++        patch.object(
++            agent,
++            "_compress_context",
++            side_effect=[
++                (compressed_messages, "compressed-1"),
++                (compressed_messages, "compressed-2"),
++                (compressed_messages, "compressed-3"),
++            ],
++        ),
++        patch.object(agent, "_persist_session"),
++        patch.object(agent, "_save_trajectory"),
++        patch.object(agent, "_cleanup_task_resources"),
++    ):
++        with pytest.raises(HermesConversationError) as raised:
++            agent.chat("hello")
++
++    failure = raised.value.to_dict()
++    assert failure["error_class"] == "hermes_compression_exhausted"
++    assert failure["original_failure_category"] == "context_overflow"
++    assert failure["retryable"] is True
++    assert "context" in failure["safe_message"].lower()
++
++
++def test_single_turn_context_compression_is_deterministically_unchanged(agent: AIAgent) -> None:
++    """A one-turn prompt has no removable middle for the compressor."""
++    messages = [{"role": "user", "content": "synthetic request"}]
++    with patch("agent.context_compressor.call_llm") as compression_model:
++        result = agent.context_compressor.compress(messages, current_tokens=11_508)
++
++    assert result == messages
++    compression_model.assert_not_called()
++
++
++def test_chat_handles_result_without_final_response(agent: AIAgent) -> None:
++    """The chat convenience API must not index a missing result field."""
++    with patch.object(
++        agent,
++        "run_conversation",
++        return_value={
++            "failed": True,
++            "error": "context overflow",
++            "failure_category": "context_overflow",
++        },
++    ):
++        with pytest.raises(HermesConversationError) as raised:
++            agent.chat("hello")
++
++    assert raised.value.original_failure_category == "context_overflow"
++
++
++@pytest.mark.parametrize("result", [{"final_response": ""}, {"final_response": "ok"}])
++def test_chat_success_path_is_unchanged(agent: AIAgent, result: dict[str, str]) -> None:
++    with patch.object(agent, "run_conversation", return_value=result):
++        assert agent.chat("hello") == result["final_response"]
++
++
++def test_chat_preserves_compression_model_failure_category(agent: AIAgent) -> None:
++    """A compression/parser category must survive the safe failure boundary."""
++    result = {
++        "failed": True,
++        "error": "summary parser failed",
++        "failure": {
++            "error_class": "hermes_compression_exhausted",
++            "safe_message": "ignored by the safe boundary",
++            "retryable": False,
++            "original_failure_category": "compression_model_failure",
++        },
++    }
++    with patch.object(agent, "run_conversation", return_value=result):
++        with pytest.raises(HermesConversationError) as raised:
++            agent.chat("hello")
++
++    assert raised.value.original_failure_category == "compression_model_failure"
++    assert raised.value.retryable is False
++    assert "ignored by the safe boundary" not in str(raised.value)
+-- 
+2.43.0
+

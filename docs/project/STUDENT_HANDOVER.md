@@ -1,6 +1,6 @@
 # AI6 TemiAgent Student Handover
 
-Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5B.1: 2026-08-28.
+Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5B.3: 2026-08-28.
 
 This page is the short handover contract for a new maintainer. Start here
 after reading the [repository README](../../README.md), then follow the
@@ -24,6 +24,24 @@ This repair is `IMPLEMENTATION_REMEDIATED_NONLIVE`. Direct `lms ls`, `lms ps`,
 `lms unload --all`, `lms server stop`, and `lms daemon down` are not read-only
 audits. The accepted ephemeral-input security pattern remains a mode `0700`
 private runtime root containing the mode `0600` config file.
+
+## Gate 5B.3 Hermes compression failure repair
+
+The second Gate 5B attempt passed L0–L3 and failed L5 after one resident
+request. The external LM backend rejected an approximately `11508`-token
+request at an available `4096` context even though the configured Hermes and
+resident context was `64000`; the first request plus three recovery retries
+therefore exhausted compression. The resident began with session
+`temi-resident`, zero history, no memory and no checkpoint, and the one-turn
+prompt had no removable middle. This is classified as
+`MODEL/API_CONFIGURATION_MISMATCH`, not stale session or memory pressure.
+
+The ten-patch Hermes overlay now returns typed bounded failure metadata and
+never assumes a failed result contains `final_response`. The resident maps
+that error to a safe HTTP 500 response and remains healthy. Patch 0010 and the
+new reconstructed tree are hardware-free verified; the result is
+`IMPLEMENTED_NONLIVE`, not live model verification. A future Gate 5B retry
+requires separately verified external provider context compatibility.
 
 ## Start here
 
@@ -62,7 +80,7 @@ conflicts with them. Supplemental documents must defer to these entries.
 | Service safety/recovery | [safe service operations](../operations/safe_service_operations.md) | Exact PID, port, rollback and containment policy. |
 | MQTT transport | [MQTT module README](../../mqtt/README.md) | Broker configuration and topic index; Bridge code/schema owns message validation. |
 | Bridge | [Bridge README](../../hermes_temi_bridge/README.md) | Bridge module behavior; runtime schemas and validators are authoritative. |
-| Hermes integration | [Hermes dependency README](../../third_party/hermes/README.md) | Formal team submodule plus root-owned nine-patch overlay. |
+| Hermes integration | [Hermes dependency README](../../third_party/hermes/README.md) | Formal team submodule plus root-owned ten-patch overlay and bounded failure contract. |
 | Anomaly backend | [anomaly README](../../anomaly_detection/README.md) | Optional experimental event producer/viewer; never a general dispatcher. |
 | Troubleshooting | [Demo troubleshooting](../operations/demo_troubleshooting.md) | Read-only evidence and safe escalation. |
 | Testing/acceptance | [verification and acceptance](../operations/verification_and_acceptance.md) | Hardware-free suite matrix and external acceptance boundaries. |
@@ -112,7 +130,7 @@ external owner or maintainer input. There are no <code>MISSING</code> items.
 | 5 | How do I initialize Hermes? | ANSWERED | Run the bounded <code>git submodule update --init --recursive --depth=1</code>, then <code>./scripts/bootstrap --hermes</code> or <code>./scripts/bootstrap --sources</code>; verify the manifest and license. |
 | 6 | Why is Hermes a submodule? | ANSWERED | The team-owned base source is kept as a formal gitlink while TemiAgent keeps a reviewable root-owned patch overlay; source identity and integration changes remain separable. |
 | 7 | What is the team Hermes fork? | ANSWERED | <code>https://github.com/YI-TING-EE13/hermes-agent.git</code>; it is recorded in <code>.gitmodules</code> and <code>third_party/hermes/manifest.json</code>. |
-| 8 | How do patches work? | ANSWERED | The pinned base commit is checked, patches <code>0001</code> through <code>0009</code> are applied in order, the final tree and license are verified, and generated local commit IDs are not dependency identity. |
+| 8 | How do patches work? | ANSWERED | The pinned base commit is checked, patches <code>0001</code> through <code>0010</code> are applied in order, the final tree and license are verified, and generated local commit IDs are not dependency identity. |
 | 9 | What external dependencies exist? | ANSWERED | Hermes source/runtime, llama.cpp source/build, LM Studio/model/cache, viewer models, optional pose weight, Android media/APK and optional Discord provider are external. See [developer setup](../operations/developer_setup.md). |
 | 10 | What tools must be installed? | PARTIAL | The designated container must provide Python, uv, Git, Bash and Mosquitto; Docker/image availability is host-owned. Installation source for the container and several host tools is a maintainer dependency, documented as an environment pin gap. |
 | 11 | Which versions matter? | PARTIAL | Python <code>>=3.12</code> and lockfiles are source-backed. Observed tool versions are recorded as snapshots; uv, Git, Bash, Mosquitto, container image, LM Studio and CUDA/driver versions are not pinned and are explicit <code>ENVIRONMENT_PIN_GAP</code>s. |
@@ -137,7 +155,7 @@ external owner or maintainer input. There are no <code>MISSING</code> items.
 | 30 | How does anomaly detection fit in? | ANSWERED | It is an optional experimental perception/event producer and viewer; it is not a general hardware dispatcher or medical/fall-detection service. |
 | 31 | Which tests run without hardware? | ANSWERED | Bridge, backend, anomaly, tools, lifecycle, schema, external-dependency, docs, mock E2E and media-fake suites are hardware-free when their locked environments are present. |
 | 32 | Which tests require hardware? | PARTIAL | Real Android/Temi session, playback, camera, microphone, device result and physical observation require the Android/device owner and are not AI6-local tests. |
-| 33 | What is currently verified? | ANSWERED | Gate 3 recorded clean-clone Hermes/llama reproducibility, licenses, source manifests and the hardware-free matrix; Gate 5B.1 verifies the non-live LM ownership repair with fakes. Current real Android, LM Studio/GPU, Discord, Temi and perception claims remain live-unverified. |
+| 33 | What is currently verified? | ANSWERED | Gate 3 recorded clean-clone Hermes/llama reproducibility, licenses, source manifests and the hardware-free matrix; Gate 5B.1 and 5B.3 verify non-live ownership/failure contracts with fakes. Current real Android, LM Studio/GPU, Discord, Temi and perception claims remain live-unverified. |
 | 34 | What remains experimental? | ANSWERED | Optional anomaly viewer, pose preprocessing, local model/viewer deployment and feature-gated media/identity/care Demo paths remain bounded or external; see [CURRENT_STATUS](../CURRENT_STATUS.md). |
 | 35 | What is legacy? | ANSWERED | Dated first-year, streaming, direct-service and broad historical runbooks are retained as evidence and marked <code>LEGACY</code>; current lifecycle authority remains <code>scripts/demo</code>. |
 | 36 | Which docs are current authority? | ANSWERED | Use this authority map, [README](../../README.md), [CURRENT_STATUS](../CURRENT_STATUS.md), [REPOSITORY_MAP](../REPOSITORY_MAP.md), [developer setup](../operations/developer_setup.md), [operator guide](../operations/DEMO_OPERATOR_GUIDE.md), deployment, configuration, testing and troubleshooting. |

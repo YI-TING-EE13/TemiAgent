@@ -19,15 +19,24 @@ The root repository records one formal Git submodule:
 | Submodule URL | `https://github.com/YI-TING-EE13/hermes-agent.git` |
 | Pinned base commit | `a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2` |
 | Pinned base tree | `bda69c575e65725bf9264dd1288a63093cea3cc3` |
-| Expected patched tree | `968f1668a05fafd09461c17a835198421f14a48f` |
+| Expected patched tree | `47e9f1411e585769c055d0c6ee4417bebcdc6f70` |
 | Contract semantics | `PINNED_BASE_PLUS_PATCHED_WORKTREE` |
 
-The root gitlink remains pinned to the base commit. The nine ordered patch
+The root gitlink remains pinned to the base commit. The ten ordered patch
 files under `third_party/hermes/patches/` are TemiAgent-owned overlay inputs.
 The bootstrap applies those patches in manifest order inside the initialized
 submodule and verifies the final tree. Generated local Hermes commit IDs are
 not dependency authority; the base commit, base tree and final tree are the
 authoritative identities.
+
+Patch `0010` adds a bounded Hermes conversation-failure contract. Compression
+exhaustion results now include an explicit `final_response: null` and bounded
+failure metadata, while the simple `chat()` API raises a typed error instead of
+indexing a missing response. The resident integration maps that typed error to
+an allowlisted HTTP failure object without returning provider error text or
+conversation content. This is a non-live failure-path remediation; the
+external provider must still be provisioned with a context window compatible
+with the configured Hermes limit before any live acceptance.
 
 The manifest records the verified license identity: `LICENSE`, MIT, copyright
 `Copyright (c) 2025 Nous Research`, Git blob

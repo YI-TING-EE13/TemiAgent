@@ -866,6 +866,61 @@ weaken the external LM ownership contract. The implementation result remains
 <code>IMPLEMENTATION_REMEDIATED_NONLIVE</code>; a future live Gate 5B retry
 requires a new process ledger and separate authorization.
 
+## Gate 5B.3 Hermes compression failure-path remediation
+
+Review date: 2026-08-28. The second Gate 5B attempt passed L0, L1, L2 and L3,
+then failed L5 after one resident <code>/invoke</code> request. The observed
+resident result was HTTP 500 after the log sequence
+<code>Context compression failed after 3 attempts</code> followed by
+<code>KeyError: 'final_response'</code>. Gate 5B rollback passed; the external
+LM process and canonical MQTT broker were preserved. No physical Temi or
+Android action occurred. Gate 5B.3 did not rerun live Gate 5B.
+
+### Failure trace and root-cause classification
+
+| Required observation | Gate 5B.3 result |
+|---|---|
+| Failure entry | <code>AIAgent.run_conversation</code> sent the synthetic request to the OpenAI-compatible LM endpoint; the context-overflow branch entered bounded recovery. |
+| Compression trigger | The context-overflow classifier handled the provider rejection and called <code>AIAgent._compress_context</code>. |
+| Compression retry | <code>AIAgent.run_conversation</code> retried the provider request after each bounded compression attempt and stopped after three recovery attempts. |
+| Failed result shape before the fix | A dict with <code>messages</code>, <code>completed</code>, <code>api_calls</code>, <code>error</code>, <code>partial</code>, <code>failed</code> and <code>compression_exhausted</code>, but no <code>final_response</code>. |
+| Unsafe access | <code>AIAgent.chat</code> unconditionally evaluated <code>result["final_response"]</code>, masking the original failure with a KeyError. |
+| Resident boundary | <code>RequestHandler.do_POST</code> caught the secondary exception and returned the generic HTTP 500 path. |
+| Compression trigger root cause | <code>MODEL/API_CONFIGURATION_MISMATCH</code>. Hermes/resident were configured for a 64,000-token context, while the retained external LM evidence rejected an approximately 11,508-token request at an available 4,096-token context. |
+| Session/state classification | Not stale state: the resident used <code>temi-resident</code>, started with zero history, loaded no memory and loaded no checkpoint. |
+
+The deterministic prompt audit measured a roughly 9,717-token pre-request
+composition from the six resident skill inputs, the synthetic care overlay,
+the Hermes system prompt, ten native tool schemas and the synthetic user
+request. It was below Hermes's configured 32,000-token compression threshold,
+so proactive compression did not trigger. The backend rejected the request
+only after it was sent because its actual available context was 4,096. The
+one-turn message set had no removable middle; all three recovery attempts
+therefore preserved the same message shape and did not call the auxiliary
+compression model. The trigger is consequently an external provider-context
+mismatch, not an oversized memory or skill payload, incorrect session reuse,
+token-threshold bug or incorrect Hermes-side limit.
+
+### Remediation contract and evidence
+
+Patch <code>0010-fix-temi-compression-failure-contract.patch</code> adds
+<code>HermesConversationError</code>, makes exhausted compression results carry
+<code>final_response: null</code> plus bounded failure metadata, and makes
+<code>AIAgent.chat</code> raise the typed error rather than index a missing
+field. The resident maps that typed error to HTTP 500 with only an allowlisted
+error class, original failure category and retryable flag. It does not return
+provider error text, prompts, payloads or a traceback. Normal empty and
+non-empty successful responses remain unchanged.
+
+The failure-path tests also assert that the one-turn compressor returns the
+input unchanged without invoking the summary model. The source-level fix is
+therefore owned by the Temi-specific Hermes overlay and the resident boundary;
+the external context mismatch is explicitly classified as an environment
+provisioning prerequisite rather than silently changing the configured limit.
+The implementation state is <code>IMPLEMENTED_NONLIVE</code>, not
+<code>LIVE_VERIFIED</code>. A future live retry requires external evidence that
+the loaded model context is compatible with the configured Hermes context.
+
 ## Snapshot
 
 | Item | Snapshot | Meaning |
@@ -929,7 +984,7 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
 
 - `third_party/hermes/` records the original upstream URL, the team-controlled
   remote, the formal `hermes-agent/` submodule path and URL, the pinned base
-  commit/tree, the ordered nine-patch series, the expected final tree and the
+  commit/tree, the ordered ten-patch series, the expected final tree and the
   verified license identity. The historical local integration commit
   `126aa304cda027679fc84212925bbd5329ada20b` remains historical; generated local
   final commit IDs are not dependency authority.
@@ -939,9 +994,9 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
   MIT license identity for `LICENSE`; `tools/verify_hermes_license.py` checks
   both the pinned Git blob and the checked-out file.
 - `HERMES_DEPENDENCY_GOVERNANCE: TEAM_REMOTE_AND_SUBMODULE_VERIFIED`. The root
-  gitlink stays at the pinned base while bootstrap applies patches `0001`–`0009`
+  gitlink stays at the pinned base while bootstrap applies patches `0001`–`0010`
   in the submodule worktree and verifies final tree
-  `968f1668a05fafd09461c17a835198421f14a48f`. The clean-clone A/B acceptance is
+  `47e9f1411e585769c055d0c6ee4417bebcdc6f70`. The clean-clone A/B acceptance is
   recorded in the Gate 3.4 section below.
 - `hermes-agent/` is a formal external submodule, not TemiAgent root source or
   vendored source. The root `hermes-skills/` directory remains a reviewable

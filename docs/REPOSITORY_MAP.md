@@ -32,7 +32,7 @@ source.
 
 | Area | Classification | Publication rule |
 |---|---|---|
-| `third_party/hermes/` | Manifest, nine patches and technical reconstruction instructions | Root-owned Hermes dependency contract: original upstream identity, team remote, license evidence and patched-tree target. The directory does not vendor Hermes source. |
+| `third_party/hermes/` | Manifest, ten patches and technical reconstruction instructions | Root-owned Hermes dependency contract: original upstream identity, team remote, license evidence and patched-tree target. The directory does not vendor Hermes source. |
 | `hermes-agent/` | Formal Git submodule and generated patched worktree | Team remote is authoritative for the pinned base gitlink. Bootstrap applies root patches in this worktree; generated final commit IDs are not root dependency identity. |
 | `third_party/llama_cpp/` | Tracked manifest and bootstrap README | Defines the external pin; bootstrap materializes `anomaly_detection/third_party/llama.cpp/`. |
 | `anomaly_detection/third_party/llama.cpp/` | Ignored generated upstream checkout | External source only; not root source, and no model binary or weight is implied by the clone. |
@@ -43,7 +43,7 @@ The Hermes manifest, formal submodule and patch series describe one
 `https://github.com/YI-TING-EE13/hermes-agent.git` at
 `a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2`; the root-owned patches then produce
 the expected final tree
-`968f1668a05fafd09461c17a835198421f14a48f`. A clean clone must use the team
+`47e9f1411e585769c055d0c6ee4417bebcdc6f70`. A clean clone must use the team
 remote and verify both identities before handover. No original-upstream,
 local-checkout, file-URL or alternate-object fallback is allowed.
 

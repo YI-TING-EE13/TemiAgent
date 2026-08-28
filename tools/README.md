@@ -52,7 +52,7 @@ tools or historical references unless the operator guide names them.
 step；它必須從 `.gitmodules` 的 team remote 初始化 `hermes-agent`。接著
 `scripts/bootstrap_hermes.sh` 是 Hermes patch reconstruction 的唯一 owner。
 它以 bounded Git reads 驗證 `.gitmodules`、root gitlink、exact pinned base/tree、
-license、patch hashes 和 alternates，然後只在 pinned base 上套用 `0001`–`0009`。
+license、patch hashes 和 alternates，然後只在 pinned base 上套用 `0001`–`0010`。
 它不執行 clone/fetch，不使用 local checkout、cache、file URL 或 alternates
 fallback，也不啟動任何服務。第二次 `./scripts/bootstrap --hermes` 只驗證
 已重建的 final tree。
@@ -83,9 +83,19 @@ python3 tools/media_v11_fake_e2e.py
 此腳本將 `MEDIA_V11_ENABLED` 只套用在 process 內的 test service，並使用 temporary
 directory。腳本不啟動 MQTT broker、Hermes、Android 或 robot，也不保留 trace artifact。
 
+### Hermes failure boundary
+
+The patched Hermes `chat()` API converts a failed conversation result into a
+typed, bounded failure rather than indexing `result["final_response"]`. The
+resident `/invoke` boundary preserves the existing HTTP 200 success response;
+for a typed Hermes failure it returns HTTP 500 with only an allowlisted error
+class, original failure category and retryable flag. Provider error text,
+tracebacks, prompts and payloads do not cross this boundary. This contract is
+hardware-free tested and is not live model acceptance.
+
 ### Canonical Demo lifecycle
 
-Gate 5B.1 current rule: production LM Studio is an external dependency. The
+Gate 5B.3 current rule: production LM Studio is an external dependency. The
 production lifecycle only checks its configured HTTP API readiness and never
 starts, stops, unloads, or reconfigures the provider. The `newcomer_mock`
 profile alone owns a local LM test double.

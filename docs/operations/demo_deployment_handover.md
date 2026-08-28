@@ -1,6 +1,6 @@
 # Demo Deployment and Handover
 
-Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5B.1:
+Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5B.3:
 2026-08-28. This document describes the canonical software
 stack in `<TEMIAGENT_ROOT>` and does not authorize real care, emergency, or
 Discord notification tests.
@@ -16,7 +16,7 @@ Run every project operation in the designated container, from `/TemiAgent`.
 The source bind mount must resolve to the approved canonical workspace.
 `hermes-agent` is the formal submodule pinned to the team-controlled Hermes
 fork. The reviewed Temi overlay is reconstructed in that submodule worktree
-from the pinned base plus the nine root-owned patches before any Demo service
+from the pinned base plus the ten root-owned patches before any Demo service
 starts.
 
 ```bash
@@ -73,21 +73,21 @@ copied into a tracked template.
 ## Service responsibility matrix
 
 The command column names the canonical lifecycle entry, not a permission to
-operate it during documentation work. The Gate 5B.1 candidate did not start or
+operate it during documentation work. The Gate 5B.3 candidate did not start or
 stop these services. A status of <code>LIVE_NOT_VERIFIED</code> means that no
 current real-device/provider claim is made.
 
 | Service | Runs on | Started by | Canonical command | Port / interface | Health check | Log location | Stop command | Dependencies | Current status |
 |---|---|---|---|---|---|---|---|---|---|
-| LM Studio | AI6 container, with external model/cache and GPU | External LM/runtime owner | <code>DO_NOT_START</code> from <code>scripts/demo</code>; provision separately | <code>127.0.0.1:1234</code> | One listener plus HTTP <code>/v1/models</code> containing the configured identifier; no CLI inventory | External owner’s private provider logs | <code>DO_NOT_STOP</code> from <code>scripts/demo</code> | External LM owner, configured model/cache and GPU/driver | <code>LIVE_NOT_VERIFIED</code>; not operated by this remediation. |
+| LM Studio | AI6 container, with external model/cache and GPU | External LM/runtime owner | <code>DO_NOT_START</code> from <code>scripts/demo</code>; provision separately | <code>127.0.0.1:1234</code> | One listener plus HTTP <code>/v1/models</code> containing the configured identifier; no CLI inventory | External owner’s private provider logs | <code>DO_NOT_STOP</code> from <code>scripts/demo</code> | External LM owner, configured model/cache and GPU/driver | <code>LIVE_NOT_VERIFIED</code>; Gate 5B.3 retained a backend-context mismatch and did not operate it. |
 | Mosquitto MQTT broker | AI6 container | <code>scripts/demo start</code> or the MQTT-only selector | <code>./scripts/demo mqtt start</code> | Canonical broker config listener <code>0.0.0.0:1883</code> | <code>./scripts/demo --json mqtt status</code>: one listener, expected bind/port, TCP ready and valid supervisor/child lineage | <code>&lt;runtime-root&gt;/logs/mqtt/mosquitto.log</code> | <code>./scripts/demo mqtt stop</code> | Python supervisor, Mosquitto, tracked broker config and private ownership state | Canonical main snapshot <code>RUNNING/READY</code>; candidate not operated. |
-| Overview adapter | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>8080</code> vision; <code>8081</code> frame broadcast | Lifecycle listener count and adapter/Bridge evidence | <code>&lt;runtime-root&gt;/logs/asr/overview_adapter.log</code> | <code>./scripts/demo stop</code> | MQTT, legacy ASR/camera inputs, shared runtime root | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 5B.1. |
-| Resident Hermes | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>127.0.0.1:8765</code>; <code>/health</code> and <code>/invoke</code> | HTTP health plus exact lifecycle identity | <code>&lt;runtime-root&gt;/logs/hermes/resident.log</code> | <code>./scripts/demo stop</code> | Patched Hermes runtime, required skills and Bridge contract | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 5B.1. |
-| HermesTemiBridge | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | No public TCP listener; private callback Unix sockets | Exact process identity, callback socket and MQTT readiness | <code>&lt;runtime-root&gt;/logs/bridge/bridge.log</code> | <code>./scripts/demo stop</code> | MQTT, resident Hermes, schemas, validators and private shared root | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 5B.1. |
+| Overview adapter | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>8080</code> vision; <code>8081</code> frame broadcast | Lifecycle listener count and adapter/Bridge evidence | <code>&lt;runtime-root&gt;/logs/asr/overview_adapter.log</code> | <code>./scripts/demo stop</code> | MQTT, legacy ASR/camera inputs, shared runtime root | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 5B.3. |
+| Resident Hermes | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>127.0.0.1:8765</code>; <code>/health</code> and <code>/invoke</code> | HTTP health plus exact lifecycle identity | <code>&lt;runtime-root&gt;/logs/hermes/resident.log</code> | <code>./scripts/demo stop</code> | Patched Hermes runtime, required skills and Bridge contract | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 5B.3; typed failure boundary is hardware-free tested. |
+| HermesTemiBridge | AI6 container | <code>scripts/demo</code> | <code>./scripts/demo start</code> | No public TCP listener; private callback Unix sockets | Exact process identity, callback socket and MQTT readiness | <code>&lt;runtime-root&gt;/logs/bridge/bridge.log</code> | <code>./scripts/demo stop</code> | MQTT, resident Hermes, schemas, validators and private shared root | <code>LIVE_NOT_VERIFIED</code>; not operated by Gate 5B.3. |
 | Hermes gateway | AI6 container when enabled | <code>scripts/demo</code> | <code>./scripts/demo start</code> | No fixed AI6 service port in the lifecycle contract | <code>hermes gateway status</code> plus exact process identity | <code>&lt;runtime-root&gt;/logs/gateway/gateway.log</code> | <code>./scripts/demo stop</code> | Patched Hermes runtime and external provider credentials if used | Disabled in newcomer; real provider live-unverified. |
-| Action viewer | AI6 container when enabled | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>8010</code> HTTP; <code>8011</code> llama server in production | Viewer <code>/health</code> source/llama readiness and five redacted component objects | <code>&lt;runtime-root&gt;/logs/trace/action_viewer.log</code> | <code>./scripts/demo stop</code> | Adapter frame stream, external GGUF/mmproj, generated llama server and optional pose weight | Experimental and live-unverified; not operated by Gate 5B.1. |
-| Newcomer mock LM/resident/viewer | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29134</code>, <code>29765</code>, <code>29010/29011</code> | Mock HTTP health and exact lifecycle identities | <code>&lt;runtime-root&gt;/logs/{lmstudio,hermes,trace}/</code> | <code>./scripts/demo stop</code> | Tracked mock servers and high-port profile | Not started by Gate 5B.1; software-only path is hardware-free. |
-| Newcomer mock Android/Discord | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29012</code> Android health; <code>29013</code> Discord mock | Mock health and canonical fake event/result evidence | <code>&lt;runtime-root&gt;/logs/mock/</code> | <code>./scripts/demo stop</code> | MQTT, Bridge, isolated mock profile | Not started by Gate 5B.1; no real device/provider contact. |
+| Action viewer | AI6 container when enabled | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>8010</code> HTTP; <code>8011</code> llama server in production | Viewer <code>/health</code> source/llama readiness and five redacted component objects | <code>&lt;runtime-root&gt;/logs/trace/action_viewer.log</code> | <code>./scripts/demo stop</code> | Adapter frame stream, external GGUF/mmproj, generated llama server and optional pose weight | Experimental and live-unverified; not operated by Gate 5B.3. |
+| Newcomer mock LM/resident/viewer | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29134</code>, <code>29765</code>, <code>29010/29011</code> | Mock HTTP health and exact lifecycle identities | <code>&lt;runtime-root&gt;/logs/{lmstudio,hermes,trace}/</code> | <code>./scripts/demo stop</code> | Tracked mock servers and high-port profile | Not started by Gate 5B.3; software-only path is hardware-free. |
+| Newcomer mock Android/Discord | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29012</code> Android health; <code>29013</code> Discord mock | Mock health and canonical fake event/result evidence | <code>&lt;runtime-root&gt;/logs/mock/</code> | <code>./scripts/demo stop</code> | MQTT, Bridge, isolated mock profile | Not started by Gate 5B.3; no real device/provider contact. |
 | Temi Android App | Temi robot/device | Android owner, outside AI6 lifecycle | Android owner’s application procedure; none in AI6 | Deployment-configured broker endpoint; command/result topics | Fresh Android runtime snapshot, subscriptions, command/result evidence and physical observation | Android owner’s private evidence store | Android owner’s controlled app/device procedure | Android source/APK, device and broker reachability | External and live-unverified. |
 | Discord provider | External provider | Bridge notification path only when explicitly authorized | No AI6 direct start command | Provider HTTPS endpoint, not an AI6 listener | Bridge redacted receipt; real success requires provider HTTP 204 evidence | Bridge notification receipt under private runtime | External owner/provider procedure | Owner-only credential env and explicit authorization | Disabled by default; live-unverified. |
 
@@ -150,6 +150,14 @@ the HTTP model-list contract. The lifecycle never invokes `lms`, never loads or
 unloads models, and never stops a provider process. The compatibility helper
 files fail closed if called directly. The newcomer mock remains lifecycle-owned
 on its isolated high port for software-only acceptance.
+
+The configured Hermes context is a requirement, not proof of the loaded
+provider context. In the Gate 5B.3 evidence, Hermes and the resident were
+configured for `64000` while the external backend rejected an approximately
+`11508`-token request at an available `4096` context. Before a future live
+retry, the external owner must provide bounded evidence that the loaded model
+context is compatible with the configured Hermes context; AI6 does not change
+that provider state during lifecycle or documentation work.
 
 ```bash
 ./scripts/demo --config <PRIVATE_CONFIG_PATH> doctor

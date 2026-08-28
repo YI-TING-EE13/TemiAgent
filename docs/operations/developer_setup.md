@@ -1,6 +1,6 @@
 # Developer Setup and Environment Contract
 
-Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5B.1: 2026-08-28.
+Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5B.3: 2026-08-28.
 
 This is the one current clean-clone setup path for a new TemiAgent maintainer.
 It prepares source, locked Python environments, private configuration and
@@ -128,7 +128,7 @@ It never starts a service and never downloads a model:
 ~~~
 
 <code>--sources</code> verifies the formal Hermes submodule, applies patches
-<code>0001</code>–<code>0009</code> in the submodule worktree, and reconstructs
+<code>0001</code>–<code>0010</code> in the submodule worktree, and reconstructs
 the ignored llama.cpp checkout from its manifest. The expected llama.cpp commit
 is <code>0b7154066e8544ed88d92ae2132cc1e055cf6304</code> and the expected tree
 is <code>1020a771795f406b8891d18ee607b4da3783fa7f</code>. The
@@ -307,7 +307,7 @@ invitation to invent one.
 | Formal Hermes submodule | Resident/gateway source base | Required for production and Hermes tests | Base commit and final tree pinned in manifest | <code>git submodule update</code> then <code>./scripts/bootstrap --hermes</code> | <code>./scripts/bootstrap --check</code> | External team remote plus root-owned patches; no fallback. |
 | Hermes virtual environment | Resident/gateway execution | Required for production | Version not pinned: <code>ENVIRONMENT_PIN_GAP</code> | Maintainer-approved Hermes setup | <code>test -x hermes-agent/venv/bin/hermes</code> | Root bootstrap verifies presence but does not install it. |
 | LM Studio API | Production external model service | Required for production; not needed by fake E2E | Version not pinned: <code>ENVIRONMENT_PIN_GAP</code> | External owner provisions the installed application and model cache | External owner’s API readiness; AI6 checks one listener and <code>/v1/models</code> and never invokes the CLI | Model/cache/license are external; no model is published or lifecycle-owned. |
-| CUDA driver/GPU | Production LM Studio and optional viewer | Required for production model/viewer paths | GPU/driver/CUDA not pinned: <code>ENVIRONMENT_PIN_GAP</code> | Host/maintainer provisioning | Lifecycle GPU policy check | Production policy names visible devices <code>0,1</code>; viewer config names device <code>3</code>; no Gate 5B.1 inference. |
+| CUDA driver/GPU | Production LM Studio and optional viewer | Required for production model/viewer paths | GPU/driver/CUDA not pinned: <code>ENVIRONMENT_PIN_GAP</code> | Host/maintainer provisioning | Lifecycle GPU policy check | Production policy names visible devices <code>0,1</code>; viewer config names device <code>3</code>; no Gate 5B.3 inference. |
 | llama.cpp | Optional action viewer server | Optional feature, but current bootstrap check expects its binary | Commit <code>0b715406...</code>; tree <code>1020a771...</code> | <code>./scripts/bootstrap --llama-cpp</code>, then approved build | <code>test -x anomaly_detection/third_party/llama.cpp/build/bin/llama-server</code> | Generated ignored checkout; build toolchain/flags are not pinned. |
 | Android/Temi dependencies | Device-side executor and asset mapping | External acceptance gate | AI6 does not own Android version pins | Android repository/device owner | Android owner’s tests and fresh runtime snapshot | AI6 defines only the cross-system MQTT/schema boundary. |
 | Node/npm | Other repository tooling | Not required by current lifecycle | Observed only | Not installed for this contract | None | Do not add it to a new-student prerequisite list without a source-backed feature. |
@@ -316,7 +316,7 @@ invitation to invent one.
 
 | Artifact or state | Tracked? | External/provision method | Expected location | Required? | Hash/version authority | License/provenance status |
 |---|---|---|---|---|---|---|
-| Hermes base plus overlay | Gitlink, manifest, patches and README | Formal team submodule, then root patch bootstrap | <code>hermes-agent/</code> | Production resident/gateway | Pinned base <code>a0fedfbb...</code>; final tree <code>968f1668...</code>; nine patch SHA-256 values | MIT license is verified by the manifest/verifier. |
+| Hermes base plus overlay | Gitlink, manifest, patches and README | Formal team submodule, then root patch bootstrap | <code>hermes-agent/</code> | Production resident/gateway | Pinned base <code>a0fedfbb...</code>; final tree <code>47e9f141...</code>; ten patch SHA-256 values | MIT license is verified by the manifest/verifier. |
 | llama.cpp source | Manifest and README only | Public pinned source bootstrap | <code>anomaly_detection/third_party/llama.cpp/</code> | Viewer path only | Commit <code>0b715406...</code>; tree <code>1020a771...</code>; MIT license hash in manifest | Generated checkout is ignored; no model binary is implied. |
 | LM Studio model/cache | No | External LM Studio provisioning | <code>.lmstudio-data/</code> | Production LM route | Model ID <code>temi/gemma-4-31b-it-qat</code>, API identifier <code>google/gemma-4-31b</code>; no weight hash | Provider/cache license and model redistribution are external. |
 | Viewer GGUF and mmproj | No | External approved model/cache provisioning | Path values in private Demo env | Viewer only | No root hash/version authority | Provenance and redistribution terms require maintainer confirmation. |

@@ -2,7 +2,7 @@
 
 最後審查日期：2026-08-28
 
-## Gate 5B.1 handover entry points
+## Gate 5B.3 handover entry points
 
 For a new student, use this short path rather than browsing the full document
 inventory:
@@ -160,7 +160,7 @@ describes an ignored generated checkout. `計劃書/` is research/reference
 material, not runtime source.
 
 For Hermes, initialize the root submodule from the team remote and run the
-documented bootstrap to apply patches `0001`–`0009`. The final patched tree is
+documented bootstrap to apply patches `0001`–`0010`. The final patched tree is
 verified by content identity; generated local submodule commit IDs are not
 dependency authority. If the team remote is unavailable, stop without falling
 back to the original upstream, a local checkout, a file URL or Git alternates.

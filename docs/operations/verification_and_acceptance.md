@@ -1,10 +1,11 @@
 # Verification and Acceptance Guide
 
-Status: <code>CURRENT_AUTHORITY</code>. Last reviewed for Gate 5B.1: 2026-08-28.
+Status: <code>CURRENT_AUTHORITY</code>. Last reviewed for Gate 5B.3: 2026-08-28.
 
 This guide distinguishes executable hardware-free verification from external
 acceptance. Run every project command in the designated container from
-`/TemiAgent`. Gate 5B.1 is a non-live LM ownership remediation: its tests use
+`/TemiAgent`. Gate 5B.3 is a non-live Hermes failure-path remediation: its
+tests use
 fake/stub providers and do not start LM Studio or any other long-running Demo
 service, send MQTT/Discord messages, alter private configuration, or use a
 robot. Do not turn a skipped external gate into a PASS claim.
@@ -29,7 +30,7 @@ git status --short
 
 ## Authoritative test matrix
 
-Run project commands inside the designated container. The Gate 5B.1 remediation
+Run project commands inside the designated container. The Gate 5B.3 remediation
 does not authorize live services, MQTT publication, Android control,
 GPU inference or Discord delivery.
 
@@ -49,7 +50,7 @@ GPU inference or Discord delivery.
 | Documentation validation | Relative links, fences and reader-schema byte equality. | <code>python3 tools/validate_documentation.py</code> | No | No | No | PASS with zero broken links/schema drift. | Fix the referenced document or schema mapping; do not suppress the finding. |
 | Shell syntax | Tracked shell parser validation. | <code>bash -n scripts/demo scripts/bootstrap scripts/bootstrap_hermes.sh scripts/bootstrap_llama_cpp.sh tools/start_lmstudio_3gpu.sh tools/validate_temi_e2e_stack.sh</code> | No | No | No | PASS for the checked entrypoints. | Shell syntax regression. |
 | Python compilation | Syntax-only check for changed Python tools. | <code>python3 -m py_compile tools/demo_lifecycle.py tools/managed_lmstudio_supervisor.py tools/validate_documentation.py</code> | No | No | No | PASS without importing services. | Python syntax regression. |
-| Clean-clone source bootstrap | Formal submodule plus nine-patch and llama reconstruction, including idempotency. | <code>./scripts/bootstrap --sources</code> twice after bounded submodule initialization | No | Yes for source acquisition | No | PASS in two independent clean clones; Gate 3 evidence is carried forward. | Missing publication URL, team source, environment or manifest identity; do not fall back. |
+| Clean-clone source bootstrap | Formal submodule plus ten-patch and llama reconstruction, including idempotency. | <code>./scripts/bootstrap --sources</code> twice after bounded submodule initialization | No | Yes for source acquisition | No | PASS in two independent clean clones; Gate 3 evidence is carried forward. | Missing publication URL, team source, environment or manifest identity; do not fall back. |
 | Full production readiness | External LM Studio, Hermes, generated binaries, ports and configured runtime. | <code>./scripts/bootstrap --check</code> and read-only <code>./scripts/demo --json doctor</code> | No for checks; external service may be required | Provisioning-dependent | Production model path may require GPU | PASS only when every required check is healthy. | A missing external prerequisite is not a documentation or hardware-free test failure. |
 
 Hardware-free PASS means only that the named software path passed. Real
@@ -79,6 +80,36 @@ subcommands and verify that normal start/stop and rejected compatibility paths
 issue zero global cleanup commands. Historical Gate 5B PIDs are incident
 evidence only; a future live retry must create a new process ledger. This
 implementation status is `IMPLEMENTATION_REMEDIATED_NONLIVE`, not live proof.
+
+## Gate 5B.3 Hermes compression failure-path remediation
+
+Gate 5B's second attempt passed L0, L1, L2 and L3, then failed L5 after one
+resident `/invoke` request. The retained failure evidence is: model request
+count `0 -> 1` at the resident boundary, HTTP 500, three bounded compression
+recovery attempts, and a missing `final_response` KeyError. No new live retry is
+authorized by Gate 5B.3.
+
+The source and deterministic measurements classify the trigger as
+`MODEL/API_CONFIGURATION_MISMATCH`, not stale session state, oversized memory,
+or a compression-threshold bug. Hermes was configured for a 64,000-token
+context with a 32,000-token compression threshold, while the external LM
+backend rejected an approximately 11,508-token request because its available
+context was 4,096. The synthetic resident process used session
+`temi-resident`, loaded no memory or checkpoint, and began with zero history.
+Its one-turn message set had no removable middle; each of the three recovery
+attempts therefore left the input unchanged and did not call the compression
+summary model.
+
+Patch `0010` gives exhausted compression results an explicit
+`final_response: null` and typed bounded failure metadata. `AIAgent.chat()` now
+raises that typed error rather than indexing a missing field. The resident
+`/invoke` handler converts the typed error into an HTTP 500 response containing
+only the allowlisted error class, original failure category and retryable flag;
+provider text, prompts, payloads and tracebacks do not cross the boundary. The
+normal successful response remains unchanged. This result is
+`IMPLEMENTED_NONLIVE`, not `LIVE_VERIFIED`; an external owner must provision a
+backend context compatible with Hermes before a separately authorized Gate 5B
+retry.
 
 ## Documentation and source-structure checks
 

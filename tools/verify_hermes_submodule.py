@@ -22,10 +22,10 @@ AUTHORIZED_ORIGINAL_UPSTREAM = "https://github.com/NousResearch/hermes-agent.git
 AUTHORIZED_TEAM_REMOTE = "https://github.com/YI-TING-EE13/hermes-agent.git"
 AUTHORIZED_BASE_COMMIT = "a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2"
 AUTHORIZED_BASE_TREE = "bda69c575e65725bf9264dd1288a63093cea3cc3"
-AUTHORIZED_FINAL_TREE = "968f1668a05fafd09461c17a835198421f14a48f"
+AUTHORIZED_FINAL_TREE = "47e9f1411e585769c055d0c6ee4417bebcdc6f70"
 AUTHORIZED_LICENSE_IDENTIFIER = "MIT"
 AUTHORIZED_COPYRIGHT = "Copyright (c) 2025 Nous Research"
-REQUIRED_PATCH_COUNT = 9
+REQUIRED_PATCH_COUNT = 10
 _SHA1 = re.compile(r"[0-9a-f]{40}\Z")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -213,12 +213,12 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         _safe_relative_path(required_path, "required_paths entry")
     if manifest["patch_count"] != REQUIRED_PATCH_COUNT:
         raise HermesSubmoduleVerificationError(
-            "HERMES_SUBMODULE_MANIFEST_INVALID: patch_count must be 9"
+            "HERMES_SUBMODULE_MANIFEST_INVALID: patch_count must be 10"
         )
     patches = manifest["patches"]
     if not isinstance(patches, list) or len(patches) != REQUIRED_PATCH_COUNT:
         raise HermesSubmoduleVerificationError(
-            "HERMES_SUBMODULE_MANIFEST_INVALID: exactly nine patches are required"
+            "HERMES_SUBMODULE_MANIFEST_INVALID: exactly ten patches are required"
         )
     seen: set[str] = set()
     for patch in patches:

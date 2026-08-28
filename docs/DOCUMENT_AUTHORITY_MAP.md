@@ -1,6 +1,6 @@
 # TemiAgent Documentation Authority Map
 
-Status: <code>CURRENT_AUTHORITY</code>; Gate 5B.1 inventory reviewed:
+Status: <code>CURRENT_AUTHORITY</code>; Gate 5B.3 inventory reviewed:
 2026-08-28.
 
 This is the complete first-party Markdown inventory for the publication
@@ -20,7 +20,7 @@ git ls-files -co --exclude-standard -- '*.md'
 Markdown paths emitted by the command above. It includes tracked paths and
 non-ignored Markdown paths in the root worktree, excludes ignored runtime or
 generated artifacts, and does not recurse into nested Git repositories or
-submodule contents. The Gate 5B.1 remediation candidate has
+submodule contents. The Gate 5B.3 remediation candidate has
 <code>MARKDOWN_COUNT_ACTUAL=74</code> under this definition.
 
 The unreferenced
@@ -45,14 +45,14 @@ history preserves it; it is not part of the active document count.
 | Document path | Classification | Purpose | Authoritative for | Overlaps with | Contradictions | Action required |
 |---|---|---|---|---|---|---|
 | <code>.hermes.md</code> | SUPPLEMENTAL | Historical/runtime context for Hermes work. | No handover topic; patched Hermes tree and dependency README win. | Hermes README and skill mirror. | Generic workspace placeholders can be mistaken for deployment paths. | Keep supplemental label and defer to setup/dependency docs. |
-| <code>AGENTS.md</code> | CURRENT_AUTHORITY | Repository governance, safety and collaboration rules. | Agent permissions, container boundary, protected files and delivery rules. | Root README and operational safety policy. | None after Gate 5B.1; executable policy still wins. | Keep required reading; change only through governance review. |
+| <code>AGENTS.md</code> | CURRENT_AUTHORITY | Repository governance, safety and collaboration rules. | Agent permissions, container boundary, protected files and delivery rules. | Root README and operational safety policy. | None after Gate 5B.3; executable policy still wins. | Keep required reading; change only through governance review. |
 | <code>Agent.md</code> | SUPPLEMENTAL | Older agent brief and project orientation. | None; not the current governance entry. | <code>AGENTS.md</code> and root README. | Older paths or duplicated boundaries may drift. | Retain as reference and point readers to <code>AGENTS.md</code> and this map. |
-| <code>README.md</code> | CURRENT_AUTHORITY | Repository entrypoint, scope and module map. | Project identity, capability limits and first reading route. | Current status, repository map and student handover. | None after Gate 5B.1. | Link the current setup and handover entry points. |
+| <code>README.md</code> | CURRENT_AUTHORITY | Repository entrypoint, scope and module map. | Project identity, capability limits and first reading route. | Current status, repository map and student handover. | None after Gate 5B.3. | Link the current setup and handover entry points. |
 | <code>anomaly_detection/README.md</code> | CURRENT_AUTHORITY | Owning module reference for optional perception/viewer. | Anomaly module scope, commands and experimental boundary. | Project overview and viewer operations docs. | Direct viewer commands are not the managed Demo lifecycle. | Keep an explicit experimental/module boundary. |
 | <code>docs/CURRENT_STATUS.md</code> | CURRENT_AUTHORITY | Dated implementation, evidence and publication status snapshot. | Current/verified/external/experimental/live-unverified claims. | README, repository map and release record. | None after release and candidate status correction. | Refresh only when evidence or publication state changes. |
 | <code>docs/DOCUMENT_AUTHORITY_MAP.md</code> | CURRENT_AUTHORITY | Complete document inventory and conflict-prevention map. | Document classification and prose authority routing. | <code>docs/README.md</code> and student handover authority table. | None; runtime source/schema still outranks prose. | Maintain one row per active first-party Markdown file. |
 | <code>docs/README.md</code> | CURRENT_AUTHORITY | Documentation index, reading order and classification rules. | Documentation navigation and authority hierarchy. | This map and student handover. | None after new entry points are linked. | Keep links and status labels synchronized. |
-| <code>docs/REPOSITORY_MAP.md</code> | CURRENT_AUTHORITY | High-density source, generated and runtime boundary map. | Repository layout and publication boundary. | README and current status. | None after Gate 5B.1 link/status update. | Update when source ownership or external pins change. |
+| <code>docs/REPOSITORY_MAP.md</code> | CURRENT_AUTHORITY | High-density source, generated and runtime boundary map. | Repository layout and publication boundary. | README and current status. | None after Gate 5B.3 link/status update. | Update when source ownership or external pins change. |
 | <code>docs/architecture/android_cross_service_contract.md</code> | SUPPLEMENTAL | Android implementer-facing cross-system contract. | No Android internal handover; AI6/Android interface detail only. | Canonical cross-service contract and runtime schemas. | Android source/APK remains external; live implementation is not implied. | Defer to runtime schemas and traceability; keep external boundary explicit. |
 | <code>docs/architecture/canonical_cross_service_contract.md</code> | SUPPLEMENTAL | Detailed media, identity, care and correlation contract. | Feature-specific cross-service semantics. | Android contract, schemas and Bridge README. | Feature-gated or future producers must not be described as live. | Keep implementation status beside examples and defer to schemas. |
 | <code>docs/architecture/contract_traceability.md</code> | CURRENT_AUTHORITY | Cross-module contract ownership and synchronization matrix. | Producer/consumer/schema/test ownership. | Runtime schemas and module READMEs. | None after status labels are respected. | Update every coordinated contract change. |

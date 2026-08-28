@@ -21,6 +21,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import sys
 import threading
 import time
@@ -571,6 +572,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             )
             self._write_json(200, result)
         except Exception as exc:
+            structured = _structured_failure_response(exc)
+            if structured is not None:
+                logging.error(
+                    "resident Hermes invocation failed: %s",
+                    structured["failure"]["error_class"],
+                )
+                self._write_json(500, structured)
+                return
             logging.exception("resident Hermes invocation failed")
             self._write_json(500, {"status": "error", "error": str(exc)})
 
@@ -602,6 +611,49 @@ def _parse_toolsets(raw: str) -> list[str]:
     if not raw.strip():
         return []
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+_RESIDENT_FAILURE_MESSAGES = {
+    "hermes_compression_exhausted": (
+        "Hermes could not produce a response after bounded context recovery."
+    ),
+    "hermes_conversation_failed": "Hermes could not produce a response.",
+    "hermes_missing_final_response": "Hermes completed without a final response.",
+}
+_SAFE_FAILURE_CATEGORY_RE = re.compile(r"^[a-z0-9_]{1,80}$")
+
+
+def _structured_failure_response(exc: BaseException) -> dict[str, Any] | None:
+    """Convert a typed Hermes failure into a bounded, non-sensitive HTTP payload."""
+    to_dict = getattr(exc, "to_dict", None)
+    if not callable(to_dict):
+        return None
+    try:
+        metadata = to_dict()
+    except Exception:
+        return None
+    if not isinstance(metadata, dict):
+        return None
+
+    error_class = metadata.get("error_class")
+    if not isinstance(error_class, str) or error_class not in _RESIDENT_FAILURE_MESSAGES:
+        return None
+    category = metadata.get("original_failure_category")
+    if not isinstance(category, str) or _SAFE_FAILURE_CATEGORY_RE.fullmatch(category) is None:
+        return None
+    retryable = metadata.get("retryable")
+    if not isinstance(retryable, bool):
+        return None
+
+    return {
+        "status": "error",
+        "error": _RESIDENT_FAILURE_MESSAGES[error_class],
+        "failure": {
+            "error_class": error_class,
+            "original_failure_category": category,
+            "retryable": retryable,
+        },
+    }
 
 
 def _combine_system_prompt(base: str, overlay: str) -> str:

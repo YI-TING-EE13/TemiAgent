@@ -7,7 +7,7 @@
   "base_commit": "a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2",
   "runtime_path": "hermes-agent",
   "integration_branch": "temiagent/integration",
-  "target_tree_sha": "968f1668a05fafd09461c17a835198421f14a48f",
+  "target_tree_sha": "47e9f1411e585769c055d0c6ee4417bebcdc6f70",
   "expected_base_tree": "bda69c575e65725bf9264dd1288a63093cea3cc3",
   "contract_semantics": "PINNED_BASE_PLUS_PATCHED_WORKTREE",
   "license_path": "LICENSE",
@@ -16,7 +16,7 @@
   "copyright": "Copyright (c) 2025 Nous Research",
   "license_sha256": "821556e6336796450ab852d375117b48a4887e71d255794fd6318d99982a5ab6",
   "license_blob_sha": "75410e73319c72cd3e991a501c5455eb78f38375",
-  "patch_count": 9,
+  "patch_count": 10,
   "required_paths": [
     "agent/context_compressor.py",
     "skills/temi-robot-control/SKILL.md",
@@ -34,6 +34,7 @@
     {"file": "0006-Update-Temi-Home-ESI-v2-skill.patch", "sha256": "97fca10b73c50aa64c9d27a0c18f8c7fe0968dba99f1f7a56168a3edc20f1bfe", "purpose": "Home-ESI v2 policy update"},
     {"file": "0007-docs-clarify-TemiAgent-integration-boundaries.patch", "sha256": "2c6b7beb4c11133b8da198339d3f6fabacfa074f98b7424dd4d21417d4684eba", "purpose": "Temi integration boundary clarification"},
     {"file": "0008-fix-context-scale-compression-threshold-to-active-wi.patch", "sha256": "7030fb3a41bf18fb0d83d3084fe6700aa143cd5c586b57c98648d9f3aa4f20d0", "purpose": "Active-context compression threshold"},
-    {"file": "0009-docs-temi-document-managed-Demo-lifecycle.patch", "sha256": "ccc6abccd35428419ac9fa0777e02fe6ac1f901901091487206c50f88088669d", "purpose": "Managed Demo lifecycle documentation"}
+    {"file": "0009-docs-temi-document-managed-Demo-lifecycle.patch", "sha256": "ccc6abccd35428419ac9fa0777e02fe6ac1f901901091487206c50f88088669d", "purpose": "Managed Demo lifecycle documentation"},
+    {"file": "0010-fix-temi-compression-failure-contract.patch", "sha256": "6588e4227d82a83f9189c6aada977e5018e79a43134139a8361a857d59967272", "purpose": "Bounded Hermes compression failure and resident error contract"}
   ]
 }
