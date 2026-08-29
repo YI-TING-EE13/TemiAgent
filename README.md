@@ -187,7 +187,7 @@ stopped. The checked-in [resource manifest](config/demo_resources.json) lists
 the logical media and skill assets. From a clean clone, initialize the formal
 Hermes submodule with the bounded command above, then run
 `./scripts/bootstrap --sources` once. Hermes resolves only the team fork at the
-pinned base commit; the bootstrap validates the submodule and applies the nine
+pinned base commit; the bootstrap validates the submodule and applies the ten
 root-owned patches. The command then reconstructs the independent optional
 llama.cpp source checkout from its public upstream pin. Run `./scripts/bootstrap
 --check` only after the documented dependency environments have been

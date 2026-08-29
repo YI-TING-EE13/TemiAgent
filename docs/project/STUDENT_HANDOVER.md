@@ -72,7 +72,7 @@ Its signer certificate digest is
 <code>4D:A8:46:1B:45:B0:2F:AD:CB:04:2F:63:15:1F:EE:05:D5:6E:BD:51:05:EB:72:1D:7D:62:E3:0B:88:51:3A:7F</code>;
 schemes v1/v2 are present, debuggable is <code>NO</code>, and the embedded
 revision is the accepted baseline. The observed target
-<code>192.168.50.204:5555</code> is classified
+<code>&lt;observed-private-deployment-address&gt;:5555</code> is classified
 <code>OBSERVED_AI6_DEPLOYMENT</code> and is not a portable default.
 
 Installed package, version, hash, signer, embedded revision and whole-APK

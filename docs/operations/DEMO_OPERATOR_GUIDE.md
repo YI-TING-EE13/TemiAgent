@@ -184,7 +184,7 @@ baseline <code>8c458888657efca5384c6d51e5ec57e8b385d987</code>. The installed
 package, signer, embedded revision and whole APK matched exactly
 (<code>EXACT_APK_MATCH</code>); the existing install was accepted as-is.
 
-The observed target <code>192.168.50.204:5555</code> is classified
+The observed target <code>&lt;observed-private-deployment-address&gt;:5555</code> is classified
 <code>OBSERVED_AI6_DEPLOYMENT</code> and is evidence only, never a portable
 default. This snapshot does not authorize ADB, installation, replacement,
 reinstall, data reset, Android/Temi operation, MQTT, service operation or

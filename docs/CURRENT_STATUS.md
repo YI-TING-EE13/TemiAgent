@@ -219,7 +219,7 @@ host-local source path is intentionally not reproduced here.
 | APK SHA-256 | <code>c0f54cd46930c05caf2f556a2e4e1e26570b8401c0034546b57c6faca27c043</code>. |
 | Signing | SHA-256 certificate <code>4D:A8:46:1B:45:B0:2F:AD:CB:04:2F:63:15:1F:EE:05:D5:6E:BD:51:05:EB:72:1D:7D:62:E3:0B:88:51:3A:7F</code>; schemes v1 and v2; debuggable <code>NO</code>. |
 | Embedded revision | Accepted baseline <code>8c458888657efca5384c6d51e5ec57e8b385d987</code>. |
-| Observed target | <code>192.168.50.204:5555</code>, classification <code>OBSERVED_AI6_DEPLOYMENT</code>; this is evidence only and is not a portable default or tracked configuration. |
+| Observed target | <code>&lt;observed-private-deployment-address&gt;:5555</code>, classification <code>OBSERVED_AI6_DEPLOYMENT</code>; the address is intentionally redacted and is evidence only, not a portable default or tracked configuration. |
 | Installed package | Package, version, APK hash, signer and embedded revision exactly match the final artifact; whole-APK match <code>YES</code>; relation <code>EXACT_APK_MATCH</code>. |
 
 The final disposition is <code>ANDROID_PROVENANCE=CLOSED_PASS</code> and the

@@ -59,7 +59,7 @@ Android-source change occurred in this gate.
 | External source | Repository <code>temi-agent-android-public</code>, branch <code>main</code>, current revision <code>3e2fc0376e5b5ca3992e697fc030cdc08173c639</code>; accepted baseline <code>8c458888657efca5384c6d51e5ec57e8b385d987</code> is an ancestor and no post-baseline implementation, build-config or signing changes were found. |
 | Final artifact | <code>temi-agent-android-public/app/build/outputs/apk/demo/app-demo.apk</code>; package <code>com.robotemi.agent</code>; version <code>1.0.2 (3)</code>; SHA-256 <code>c0f54cd46930c05caf2f556a2e4e1e26570b8401c0034546b57c6faca27c043</code>. |
 | Signing/build facts | Certificate SHA-256 <code>4D:A8:46:1B:45:B0:2F:AD:CB:04:2F:63:15:1F:EE:05:D5:6E:BD:51:05:EB:72:1D:7D:62:E3:0B:88:51:3A:7F</code>; schemes v1/v2; debuggable <code>NO</code>; embedded revision is the accepted baseline. |
-| Observed target | <code>192.168.50.204:5555</code>, classified <code>OBSERVED_AI6_DEPLOYMENT</code>; evidence only, not a portable default or tracked configuration. |
+| Observed target | <code>&lt;observed-private-deployment-address&gt;:5555</code>, classified <code>OBSERVED_AI6_DEPLOYMENT</code>; the address is intentionally redacted and is evidence only, not a portable default or tracked configuration. |
 | Installed match | Package, version, hash, signer, embedded revision and whole APK match exactly: <code>EXACT_APK_MATCH</code>; existing install <code>ACCEPTED_AS_IS</code>. |
 | Historical correction | E2DD is retained as the legacy 1.0.0 (1) acceptance artifact, not final 1.0.2 authority; L4.2 is <code>SUPERSEDED_BY_AUTHORITATIVE_LAB606_PROVENANCE_RECOVERY</code>. |
 

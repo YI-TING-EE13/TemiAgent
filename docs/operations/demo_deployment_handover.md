@@ -136,7 +136,7 @@ package <code>com.robotemi.agent</code>, version <code>1.0.2 (3)</code>,
 SHA-256 <code>c0f54cd46930c05caf2f556a2e4e1e26570b8401c0034546b57c6faca27c043</code>.
 Installed package, signer, embedded revision and whole APK matched exactly;
 the existing install was accepted as-is. The observed target
-<code>192.168.50.204:5555</code> is classified
+<code>&lt;observed-private-deployment-address&gt;:5555</code> is classified
 <code>OBSERVED_AI6_DEPLOYMENT</code>, not a portable endpoint or tracked
 configuration. E2DD remains the legacy 1.0.0 (1) artifact, and the prior L4.2
 mismatch is superseded by
