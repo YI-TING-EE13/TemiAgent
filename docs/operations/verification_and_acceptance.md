@@ -1,7 +1,7 @@
 # Verification and Acceptance Guide
 
-Status: <code>CURRENT_AUTHORITY</code>. Last reviewed for Gate 5 final evidence:
-2026-08-29.
+Status: <code>CURRENT_AUTHORITY</code>. Last reviewed for Gate 5 final evidence
+and L4.3 Android provenance adoption: 2026-08-29.
 
 This guide distinguishes executable hardware-free verification from external
 acceptance. Run every project command in the designated container from
@@ -25,7 +25,7 @@ documentation gate.
 | Publication/runtime source | Candidate started from <code>release/github-v1@59d568b079ce260e2144c410b0f9397d8b026913</code>; Hermes pinned base plus patches <code>0001</code>–<code>0010</code> reconstructs tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. |
 | LM Studio ownership | <code>EXTERNAL_ONLY</code>; API identifier <code>google/gemma-4-31b</code>; provisioned model <code>temi/gemma-4-31b-it-qat</code>; runtime context <code>64000</code>, verified from runtime metadata; observed model maximum <code>262144</code>. |
 | MQTT | Existing broker reused, not restarted; accepted listener <code>0.0.0.0:1883</code>; explicit broker configuration remained mandatory. |
-| Layer disposition | L0 PASS; L1 PASS; L2 PASS; L3 PASS; L4 NOT_RUN_BY_SCOPE; L5 PASS. |
+| Layer disposition | L0 PASS; L1 PASS; L2 PASS; L3 PASS; L4 Android provenance CLOSED_PASS; L4 Temi E2E NOT_RUN_BY_SCOPE; L5 PASS. |
 | Request budget | <code>L1=0; L2=0; L3=0; L5=1</code>. |
 | L2 | Inference-impossible malformed resident request returned HTTP 400 before invocation; inference calls <code>0</code>. |
 | L3 | Bridge Unix callback produced a validated identity-result publication on <code>temi/temi-01/resident/identity/result</code>; physical side effect <code>NO</code>. |
@@ -39,8 +39,30 @@ independently managed MQTT, no tracked private-LAN fallback for
 <code>PC_IP</code>, inference-impossible L2 validation, and exact ownership
 boundaries for stop. PIDs, run IDs, temporary worktrees and transient runtime
 directories are <code>ACCEPTANCE_EVIDENCE_ONLY</code>, not portable setup
-requirements. Android/Temi physical execution, viewer/GPU general readiness,
-Discord delivery and Gate 6 remain separate or unverified.
+requirements. LAB606 Android artifact provenance is now closed as a separate
+L4 evidence item; Temi physical execution, viewer/GPU general readiness,
+Discord delivery, complete L4 E2E and Gate 6 remain separate or unverified.
+
+## L4.3 Android artifact provenance adoption
+
+LAB606 result <code>LAB606_ANDROID_FINAL_ARTIFACT_PROVENANCE_CONFIRMED</code> is
+adopted here as <code>ANDROID_PROVENANCE=CLOSED_PASS</code>. This is a
+documentation/evidence record only: no ADB, installation, replacement,
+reinstall, data reset, Android operation, Temi operation, MQTT operation or
+Android-source change occurred in this gate.
+
+| Field | Accepted evidence |
+|---|---|
+| External source | Repository <code>temi-agent-android-public</code>, branch <code>main</code>, current revision <code>3e2fc0376e5b5ca3992e697fc030cdc08173c639</code>; accepted baseline <code>8c458888657efca5384c6d51e5ec57e8b385d987</code> is an ancestor and no post-baseline implementation, build-config or signing changes were found. |
+| Final artifact | <code>temi-agent-android-public/app/build/outputs/apk/demo/app-demo.apk</code>; package <code>com.robotemi.agent</code>; version <code>1.0.2 (3)</code>; SHA-256 <code>c0f54cd46930c05caf2f556a2e4e1e26570b8401c0034546b57c6faca27c043</code>. |
+| Signing/build facts | Certificate SHA-256 <code>4D:A8:46:1B:45:B0:2F:AD:CB:04:2F:63:15:1F:EE:05:D5:6E:BD:51:05:EB:72:1D:7D:62:E3:0B:88:51:3A:7F</code>; schemes v1/v2; debuggable <code>NO</code>; embedded revision is the accepted baseline. |
+| Observed target | <code>192.168.50.204:5555</code>, classified <code>OBSERVED_AI6_DEPLOYMENT</code>; evidence only, not a portable default or tracked configuration. |
+| Installed match | Package, version, hash, signer, embedded revision and whole APK match exactly: <code>EXACT_APK_MATCH</code>; existing install <code>ACCEPTED_AS_IS</code>. |
+| Historical correction | E2DD is retained as the legacy 1.0.0 (1) acceptance artifact, not final 1.0.2 authority; L4.2 is <code>SUPERSEDED_BY_AUTHORITATIVE_LAB606_PROVENANCE_RECOVERY</code>. |
+
+This closes Android artifact provenance and sets
+<code>READY_FOR_L4_E2E=YES</code>. It does not close Temi physical playback,
+device observation or complete L4 E2E; <code>READY_FOR_GATE6=NO</code>.
 
 ## Preconditions and evidence vocabulary
 
@@ -425,6 +447,7 @@ These are separate, authorization- and dependency-dependent activities:
 |---|---|---|
 | LM Studio / GPU | Service health plus the configured model/context/GPU policy. | A script existing or a unit test passing. |
 | MQTT / resident / Bridge | Exact lifecycle identity, endpoint health, and relevant trace. | A listener alone. |
+| Android artifact provenance | External source revision, final APK identity/hash/signer, installed-package match and explicit artifact-vs-device disposition. | A binary mismatch against an incorrectly classified historical artifact, a Bridge publish, or a browser/terminal log. |
 | Android command execution | Fresh Android MQTT session, `cmd/result` lifecycle response, and device observation. | Bridge publish or a browser/terminal log. |
 | Media playback | Accepted/started or playing result plus visible device playback. | Native callback acceptance or request publication. |
 | Viewer perception | Authorized model/input run and bounded evidence. | Parser tests or a health endpoint. |

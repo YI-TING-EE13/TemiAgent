@@ -16,12 +16,14 @@ TemiAgent 是以 Temi robot 為實體載具、Hermes Agent 為認知核心的 em
 | Structured care memory | DEMO_ONLY; HARDWARE_FREE_VERIFIED | `memory/` 只保存已去識別的合成 fixture；runtime memory、production data 與正式病歷不在 publication scope。 |
 | Continuous abnormal perception | EXPERIMENTAL; LIVE_NOT_VERIFIED | `anomaly_detection/` 可產生 abnormal event；模型結果未經醫療或安全認證，且 viewer 不得 dispatch hardware command。 |
 | Immediate abnormal-care flow | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | Bridge validates an abnormal event, records one notification-stage receipt, invokes Resident Hermes, validates the resulting speak command, and persists a bounded follow-up episode. Real recipient delivery and real-device execution remain unverified. |
+| L4 Android artifact provenance | CLOSED_PASS; EXACT_FINAL_ACCEPTED_ARTIFACT | LAB606 evidence identifies the installed Android APK as the accepted final 1.0.2 (3) artifact. Temi E2E, physical playback and device observation have not yet run. |
 
 狀態標籤的意思是：`IMPLEMENTED` 代表程式已存在；`HARDWARE_FREE_VERIFIED` 只代表指定的
 unit、mock 或 fake 路徑實際通過；`HOST_LIVE_VERIFIED` 只代表 exact Gate 5 deployment
 contract 在 designated host 通過，不代表 Android/Temi physical execution、viewer/GPU
 general acceptance、Discord 或 portable environment；`ANDROID_TEMI_NOT_VERIFIED` 代表
-真機與 Android gate 尚未通過；`LIVE_NOT_VERIFIED` 代表該邊界沒有 current live claim；`LEGACY` 與
+physical Android/Temi E2E 尚未通過；`L4_ANDROID_PROVENANCE=CLOSED_PASS` 只代表已接受
+APK provenance，不代表 physical execution；`LIVE_NOT_VERIFIED` 代表該邊界沒有 current live claim；`LEGACY` 與
 `EXPERIMENTAL` 不屬於 canonical V1 主線。最新治理 snapshot 見
 [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md)。
 
@@ -222,7 +224,7 @@ Runbooks may contain environment-specific placeholders. Supply private IP addres
 
 ## Known Limitations
 
-- The Android App source is not maintained in this workspace; Android behavior requires separate source and real-device verification.
+- The Android App source is not maintained in this workspace. LAB606 provenance confirms the observed installed APK as the accepted final artifact, but Android behavior, physical playback and real-device E2E still require separate verification.
 - The canonical topic strings are repeated across producer and consumer code rather than generated from one contract package.
 - Several runbooks capture machine-specific Demo history. Treat observed values as evidence snapshots, not portable defaults.
 - The root publication boundary retains only reviewed synthetic memory fixtures; runtime memory must remain outside Git. The historical HEAD contains a pose checkpoint, while the Gate 1A publication change removes that weight from the current index; source, version, license and redistribution status remain unresolved.

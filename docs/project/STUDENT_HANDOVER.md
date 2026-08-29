@@ -1,6 +1,7 @@
 # AI6 TemiAgent Student Handover
 
-Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5 final evidence: 2026-08-29.
+Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5 final evidence
+and L4.3 Android provenance adoption: 2026-08-29.
 
 This page is the short handover contract for a new maintainer. Start here
 after reading the [repository README](../../README.md), then follow the
@@ -33,10 +34,12 @@ The frozen production contract is:
 - Lifecycle stop targets only positively owned process identities. Pre-existing
   LM/MQTT processes remain foreign/external unless explicitly proven otherwise.
 
-Gate status is <code>GATE5_HOST_RUNTIME=CLOSED_PASS</code>. L4
-Android/Temi acceptance is <code>NOT_RUN_BY_SCOPE / SEPARATE_GATE</code>;
-physical execution, device playback, camera/microphone and Android source
-remain external. <code>GATE6=NOT_STARTED</code>.
+Gate status is <code>GATE5_HOST_RUNTIME=CLOSED_PASS</code>.
+<code>L4_ANDROID_PROVENANCE=CLOSED_PASS</code> is adopted from LAB606 evidence;
+the installed Android 1.0.2 (3) artifact is accepted as-is. Temi physical
+execution, device playback, camera/microphone and complete L4 E2E remain
+<code>NOT_YET_RUN</code>. <code>READY_FOR_L4_E2E=YES</code> and
+<code>GATE6=NOT_STARTED</code>.
 
 The accepted host evidence includes L0–L3 PASS, L5 PASS, L2 HTTP 400 before
 inference, L3 validated identity-result publication without physical side
@@ -47,6 +50,37 @@ directories are <code>ACCEPTANCE_EVIDENCE_ONLY</code>, not portable
 requirements. See [CURRENT_STATUS](../CURRENT_STATUS.md) and the
 [verification guide](../operations/verification_and_acceptance.md) for the
 complete redacted evidence and retained failed-attempt history.
+
+## L4.3 Android provenance adoption
+
+LAB606 reports <code>LAB606_ANDROID_FINAL_ARTIFACT_PROVENANCE_CONFIRMED</code>.
+The external Android repository is on branch <code>main</code> at revision
+<code>3e2fc0376e5b5ca3992e697fc030cdc08173c639</code>; accepted baseline
+<code>8c458888657efca5384c6d51e5ec57e8b385d987</code> is an ancestor and no
+post-baseline implementation, build-config or signing changes were found.
+
+The accepted artifact is
+<code>temi-agent-android-public/app/build/outputs/apk/demo/app-demo.apk</code>,
+package <code>com.robotemi.agent</code>, version <code>1.0.2 (3)</code>, with
+SHA-256 <code>c0f54cd46930c05caf2f556a2e4e1e26570b8401c0034546b57c6faca27c043</code>.
+Its signer certificate digest is
+<code>4D:A8:46:1B:45:B0:2F:AD:CB:04:2F:63:15:1F:EE:05:D5:6E:BD:51:05:EB:72:1D:7D:62:E3:0B:88:51:3A:7F</code>;
+schemes v1/v2 are present, debuggable is <code>NO</code>, and the embedded
+revision is the accepted baseline. The observed target
+<code>192.168.50.204:5555</code> is classified
+<code>OBSERVED_AI6_DEPLOYMENT</code> and is not a portable default.
+
+Installed package, version, hash, signer, embedded revision and whole-APK
+content match the accepted artifact: <code>EXACT_APK_MATCH</code>.
+<code>ANDROID_PROVENANCE=CLOSED_PASS</code> and
+<code>ACCEPTED_AS_IS</code> mean no replacement, reinstall or data reset was
+performed. The earlier E2DD reference is retained only as the legacy 1.0.0 (1)
+acceptance artifact; the L4.2 mismatch finding is superseded by
+<code>SUPERSEDED_BY_AUTHORITATIVE_LAB606_PROVENANCE_RECOVERY</code>.
+
+This closes artifact provenance only. It does not claim Android behavior,
+physical playback, device observation or complete Temi E2E acceptance, and it
+does not authorize ADB, MQTT, service or inference operations.
 
 ## Gate 5B.1 LM ownership repair (historical remediation)
 
@@ -194,15 +228,15 @@ external owner or maintainer input. There are no <code>MISSING</code> items.
 | 29 | How does Hermes fit in? | ANSWERED | Hermes is a JSON-only reasoning runtime behind the resident wrapper; it does not publish MQTT or control hardware directly. |
 | 30 | How does anomaly detection fit in? | ANSWERED | It is an optional experimental perception/event producer and viewer; it is not a general hardware dispatcher or medical/fall-detection service. |
 | 31 | Which tests run without hardware? | ANSWERED | Bridge, backend, anomaly, tools, lifecycle, schema, external-dependency, docs, mock E2E and media-fake suites are hardware-free when their locked environments are present. |
-| 32 | Which tests require hardware? | PARTIAL | Real Android/Temi session, playback, camera, microphone, device result and physical observation require the Android/device owner and are not AI6-local tests. |
-| 33 | What is currently verified? | ANSWERED | Gate 3 recorded clean-clone Hermes/llama reproducibility, licenses, source manifests and the hardware-free matrix; Gate 5 closes the bounded host runtime contract with external-only LM, reused MQTT, resident/Bridge L0–L3 and one L5 request. Android/Temi physical execution, viewer/GPU general readiness, Discord and real perception remain separate or unverified. |
+| 32 | Which tests require hardware? | PARTIAL | LAB606 closed Android artifact provenance for the installed 1.0.2 (3) APK, but real Android/Temi session, playback, camera, microphone, device result and physical observation remain separate device-owner tests. |
+| 33 | What is currently verified? | ANSWERED | Gate 3 recorded clean-clone Hermes/llama reproducibility, licenses, source manifests and the hardware-free matrix; Gate 5 closes the bounded host runtime contract and L4.3 closes final Android artifact provenance. Temi physical execution, viewer/GPU general readiness, Discord, real perception and complete L4 E2E remain separate or unverified. |
 | 34 | What remains experimental? | ANSWERED | Optional anomaly viewer, pose preprocessing, local model/viewer deployment and feature-gated media/identity/care Demo paths remain bounded or external; see [CURRENT_STATUS](../CURRENT_STATUS.md). |
 | 35 | What is legacy? | ANSWERED | Dated first-year, streaming, direct-service and broad historical runbooks are retained as evidence and marked <code>LEGACY</code>; current lifecycle authority remains <code>scripts/demo</code>. |
 | 36 | Which docs are current authority? | ANSWERED | Use this authority map, [README](../../README.md), [CURRENT_STATUS](../CURRENT_STATUS.md), [REPOSITORY_MAP](../REPOSITORY_MAP.md), [developer setup](../operations/developer_setup.md), [operator guide](../operations/DEMO_OPERATOR_GUIDE.md), deployment, configuration, testing and troubleshooting. |
 | 37 | How do I update dependencies? | ANSWERED | Change the owning project declaration and lockfile together, run affected tests and docs/security checks, update authority/status documentation, and obtain maintainer review. |
 | 38 | How do I make a release? | ANSWERED | Prepare an isolated candidate from the exact publication ref, run the required validation, make one bounded documentation/evidence commit, and use an old-value-guarded local fast-forward; any root push remains separately authorized. Gate 5 final evidence adoption demonstrates this procedure. |
 | 39 | How do I prove a fresh clone is healthy? | ANSWERED | Follow all ten [developer setup](../operations/developer_setup.md) steps, verify submodule/final trees and licenses, run the focused/full hardware-free matrix, then use read-only doctor/status. |
-| 40 | What should I check before a Demo? | ANSWERED | Confirm branch/config/runtime ownership, <code>doctor</code>, status, exact ports/PIDs, external LM Studio model/API/GPU readiness if production, fresh Android evidence if claiming <code>DEMO_READY</code>, and the acceptance checklist. Do not use the LM CLI as an audit. |
+| 40 | What should I check before a Demo? | ANSWERED | Confirm branch/config/runtime ownership, <code>doctor</code>, status, exact ports/PIDs, external LM Studio model/API/GPU readiness if production, the adopted Android artifact provenance, and fresh Temi physical evidence before claiming <code>DEMO_READY</code>. Do not use the LM CLI as an audit. |
 
 Handover result: <code>ANSWERED=36</code>,
 <code>PARTIAL=4</code>, <code>MISSING=0</code>. Each partial answer has an
@@ -256,10 +290,10 @@ runtime boundary.
 - <code>QUESTION</code>: Which tests require hardware?
 - <code>STATUS</code>: PARTIAL
 - <code>WHY_PARTIAL</code>: Real Android/Temi sessions, physical playback, camera, microphone and device results cannot be verified by this repository alone.
-- <code>GATE5_OBSERVED_FACT</code>: Gate 5 accepted one bounded host L5 model request and L0–L3 software path, but no Android/Temi device action, camera/microphone session or physical playback was performed or accepted. General viewer/GPU and hardware behavior remain outside this evidence.
-- <code>MISSING_FACT</code>: A fresh Android/Temi session with device observation and the corresponding command/result evidence.
+- <code>GATE5_OBSERVED_FACT</code>: Gate 5 accepted one bounded host L5 model request and L0–L3 software path. L4.3 now accepts the final Android 1.0.2 (3) artifact provenance and exact installed-APK match, but no Android/Temi device action, camera/microphone session or physical playback was performed or accepted. General viewer/GPU and hardware behavior remain outside this evidence.
+- <code>MISSING_FACT</code>: A fresh Android/Temi session with physical playback, device observation and the corresponding command/result evidence.
 - <code>OWNER</code>: Temi Android/device integration owner.
-- <code>FUTURE_GATE</code>: Gate 5 runtime/environment acceptance.
+- <code>FUTURE_GATE</code>: L4 Temi physical/E2E acceptance.
 - <code>WHAT_STUDENT_CAN_DO_NOW</code>: Run the hardware-free Bridge, backend, anomaly, tools and mock/fake checks, then request a separately authorized device acceptance record; do not label software evidence as live hardware evidence.
 
 ## Resolved handover records
@@ -320,6 +354,8 @@ dirty-path verification. Reuse the verified external MQTT listener without a
 restart; make LM Studio/API readiness, model/GPU policy, optional
 gateway/viewer resources and Android/Temi acceptance separate gates.
 
-No public root remote, approved environment/provider pins, Android/Temi evidence
-or physical acceptance was invented by this handover. The bounded Gate 5 host
-runtime is accepted; L4 Android/Temi remains separate and Gate 6 is not started.
+No public root remote, approved environment/provider pins or physical Android/
+Temi acceptance was invented by this handover. LAB606 Android artifact
+provenance is now adopted as <code>CLOSED_PASS</code>; the bounded Gate 5 host
+runtime is accepted, complete L4 physical/E2E remains separate, and Gate 6 is
+not started.

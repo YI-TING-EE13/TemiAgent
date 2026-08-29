@@ -1350,13 +1350,17 @@ APK：
 app\build\outputs\apk\debug\app-debug.apk
 ```
 
-目前驗證 baseline SHA-256：
+歷史驗證 artifact SHA-256（legacy 1.0.0 (1),
+<code>LEGACY_1_0_0_ACCEPTANCE</code>）：
 
 ```text
 E2DD1CABE7032DD73B65AA6CB451F48906FAA87F7633D7C7739AC5971DA94A11
 ```
 
-此 hash 只代表目前已驗證 APK；任何重新 build 都可能改變。
+此 hash 僅保留作為 legacy 1.0.0 (1) acceptance artifact 的歷史證據，
+不是 final 1.0.2 provenance authority。L4.3 採用的 final Android 1.0.2
+artifact 與安裝比對，請以目前權威的
+<code>docs/CURRENT_STATUS.md</code> 為準。
 
 部署：
 

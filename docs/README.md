@@ -2,12 +2,13 @@
 
 最後審查日期：2026-08-29
 
-## Gate 5 final evidence handover entry points
+## Gate 5 and L4 final evidence handover entry points
 
 Gate 5 host runtime acceptance is closed with the adopted Retry #4 evidence.
 The current claim is bounded to the exact publication/runtime contract recorded
-in [CURRENT_STATUS](CURRENT_STATUS.md); Android/Temi physical acceptance remains
-a separate L4 gate and Gate 6 has not started.
+in [CURRENT_STATUS](CURRENT_STATUS.md); LAB606 has closed Android artifact
+provenance as a separate bounded L4 evidence item. Temi physical execution,
+device playback and Gate 6 remain unverified.
 
 For a new student, use this short path rather than browsing the full document
 inventory:
@@ -79,14 +80,14 @@ authoritative when any prose conflicts with them.
 | Surface | Current document | Owner / verification boundary |
 |---|---|---|
 | Repository entry, scope, module map | [`README.md`](../README.md) | Root maintainers; hardware-free checks only unless recorded otherwise. |
-| Current implementation, verification and release blockers | [CURRENT_STATUS.md](CURRENT_STATUS.md) | Maintainer snapshot; includes adopted Gate 5 host evidence and remaining L4/Gate 6 boundaries. |
+| Current implementation, verification and release blockers | [CURRENT_STATUS.md](CURRENT_STATUS.md) | Maintainer snapshot; includes adopted Gate 5 host evidence, closed L4 Android artifact provenance and remaining Temi E2E/Gate 6 boundaries. |
 | Repository layout and publication boundary | [REPOSITORY_MAP.md](REPOSITORY_MAP.md) | Maintainer map; physical presence is not canonical ownership. |
 | Data flow, module boundary and capability classification | [project overview](architecture/project_overview.md) | Architecture; sections 6–13 are historical planning material. |
 | Cross-module topic, schema and update-together rule | [contract traceability](architecture/contract_traceability.md) | Bridge and contract owners; runtime schemas are authoritative. |
 | Demo lifecycle and operator workflow | [Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md) | Demo operator; `scripts/demo` is the only current lifecycle. |
 | Private Demo configuration and ownership | [Demo configuration reference](operations/demo_configuration_reference.md) | Canonical ignored owner-only `.runtime/demo/demo.env`, initializer, production and isolated `newcomer_mock` profiles; never commit values or credentials. |
 | Incident diagnosis and recovery boundary | [Demo troubleshooting](operations/demo_troubleshooting.md) | Exact-PID investigation; no broad process control. |
-| Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes the adopted bounded Gate 5 host evidence. Android/Temi physical, viewer/GPU general and Discord remain separate external gates. |
+| Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes adopted Gate 5 host evidence and LAB606 Android artifact provenance. Temi physical, viewer/GPU general and Discord remain separate external gates. |
 | Bridge-owned abnormal alert, follow-up, and Demo injection | [Immediate abnormal-care flow](operations/immediate_abnormal_care_flow.md) | Bridge owner; formal injector is synthetic-only and real Discord remains an authorization-gated external path. |
 | Module commands and artifacts | Each module README in the root module index | Owning module; do not infer contracts from a README alone. |
 | External source bootstrap | [`third_party/hermes/`](../third_party/hermes/README.md) and [`third_party/llama_cpp/`](../third_party/llama_cpp/README.md) | Hermes is a formal team-remote submodule plus root-owned patches; llama.cpp remains an ignored generated checkout reconstructed from its manifest. |
@@ -99,7 +100,7 @@ authoritative when any prose conflicts with them.
 | [project_overview.md](architecture/project_overview.md) | Maintained mixed overview; historical plan sections labeled | Project architecture | Module map, canonical data flow and payload narrative. |
 | [contract_traceability.md](architecture/contract_traceability.md) | Maintained | Bridge and contract owners | Authoritative source, producer, consumer, test and synchronization matrix. |
 | [canonical_cross_service_contract.md](architecture/canonical_cross_service_contract.md) | Media Bridge runtime feature-gated; other integrations pending | Bridge contract owner | Identity, video and care-report topics, schemas, correlation, safety and migration. |
-| [android_cross_service_contract.md](architecture/android_cross_service_contract.md) | Implementation handoff; Android verification pending | Bridge contract owner and Android owner | LAB606 Android parser, state, privacy and test requirements. |
+| [android_cross_service_contract.md](architecture/android_cross_service_contract.md) | Implementation handoff; artifact provenance CLOSED_PASS; Temi E2E pending | Bridge contract owner and Android owner | LAB606 Android parser, state, privacy and test requirements. |
 
 ## Operations
 

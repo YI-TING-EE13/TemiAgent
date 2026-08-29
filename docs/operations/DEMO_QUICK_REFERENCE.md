@@ -36,7 +36,9 @@ context `64000`), reuses MQTT without restart, reconstructs Hermes base plus
 patches `0001`–`0010` to tree
 `47e9f1411e585769c055d0c6ee4417bebcdc6f70`, and permits exactly one model
 request at L5 (`L1=0; L2=0; L3=0; L5=1`). This is host evidence only;
-Android/Temi L4 remains a separate gate and Gate 6 is not started.
+LAB606 Android artifact provenance is <code>CLOSED_PASS</code> for the accepted
+1.0.2 (3) APK; Temi physical/E2E L4 remains a separate gate and Gate 6 is not
+started.
 
 ## 每個指令
 
@@ -71,7 +73,9 @@ JSON output：
 - `canonical.normalized.subscriptions` 是 canonical endpoint topic contract，不是 Paho
   subscribe 清單。
 - branch／HEAD 需在 private config pin，才可作完整 `DEMO_READY` claim；Gate 5 host
-  evidence does not establish Android/Temi `DEMO_READY` or physical execution。
+  evidence and Android artifact provenance do not establish Android/Temi
+  `DEMO_READY` or physical execution。See [CURRENT_STATUS](../CURRENT_STATUS.md)
+  for the accepted artifact identity and evidence-only target classification。
 
 ## 失敗時先做什麼
 

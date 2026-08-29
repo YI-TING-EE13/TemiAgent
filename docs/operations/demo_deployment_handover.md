@@ -1,7 +1,8 @@
 # Demo Deployment and Handover
 
 Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5 final
-evidence: 2026-08-29. This document describes the canonical software
+evidence and L4.3 Android provenance adoption: 2026-08-29. This document
+describes the canonical software
 stack in `<TEMIAGENT_ROOT>` and does not authorize real care, emergency, or
 Discord notification tests.
 
@@ -113,13 +114,37 @@ ownership semantics:
 | Resident Hermes | <code>HOST_LIVE_VERIFIED</code> for health, inference-impossible L2 and one bounded L5 request; Gate-owned process removed during rollback. | Hermes base plus patches <code>0001</code>–<code>0010</code> must produce tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>; no Android claim. |
 | HermesTemiBridge | <code>HOST_LIVE_VERIFIED</code> for the validated L3 callback/publication path; Gate-owned processes removed during rollback. | The L3 physical side effect was <code>NO</code>; Android command execution remains L4. |
 | Gateway/viewer | <code>LIVE_NOT_VERIFIED</code> / not required by the accepted minimum path. | Optional provider, viewer/GPU and perception acceptance remain separate. |
-| Temi Android / Discord | <code>NOT_RUN_BY_SCOPE</code> / external. | No physical execution or real notification delivery was accepted. |
+| Temi Android artifact provenance | <code>CLOSED_PASS</code>; LAB606 accepted the final 1.0.2 (3) artifact and exact installed-APK match. | Artifact identity does not prove physical execution, playback or device observation. |
+| Temi physical/E2E | <code>NOT_RUN_BY_SCOPE</code> / external. | No physical execution, playback or complete L4 E2E acceptance was accepted. |
+| Discord | <code>NOT_RUN_BY_SCOPE</code> / external. | No real notification delivery was accepted. |
 
 The accepted request budget is <code>L1=0; L2=0; L3=0; L5=1</code>. PIDs,
 run IDs, temporary worktrees and transient runtime directories are
 <code>ACCEPTANCE_EVIDENCE_ONLY</code>, not deployment pins or handover
 requirements. See [verification and acceptance](verification_and_acceptance.md)
 for the redacted result and retained failure history.
+
+## L4.3 Android provenance handover
+
+LAB606 evidence closes artifact provenance only. The accepted external source is
+at revision <code>3e2fc0376e5b5ca3992e697fc030cdc08173c639</code> on branch
+<code>main</code>, based on accepted baseline
+<code>8c458888657efca5384c6d51e5ec57e8b385d987</code>. The final artifact is
+<code>temi-agent-android-public/app/build/outputs/apk/demo/app-demo.apk</code>,
+package <code>com.robotemi.agent</code>, version <code>1.0.2 (3)</code>,
+SHA-256 <code>c0f54cd46930c05caf2f556a2e4e1e26570b8401c0034546b57c6faca27c043</code>.
+Installed package, signer, embedded revision and whole APK matched exactly;
+the existing install was accepted as-is. The observed target
+<code>192.168.50.204:5555</code> is classified
+<code>OBSERVED_AI6_DEPLOYMENT</code>, not a portable endpoint or tracked
+configuration. E2DD remains the legacy 1.0.0 (1) artifact, and the prior L4.2
+mismatch is superseded by
+<code>SUPERSEDED_BY_AUTHORITATIVE_LAB606_PROVENANCE_RECOVERY</code>.
+
+Do not use this record to authorize ADB, installation, replacement, data reset,
+Android/Temi operation, MQTT, service operation or inference. Complete Temi
+physical/E2E acceptance remains a separate gate and
+<code>READY_FOR_GATE6=NO</code>.
 
 ## Private configuration and runtime data
 

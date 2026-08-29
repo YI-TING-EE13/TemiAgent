@@ -163,8 +163,32 @@ no physical side effect. L5 returned HTTP 200 with one validated
 <code>speak</code> action; resident health remained healthy and no compression,
 response-boundary or unexpected-runtime failure occurred. Rollback removed
 all Gate-owned processes/listeners and preserved LM/MQTT. This is
-<code>HOST_LIVE_VERIFIED</code> for the exact contract only; Android/Temi L4,
-physical execution, viewer/GPU general behavior and Gate 6 remain separate.
+<code>HOST_LIVE_VERIFIED</code> for the exact contract only; Android artifact
+provenance is separately <code>CLOSED_PASS</code>, while Temi physical
+execution, viewer/GPU general behavior, complete L4 E2E and Gate 6 remain
+separate.
+
+### L4.3 Android artifact provenance snapshot
+
+LAB606 accepted the external Android final artifact as
+<code>ANDROID_PROVENANCE=CLOSED_PASS</code>. The accepted package is
+<code>com.robotemi.agent</code>, version <code>1.0.2 (3)</code>, at
+<code>temi-agent-android-public/app/build/outputs/apk/demo/app-demo.apk</code>,
+with SHA-256
+<code>c0f54cd46930c05caf2f556a2e4e1e26570b8401c0034546b57c6faca27c043</code>.
+The external source is revision
+<code>3e2fc0376e5b5ca3992e697fc030cdc08173c639</code>, based on accepted
+baseline <code>8c458888657efca5384c6d51e5ec57e8b385d987</code>. The installed
+package, signer, embedded revision and whole APK matched exactly
+(<code>EXACT_APK_MATCH</code>); the existing install was accepted as-is.
+
+The observed target <code>192.168.50.204:5555</code> is classified
+<code>OBSERVED_AI6_DEPLOYMENT</code> and is evidence only, never a portable
+default. This snapshot does not authorize ADB, installation, replacement,
+reinstall, data reset, Android/Temi operation, MQTT, service operation or
+inference. Temi physical playback, device observation and complete L4 E2E are
+still <code>NOT_YET_RUN</code>; use the [verification guide](verification_and_acceptance.md)
+for the authoritative provenance record and remaining gate boundary.
 
 `doctor` 與 `status` 不啟停 service，也不發布 MQTT。`restart` 只會採用已記錄、或在此明確
 restart 中以 cwd、command line、PID start identity 與 listener 驗證過的既有 Demo process。
