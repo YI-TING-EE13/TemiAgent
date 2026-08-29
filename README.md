@@ -8,17 +8,20 @@ TemiAgent 是以 Temi robot 為實體載具、Hermes Agent 為認知核心的 em
 
 | Capability | State | Evidence and limits |
 |---|---|---|
-| Legacy live route | LEGACY; LIVE_NOT_VERIFIED | `temi_backend/` 保留 legacy ASR、影像、local VLM 與 MQTT 相容路線；目前 Gate snapshot 只有硬體無關測試，歷史真機紀錄不是目前 live evidence。 |
+| Legacy live route | LEGACY; LIVE_NOT_VERIFIED | `temi_backend/` 保留 legacy ASR、影像、local VLM 與 MQTT 相容路線；Gate 5 的 host acceptance 不替 legacy route 或歷史真機紀錄背書。 |
 | Canonical ASR route | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | Overview adapter 產生 canonical ASR event，Bridge 驗證事件、路徑與 Hermes output 後發布 command；Temi Android live path 尚未驗證。 |
 | Canonical media v1.1 Bridge route | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | Bridge 與 fake Android 已驗證 play/control lifecycle；Android、Hermes video entry 與真機播放仍是外部驗收。 |
-| Resident Hermes HTTP mode | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | `tools/hermes_resident_server.py` 提供 `/health` 與 `/invoke`；wrapper 與 mock route 可測，live provider/model 尚未驗證。 |
+| Resident Hermes HTTP mode | IMPLEMENTED; HARDWARE_FREE_VERIFIED; HOST_LIVE_VERIFIED; ANDROID_TEMI_NOT_VERIFIED | `tools/hermes_resident_server.py` 的 exact Gate 5 host contract 通過 L0–L3、L5；production LM remains external-only，Android/Temi physical execution 尚未驗證。 |
+| Gate 5 host runtime | CLOSED_PASS; HOST_LIVE_VERIFIED | Publication `release/github-v1` 的 exact candidate 通過 bounded host acceptance：external LM、reused MQTT、resident、Bridge 與 one bounded model request；這不是 Android/Temi 或 portable environment proof。 |
 | Structured care memory | DEMO_ONLY; HARDWARE_FREE_VERIFIED | `memory/` 只保存已去識別的合成 fixture；runtime memory、production data 與正式病歷不在 publication scope。 |
 | Continuous abnormal perception | EXPERIMENTAL; LIVE_NOT_VERIFIED | `anomaly_detection/` 可產生 abnormal event；模型結果未經醫療或安全認證，且 viewer 不得 dispatch hardware command。 |
 | Immediate abnormal-care flow | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | Bridge validates an abnormal event, records one notification-stage receipt, invokes Resident Hermes, validates the resulting speak command, and persists a bounded follow-up episode. Real recipient delivery and real-device execution remain unverified. |
 
 狀態標籤的意思是：`IMPLEMENTED` 代表程式已存在；`HARDWARE_FREE_VERIFIED` 只代表指定的
-unit、mock 或 fake 路徑實際通過；`LIVE_NOT_VERIFIED` 代表本文件沒有宣稱目前有 live
-listener、真機、GPU/model、Discord 或真實 perception evidence；`LEGACY` 與
+unit、mock 或 fake 路徑實際通過；`HOST_LIVE_VERIFIED` 只代表 exact Gate 5 deployment
+contract 在 designated host 通過，不代表 Android/Temi physical execution、viewer/GPU
+general acceptance、Discord 或 portable environment；`ANDROID_TEMI_NOT_VERIFIED` 代表
+真機與 Android gate 尚未通過；`LIVE_NOT_VERIFIED` 代表該邊界沒有 current live claim；`LEGACY` 與
 `EXPERIMENTAL` 不屬於 canonical V1 主線。最新治理 snapshot 見
 [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md)。
 

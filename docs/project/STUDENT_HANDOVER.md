@@ -1,6 +1,6 @@
 # AI6 TemiAgent Student Handover
 
-Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5B.3: 2026-08-28.
+Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5 final evidence: 2026-08-29.
 
 This page is the short handover contract for a new maintainer. Start here
 after reading the [repository README](../../README.md), then follow the
@@ -8,7 +8,47 @@ after reading the [repository README](../../README.md), then follow the
 runtime schemas, executable validators, module READMEs or the
 [Demo operator guide](../operations/DEMO_OPERATOR_GUIDE.md).
 
-## Gate 5B.1 LM ownership repair
+## Gate 5 final evidence adoption
+
+Gate 5 host runtime acceptance is closed by the separately completed Gate 5B
+Retry #4. This documentation freeze adopts that evidence; it does not rerun
+the live stack. The accepted publication baseline was
+<code>release/github-v1@59d568b079ce260e2144c410b0f9397d8b026913</code>.
+
+The frozen production contract is:
+
+- LM Studio is <code>EXTERNAL_ONLY</code>. The lifecycle never starts, stops,
+  unloads, daemon-downs, server-stops or globally mutates the provider.
+- External readiness must be established before Demo start. The expected API
+  identifier is <code>google/gemma-4-31b</code>, runtime context is
+  <code>64000</code>, and context must be verified from runtime metadata.
+- MQTT is independently managed/reusable; the accepted run reused the
+  configured broker without restart. Explicit broker configuration remains
+  mandatory and no tracked private-LAN fallback is allowed for <code>PC_IP</code>.
+- Hermes reconstruction is the pinned base plus patches
+  <code>0001</code>–<code>0010</code> producing tree
+  <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>.
+- L2 malformed input is inference-impossible. The accepted request budget is
+  exactly <code>L1=0; L2=0; L3=0; L5=1</code>.
+- Lifecycle stop targets only positively owned process identities. Pre-existing
+  LM/MQTT processes remain foreign/external unless explicitly proven otherwise.
+
+Gate status is <code>GATE5_HOST_RUNTIME=CLOSED_PASS</code>. L4
+Android/Temi acceptance is <code>NOT_RUN_BY_SCOPE / SEPARATE_GATE</code>;
+physical execution, device playback, camera/microphone and Android source
+remain external. <code>GATE6=NOT_STARTED</code>.
+
+The accepted host evidence includes L0–L3 PASS, L5 PASS, L2 HTTP 400 before
+inference, L3 validated identity-result publication without physical side
+effect, and L5 HTTP 200 with one validated <code>speak</code> action. Rollback
+left zero Gate-owned processes/listeners and preserved the external LM and
+canonical MQTT broker. PIDs, run IDs, temporary worktrees and runtime
+directories are <code>ACCEPTANCE_EVIDENCE_ONLY</code>, not portable
+requirements. See [CURRENT_STATUS](../CURRENT_STATUS.md) and the
+[verification guide](../operations/verification_and_acceptance.md) for the
+complete redacted evidence and retained failed-attempt history.
+
+## Gate 5B.1 LM ownership repair (historical remediation)
 
 Gate 5B stopped at the L1 ownership-safety gate because the former managed LM
 path used global `lms` cleanup against pre-existing provider state. Production
@@ -25,7 +65,7 @@ This repair is `IMPLEMENTATION_REMEDIATED_NONLIVE`. Direct `lms ls`, `lms ps`,
 audits. The accepted ephemeral-input security pattern remains a mode `0700`
 private runtime root containing the mode `0600` config file.
 
-## Gate 5B.3 Hermes compression failure repair
+## Gate 5B.3 Hermes compression failure repair (historical remediation)
 
 The second Gate 5B attempt passed L0–L3 and failed L5 after one resident
 request. The external LM backend rejected an approximately `11508`-token
@@ -155,17 +195,17 @@ external owner or maintainer input. There are no <code>MISSING</code> items.
 | 30 | How does anomaly detection fit in? | ANSWERED | It is an optional experimental perception/event producer and viewer; it is not a general hardware dispatcher or medical/fall-detection service. |
 | 31 | Which tests run without hardware? | ANSWERED | Bridge, backend, anomaly, tools, lifecycle, schema, external-dependency, docs, mock E2E and media-fake suites are hardware-free when their locked environments are present. |
 | 32 | Which tests require hardware? | PARTIAL | Real Android/Temi session, playback, camera, microphone, device result and physical observation require the Android/device owner and are not AI6-local tests. |
-| 33 | What is currently verified? | ANSWERED | Gate 3 recorded clean-clone Hermes/llama reproducibility, licenses, source manifests and the hardware-free matrix; Gate 5B.1 and 5B.3 verify non-live ownership/failure contracts with fakes. Current real Android, LM Studio/GPU, Discord, Temi and perception claims remain live-unverified. |
+| 33 | What is currently verified? | ANSWERED | Gate 3 recorded clean-clone Hermes/llama reproducibility, licenses, source manifests and the hardware-free matrix; Gate 5 closes the bounded host runtime contract with external-only LM, reused MQTT, resident/Bridge L0–L3 and one L5 request. Android/Temi physical execution, viewer/GPU general readiness, Discord and real perception remain separate or unverified. |
 | 34 | What remains experimental? | ANSWERED | Optional anomaly viewer, pose preprocessing, local model/viewer deployment and feature-gated media/identity/care Demo paths remain bounded or external; see [CURRENT_STATUS](../CURRENT_STATUS.md). |
 | 35 | What is legacy? | ANSWERED | Dated first-year, streaming, direct-service and broad historical runbooks are retained as evidence and marked <code>LEGACY</code>; current lifecycle authority remains <code>scripts/demo</code>. |
 | 36 | Which docs are current authority? | ANSWERED | Use this authority map, [README](../../README.md), [CURRENT_STATUS](../CURRENT_STATUS.md), [REPOSITORY_MAP](../REPOSITORY_MAP.md), [developer setup](../operations/developer_setup.md), [operator guide](../operations/DEMO_OPERATOR_GUIDE.md), deployment, configuration, testing and troubleshooting. |
 | 37 | How do I update dependencies? | ANSWERED | Change the owning project declaration and lockfile together, run affected tests and docs/security checks, update authority/status documentation, and obtain maintainer review. |
-| 38 | How do I make a release? | PARTIAL | Prepare an isolated candidate from the publication ref, run the required validation, have a maintainer review/adopt the ref, then perform any separately authorized root push. Gate 4's final retry adopted the reviewed ref locally; root push remains separate and unauthorized here. |
+| 38 | How do I make a release? | ANSWERED | Prepare an isolated candidate from the exact publication ref, run the required validation, make one bounded documentation/evidence commit, and use an old-value-guarded local fast-forward; any root push remains separately authorized. Gate 5 final evidence adoption demonstrates this procedure. |
 | 39 | How do I prove a fresh clone is healthy? | ANSWERED | Follow all ten [developer setup](../operations/developer_setup.md) steps, verify submodule/final trees and licenses, run the focused/full hardware-free matrix, then use read-only doctor/status. |
 | 40 | What should I check before a Demo? | ANSWERED | Confirm branch/config/runtime ownership, <code>doctor</code>, status, exact ports/PIDs, external LM Studio model/API/GPU readiness if production, fresh Android evidence if claiming <code>DEMO_READY</code>, and the acceptance checklist. Do not use the LM CLI as an audit. |
 
-Handover result: <code>ANSWERED=35</code>,
-<code>PARTIAL=5</code>, <code>MISSING=0</code>. Each partial answer has an
+Handover result: <code>ANSWERED=36</code>,
+<code>PARTIAL=4</code>, <code>MISSING=0</code>. Each partial answer has an
 individual owner and future gate in the register below.
 
 ## Partial handover register
@@ -180,7 +220,7 @@ runtime boundary.
 - <code>QUESTION</code>: How do I clone it?
 - <code>STATUS</code>: PARTIAL
 - <code>WHY_PARTIAL</code>: The audited local snapshot does not contain the root publication URL, and a URL cannot be inferred safely.
-- <code>GATE5A_OBSERVED_FACT</code>: Read-only <code>git remote -v</code> returned no root remote; the local <code>release/github-v1</code> ref is <code>654110f621c6eff5e4defaa54f0722b2a916f50a</code>. This does not supply a public clone URL.
+- <code>GATE5_OBSERVED_FACT</code>: Read-only <code>git remote -v</code> still returns no root remote. The local <code>release/github-v1</code> publication ref and the Gate 5 evidence baseline are local Git facts, not a public clone URL.
 - <code>MISSING_FACT</code>: The maintainer-designated public repository URL and any access requirement.
 - <code>OWNER</code>: Publication maintainer / repository owner.
 - <code>FUTURE_GATE</code>: Final GitHub publication gate.
@@ -192,7 +232,7 @@ runtime boundary.
 - <code>QUESTION</code>: What tools must be installed?
 - <code>STATUS</code>: PARTIAL
 - <code>WHY_PARTIAL</code>: The repository requires a designated container and host Docker support but does not own their provisioning.
-- <code>GATE5A_OBSERVED_FACT</code>: The designated container used image <code>pytorch/pytorch:2.11.0-cuda13.0-cudnn9-devel</code> with host Docker <code>29.3.0</code>; Python, uv, Git, Bash, Mosquitto, CMake, Ninja and GCC were available, while jq, lsof and clang were absent. These are deployment observations, not installation requirements or pins.
+- <code>GATE5_OBSERVED_FACT</code>: The accepted host had the designated container and required runtime toolchain available for the bounded Gate 5 checks; the observed image/tool versions and absent optional tools remain deployment observations, not installation requirements or pins.
 - <code>MISSING_FACT</code>: The approved container image, Docker host provisioning and installation source for the required container tools.
 - <code>OWNER</code>: AI6 container/infrastructure maintainer.
 - <code>FUTURE_GATE</code>: Gate 5 runtime/environment acceptance.
@@ -204,7 +244,7 @@ runtime boundary.
 - <code>QUESTION</code>: Which versions matter?
 - <code>STATUS</code>: PARTIAL
 - <code>WHY_PARTIAL</code>: Python floors and lockfiles are source-backed, but several host, container and provider versions remain unpinned.
-- <code>GATE5A_OBSERVED_FACT</code>: The container reported Python <code>3.12.3</code>, uv <code>0.10.12</code>, Git <code>2.43.0</code>, Bash <code>5.2.21</code>, Mosquitto <code>2.0.18</code>, CUDA <code>13.0</code> with driver <code>580.142</code>, and four RTX 5090 devices. Hermes <code>venv</code> uses Python <code>3.11.15</code>. None of these observations closes the environment-pin gap.
+- <code>GATE5_OBSERVED_FACT</code>: The accepted host evidence records the designated toolchain and external LM/model context, but observed Python/uv/Git/Bash/Mosquitto/CUDA/driver/provider versions remain deployment observations. None of these observations closes the environment-pin gap.
 - <code>MISSING_FACT</code>: Approved versions or digests for uv, Git, Bash, Mosquitto, the container image, LM Studio and CUDA/driver software.
 - <code>OWNER</code>: AI6 environment maintainer.
 - <code>FUTURE_GATE</code>: Gate 5 runtime/environment acceptance.
@@ -216,51 +256,42 @@ runtime boundary.
 - <code>QUESTION</code>: Which tests require hardware?
 - <code>STATUS</code>: PARTIAL
 - <code>WHY_PARTIAL</code>: Real Android/Temi sessions, physical playback, camera, microphone and device results cannot be verified by this repository alone.
-- <code>GATE5A_OBSERVED_FACT</code>: Four host-visible RTX 5090 devices and the configured CUDA toolchain were observed, but no model inference, Android/Temi device action, camera/microphone session or physical playback was performed or accepted.
+- <code>GATE5_OBSERVED_FACT</code>: Gate 5 accepted one bounded host L5 model request and L0–L3 software path, but no Android/Temi device action, camera/microphone session or physical playback was performed or accepted. General viewer/GPU and hardware behavior remain outside this evidence.
 - <code>MISSING_FACT</code>: A fresh Android/Temi session with device observation and the corresponding command/result evidence.
 - <code>OWNER</code>: Temi Android/device integration owner.
 - <code>FUTURE_GATE</code>: Gate 5 runtime/environment acceptance.
 - <code>WHAT_STUDENT_CAN_DO_NOW</code>: Run the hardware-free Bridge, backend, anomaly, tools and mock/fake checks, then request a separately authorized device acceptance record; do not label software evidence as live hardware evidence.
 
+## Resolved handover records
+
 ### #38 — How do I make a release?
 
 - <code>QUESTION_NUMBER</code>: 38
 - <code>QUESTION</code>: How do I make a release?
-- <code>STATUS</code>: PARTIAL
-- <code>WHY_PARTIAL</code>: Release-ref adoption and root publication require maintainer authorization and a selected publication target.
-- <code>GATE5A_OBSERVED_FACT</code>: The local <code>release/github-v1</code> ref is <code>654110f621c6eff5e4defaa54f0722b2a916f50a</code>; the root checkout has no configured remote and no push was performed. The Gate 5A.1 candidate, including its lifecycle source-gate compatibility fix, is <code>codex/github-v1-live-environment-audit</code> and remains unadopted.
-- <code>MISSING_FACT</code>: Approval to adopt the reviewed release ref and the authorized root GitHub remote/push target.
+- <code>STATUS</code>: RESOLVED for local evidence-ref adoption
+- <code>RESOLUTION</code>: Gate 5 created an isolated candidate from the exact publication baseline, ran the required documentation/security/authority review, made one bounded documentation/evidence commit, and fast-forwarded <code>release/github-v1</code> with an old-value guard. Root publication push remains a separate maintainer action.
+- <code>GATE5_OBSERVED_FACT</code>: The accepted local release procedure is now evidenced by this Gate 5 adoption. The root checkout still has no configured remote, and no push was performed.
 - <code>OWNER</code>: Release maintainer / repository owner.
-- <code>FUTURE_GATE</code>: Final GitHub publication gate after maintainer review and authorization.
-- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Prepare an isolated candidate, run the required validation, and request review; do not modify <code>release/github-v1</code>, rewrite history or push.
+- <code>FUTURE_ACTION</code>: A maintainer may select/configure the public root remote and perform a separately authorized push; that action is not part of this local adoption.
+- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Reuse the isolated-candidate, validation and old-value-guard procedure; do not rewrite history, merge, rebase or push.
 
 ## Release handover
 
-The historical Gate 4.1 repair candidate is derived from
-<code>release/github-v1@d66a046395aed21712b00cba43d4ea1b2d9f23de</code> in the
-isolated worktree named by that task. Its reviewed handover repair was adopted
-locally by the Gate 4 final retry at
-<code>release/github-v1@654110f621c6eff5e4defaa54f0722b2a916f50a</code>.
-Reviewers should inspect the candidate diff and its validation evidence, then
-decide separately whether to perform any root publication push. The canonical
-<code>main</code> checkout and the release ref are not handover targets for an
-unreviewed documentation change. No root push is part of this gate.
+The historical Gate 4.1 repair candidate and Gate 5A/5A.1 candidates remain
+dated evidence. The current release procedure is to create an isolated
+candidate from the exact publication ref, validate only the allowed
+documentation/evidence delta, obtain maintainer review, and use an atomic
+old-value-guarded fast-forward for local <code>release/github-v1</code>.
+No merge, rebase, squash, rewrite or push is part of that local adoption.
 
-Gate 5A created a separate candidate on branch
-<code>codex/github-v1-live-environment-audit</code>, based on
-<code>release/github-v1@654110f621c6eff5e4defaa54f0722b2a916f50a</code>. It records
-observed deployment provenance, runtime blockers, publication/runtime parity and
-the safe Gate 5B strategy. Gate 5A.1 additionally reconciles the formal Hermes
-submodule's expected root worktree status with the full-stack lifecycle source
-gate: only verifier-confirmed <code>state=RECONSTRUCTED</code> plus a clean
-nested checkout is accepted, while all other dirty paths still fail closed.
-The candidate remains isolated and unadopted. It does not modify canonical
-<code>main</code>, advance <code>release/github-v1</code>, or perform an
-authorized/intentional lifecycle operation, MQTT publication or push; the
-unintended Gate 5A audit wake-up is recorded in
-<code>CURRENT_STATUS.md</code>.
+Gate 5 final evidence adoption completed that local procedure from
+<code>release/github-v1@59d568b079ce260e2144c410b0f9397d8b026913</code>.
+The exact evidence commit is reported in the task handoff; the candidate ended
+clean and the canonical <code>main</code> checkout remained unchanged. The
+root publication URL and any push target remain maintainer-owned external
+facts.
 
-## Gate 5A.1 review handover
+## Gate 5A.1 review handover (historical candidate)
 
 The Gate 5A.1 candidate is the branch
 <code>codex/github-v1-live-environment-audit</code> based on
@@ -289,6 +320,6 @@ dirty-path verification. Reuse the verified external MQTT listener without a
 restart; make LM Studio/API readiness, model/GPU policy, optional
 gateway/viewer resources and Android/Temi acceptance separate gates.
 
-No public root remote, approved environment/provider pins, LM Studio model/API
-readiness, Android/Temi evidence or physical acceptance was invented by this
-handover. The candidate is review-ready, not Gate 5B-live-accepted.
+No public root remote, approved environment/provider pins, Android/Temi evidence
+or physical acceptance was invented by this handover. The bounded Gate 5 host
+runtime is accepted; L4 Android/Temi remains separate and Gate 6 is not started.

@@ -1,13 +1,95 @@
 # TemiAgent Current Status
 
-狀態：CURRENT；governance snapshot：2026-08-28。
+狀態：CURRENT；governance snapshot：2026-08-29。
 
 This page is the maintained status snapshot for implementation, verification,
 runtime honesty and publication blockers. It is not a runtime health endpoint and
 does not replace the runtime schemas, module READMEs or the
 [canonical Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md).
 
-## Gate 4.1 handover repair candidate
+## Gate 5 final evidence adoption (current authority)
+
+Review date: 2026-08-29. This section adopts the separately completed Gate 5B
+Retry #4 evidence; it is a documentation/evidence freeze and does not rerun
+the live acceptance. The publication baseline for the evidence candidate was
+<code>release/github-v1@59d568b079ce260e2144c410b0f9397d8b026913</code>.
+
+### Frozen gate disposition
+
+| Gate / boundary | Final status | Boundary |
+|---|---|---|
+| Gate 5A | <code>CLOSED_PASS</code> | Read-only environment and publication/runtime reconciliation is retained as historical evidence. |
+| Gate 5A.1 runtime delta reconciliation | <code>CLOSED_PASS</code> | The intended publication/runtime delta is reviewed and adopted in the publication candidate. |
+| Gate 5B.1 LM ownership remediation | <code>CLOSED_PASS</code> | Production LM Studio is external-only; the lifecycle has no real-provider start/stop/unload/daemon-down path. |
+| Gate 5B.3 Hermes compression remediation | <code>CLOSED_PASS</code> | Patch 0010 and the structured resident failure boundary are included in the accepted Hermes reconstruction. |
+| Gate 5B.5 resident probe safety | <code>CLOSED_PASS</code> | L2 validation is inference-impossible and client disconnects do not trigger a second response. |
+| Gate 5B live runtime acceptance | <code>CLOSED_PASS</code> | Retry #4 passed the bounded host L0–L3 and L5 contract; L4 was not run by scope. |
+| Gate 5 host runtime | <code>CLOSED_PASS</code> | The exact publication/runtime contract is host-live accepted, not a physical-device or portable-environment claim. |
+| L4 Android/Temi acceptance | <code>NOT_RUN_BY_SCOPE / SEPARATE_GATE</code> | Android source, device session, physical playback and physical observation remain external. |
+| Gate 6 | <code>NOT_STARTED</code> | No Gate 6 work is implied by this adoption. |
+
+### Accepted host evidence
+
+| Contract | Accepted observation |
+|---|---|
+| Hermes reconstruction | Pinned base plus patches <code>0001</code>–<code>0010</code>; patch <code>0010</code> SHA-256 <code>6588e4227d82a83f9189c6aada977e5018e79a43134139a8361a857d59967272</code>; final tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. |
+| Production LM ownership | <code>EXTERNAL_ONLY</code>; expected model <code>google/gemma-4-31b</code> for model API identity, provisioned model <code>temi/gemma-4-31b-it-qat</code>; runtime context <code>64000</code>; observed model maximum <code>262144</code>. |
+| LM lifecycle safety | External LM was ready before Demo start and was preserved; the lifecycle did not start, stop, unload, daemon-down, server-stop or globally mutate it. Context was verified from runtime metadata, not configuration alone. |
+| MQTT | Existing broker was reused and not restarted; one accepted listener was <code>0.0.0.0:1883</code>. Explicit broker configuration and independent ownership remain mandatory. |
+| Layer results | L0 PASS; L1 PASS; L2 PASS; L3 PASS; L4 NOT_RUN_BY_SCOPE; L5 PASS. |
+| Model-request budget | <code>L1=0; L2=0; L3=0; L5=1</code>, recorded invariant <code>0 → 0 → 0 → 1</code>. |
+| L2 malformed probe | Controlled HTTP 400 validation failure before resident invocation; inference calls <code>0</code>. |
+| L3 no-op path | Bridge Unix callback produced validated MQTT identity-result publication on <code>temi/temi-01/resident/identity/result</code>; physical side effect <code>NO</code>. |
+| L5 bounded request | HTTP 200; approximately <code>14.225686 s</code> curl time and <code>14222 ms</code> resident time; response validation PASS with one <code>speak</code> action. |
+| L5 failure guards | No context overflow, compression exhaustion, <code>final_response</code> KeyError, BrokenPipe, secondary 500 or unexpected runtime error; resident health after the request PASS. |
+| Rollback | Gate-owned processes and listeners remaining: <code>0</code>; LM and canonical MQTT were preserved; canonical source was preserved. |
+
+### Failed attempts retained as causal history
+
+The failed attempts remain important because they explain the frozen contract:
+
+1. Attempt 1 failed LM ownership safety because the managed lifecycle issued
+   global LM operations against pre-existing <code>llmster</code> state. The
+   resolution was production <code>EXTERNAL_ONLY</code> ownership.
+2. Attempt 2 passed L0–L3 but failed L5 because the external runtime context
+   was <code>4096</code> while Hermes/resident required <code>64000</code>; an
+   approximately <code>11508</code>-token request exhausted compression and
+   exposed the missing <code>final_response</code> contract. The resolution was
+   external reprovisioning, patch 0010 and the structured resident failure
+   boundary.
+3. Attempt 3 exposed an acceptance-harness defect: its supposed malformed
+   probe contained a valid prompt and triggered inference. The five-second
+   disconnect then exposed the BrokenPipe/secondary-500 boundary. The
+   resolution was the inference-impossible L2 probe, disconnect hardening and
+   the exact one-request L5 budget.
+4. Attempt 4 is the final host acceptance and passed L0–L3 and L5.
+
+Two setup-only starts before the accepted run also failed safely because the
+Hermes virtual-environment executable was missing and an AF_UNIX socket path
+was too long. Both rolled back before acceptance, changed no tracked
+source/config and are troubleshooting prerequisites, not final runtime
+failures. Verify <code>hermes-agent/venv/bin/python3</code> and
+<code>hermes-agent/venv/bin/hermes</code> before a start, and choose a short
+owner-only runtime/socket root that satisfies Unix-domain socket limits.
+
+### Portable versus transient evidence
+
+PIDs, run IDs, temporary worktrees and transient runtime directories are
+<code>ACCEPTANCE_EVIDENCE_ONLY</code>; they are not universal requirements.
+The portable contract is external-only production LM ownership, runtime
+metadata context <code>64000</code>, the expected model identifier, the Hermes
+base-plus-ten-patch tree, private runtime-root permissions, explicit broker
+configuration and the exact request-budget boundary. The lifecycle stops only
+processes it owns; pre-existing LM/MQTT processes are foreign or external
+unless positive identity evidence proves otherwise.
+
+This adoption changed documentation/evidence only. It did not change runtime
+source, runtime behavior, configuration values, Hermes patches, model context,
+MQTT state or canonical <code>main</code>. No service operation, inference,
+MQTT publish/subscribe, Android/Temi action, push, merge, rebase or history
+rewrite was performed by the adoption gate.
+
+## Gate 4.1 handover repair candidate (historical)
 
 The rejected Gate 4 documentation candidate is
 <code>d0e6a4ebe162363e58dcc3146d80d679151d2a75</code>, derived from
@@ -20,10 +102,11 @@ documentation and that protected fixture only. It does not advance
 <code>release/github-v1</code>, modify canonical <code>main</code>, operate
 services, publish MQTT or push.
 
-## Gate 5A live environment audit (read-only)
+## Gate 5A live environment audit (historical pre-live snapshot)
 
 Audit date: 2026-08-28. The facts in this section are an observed deployment
-snapshot, not portable version pins and not a live-acceptance claim. Project
+snapshot, not portable version pins and not the final live-acceptance claim;
+the current bounded host acceptance is recorded above. Project
 commands were run in the designated <code>yiting.TemiAgent_gpu_all</code>
 container at <code>/TemiAgent</code>. Host environment and Docker metadata
 inspections were the explicit host-side provenance exception; they read
@@ -226,7 +309,7 @@ build pin.
 Gate 5A records facts for Gate 5B; it does not close any of these blockers,
 advance <code>release/github-v1</code>, push, or authorize a service operation.
 
-## Gate 5A.1 publication/runtime delta reconciliation
+## Gate 5A.1 publication/runtime delta reconciliation (historical candidate)
 
 Review date: 2026-08-28. This section is the Gate 5A.1 candidate contract. It
 does not adopt or move <code>release/github-v1</code>, change canonical
@@ -789,7 +872,7 @@ review-ready only; it is not a live acceptance and must not be described as
 production-ready until the separate Gate 5B contract is authorized and
 executed.
 
-## Gate 5B failure and Gate 5B.1 LM ownership remediation
+## Gate 5B failure and Gate 5B.1 LM ownership remediation (historical remediation)
 
 Review date: 2026-08-28. Gate 5B stopped at the L1 ownership-safety gate with
 <code>AI6_TEMIAGENT_GATE5B_RUNTIME_SAFETY_FAILED</code>. L0 and individual
@@ -866,7 +949,7 @@ weaken the external LM ownership contract. The implementation result remains
 <code>IMPLEMENTATION_REMEDIATED_NONLIVE</code>; a future live Gate 5B retry
 requires a new process ledger and separate authorization.
 
-## Gate 5B.3 Hermes compression failure-path remediation
+## Gate 5B.3 Hermes compression failure-path remediation (historical remediation)
 
 Review date: 2026-08-28. The second Gate 5B attempt passed L0, L1, L2 and L3,
 then failed L5 after one resident <code>/invoke</code> request. The observed
@@ -943,7 +1026,7 @@ the loaded model context is compatible with the configured Hermes context.
 | Full upstream Hermes test inventory | INCOMPLETE/ENVIRONMENT_BASELINE: the 19,736-case runner exposed unrelated existing failures and did not complete within the bounded observation; focused Hermes compressor, agent-loop and 0010 suites passed. |
 | Live LM/MQTT/service/device acceptance | SKIPPED: Gate 5B.3 forbids a live retry, model inference, service operation, MQTT publication/subscription, Android/Temi and physical action. |
 
-## Gate 5B.5 resident probe safety and client-disconnect remediation
+## Gate 5B.5 resident probe safety and client-disconnect remediation (historical remediation)
 
 Review date: 2026-08-28. This is a non-live remediation on the publication
 candidate based at <code>release/github-v1@657b39e0064c45c2346f0cdff35581eb01e01d08</code>.
@@ -1006,7 +1089,7 @@ zero. This contract is documented for a separately authorized retry only.
 | Documentation, shell and Python checks | PASS: documentation validator, required shell syntax, changed-file compilation and <code>git diff --check</code>. |
 | Live LM/MQTT/service/device acceptance | SKIPPED: this gate forbids live inference, lifecycle operations, MQTT publication/subscription, Android/Temi and physical action. |
 
-## Snapshot
+## Snapshot (historical Gate 5A.1 baseline)
 
 | Item | Snapshot | Meaning |
 |---|---|---|
@@ -1048,22 +1131,25 @@ to this workspace.
 ## Capability state
 
 `IMPLEMENTED` means code exists. `HARDWARE_FREE_VERIFIED` means the named unit,
-mock or fake path actually passed. `LIVE_NOT_VERIFIED` means there is no current
-claim for a real Temi, Android session, MQTT broker, LM Studio/model service,
-GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
-`DEMO_ONLY` are scope labels, not stronger verification levels.
+mock or fake path actually passed. `HOST_LIVE_VERIFIED` means the exact bounded
+Gate 5 deployment contract passed in the designated host; it does not prove
+physical Android/Temi execution, general viewer/GPU behavior or portable
+environment reproducibility. `LIVE_NOT_VERIFIED` means no current live claim is
+made for that boundary. `LEGACY`, `EXPERIMENTAL` and `DEMO_ONLY` are scope
+labels, not stronger verification levels.
 
 | Capability | State | Evidence boundary |
 |---|---|---|
-| Bridge validation, schemas and dispatch boundary | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED` | Bridge unit/integration tests and fake routes pass; real Android execution is external. |
+| Bridge validation, schemas and dispatch boundary | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; HOST_LIVE_VERIFIED` | Gate 5 L3 exercised the validated callback/publication path without physical side effect; real Android execution remains external. |
 | Canonical ASR adapter route | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED` | Adapter and Bridge software paths are tested; Temi microphone/session evidence is not current. |
 | Media v1.1 command/result route | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED` | Fake Android media lifecycle is tested; real playback is not verified. |
-| Resident Hermes wrapper/mock route | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED` | Local wrapper and mock integration are testable; live provider, model and GPU are not verified. |
+| Resident Hermes wrapper/mock route | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; HOST_LIVE_VERIFIED` | Gate 5 accepted resident health, inference-impossible L2 and one bounded L5 request with external-only LM; Android/Temi remains external. |
 | Immediate abnormal-care Bridge route | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED` | Synthetic event, bounded notification, Hermes follow-up and action validation are tested; real recipient/device execution is not. |
+| Gate 5 host runtime: external LM, MQTT, resident and Bridge | `HOST_LIVE_VERIFIED` | Exact publication/runtime candidate passed L0–L3 and L5; MQTT was reused, LM was preserved, and L4 physical acceptance was not run. |
 | Structured care memory | `DEMO_ONLY; HARDWARE_FREE_VERIFIED` | Tracked memory is synthetic/de-identified fixture material; runtime and production data are excluded. |
 | Legacy ASR/video/local-VLM route | `LEGACY; LIVE_NOT_VERIFIED` | `temi_backend/` remains for compatibility; historical hardware observations are not current evidence. |
 | Continuous abnormal perception viewer | `EXPERIMENTAL; LIVE_NOT_VERIFIED` | Optional viewer/event producer; model output is not medical or fall-detection certification. |
-| Temi Android, real MQTT, LM Studio, GPU, Discord and real camera stream | `LIVE_NOT_VERIFIED` | External dependencies and hardware gates were not authorized or available in this snapshot. |
+| Temi Android, physical camera/microphone/playback, viewer/GPU general behavior, Discord and real perception | `LIVE_NOT_VERIFIED` | External hardware/provider boundaries remain separate or unverified; Gate 5 host evidence must not be generalized. |
 
 ## External, generated and optional artifacts
 
@@ -1118,10 +1204,11 @@ GPU, Discord recipient or real perception stream. `LEGACY`, `EXPERIMENTAL` and
 4. Local credential-bearing environment files are owner-only and excluded from Git;
    owner handling/rotation remains outside this documentation gate.
 5. The Hermes team remote and formal submodule contract are verified from Gate
-   3.4. <code>release/github-v1</code> contains the adopted Gate 3 dependency
-   chain and the Gate 4 final-retry handover adoption at
-   <code>654110f621c6eff5e4defaa54f0722b2a916f50a</code>. No root publication
-   push is performed here.
+   3.4. Gate 5 final evidence adoption advances the local
+   <code>release/github-v1</code> ref from the documented publication baseline
+   to the bounded documentation/evidence commit under an old-value guard. No
+   root publication push is performed here; the public URL and push target
+   remain maintainer-owned external facts.
 
 ## Documentation authority
 
@@ -1140,7 +1227,7 @@ acceptance](operations/verification_and_acceptance.md) and
 [student handover](project/STUDENT_HANDOVER.md). The complete document
 classification is in [DOCUMENT_AUTHORITY_MAP](DOCUMENT_AUTHORITY_MAP.md).
 
-## Verification snapshot
+## Verification snapshot (historical baseline)
 
 The final Gate 1B verification below was run after the documentation changes. It
 remains hardware-free and did not start a long-running service:
@@ -1241,7 +1328,7 @@ candidate evidence; historical snapshots above are not current baselines.
 No service was started, stopped or restarted for Gate 4.1. No MQTT message was
 published or subscribed.
 
-## Gate 4 disposition
+## Gate 4 disposition (historical)
 
 Gate 3 external dependency reproducibility is closed PASS. Gate 4.1's
 documentation repair was reviewed in isolation, and the Gate 4 final retry

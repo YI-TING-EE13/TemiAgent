@@ -1,7 +1,7 @@
 # TemiAgent Demo 快速參考
 
 狀態：CURRENT companion；完整 lifecycle 只以 [Demo 操作入口](DEMO_OPERATOR_GUIDE.md) 為準。
-最後審查日期：2026-08-28
+最後審查日期：2026-08-29
 
 完整說明請看 [Demo 新手操作手冊](DEMO_OPERATOR_GUIDE.md)、
 [設定參考](demo_configuration_reference.md)與
@@ -27,6 +27,16 @@ cd /TemiAgent
 `start` 成功後請以 `status` 判讀 readiness。沒有 fresh Android MQTT session 時，正確結果是
 `BACKEND_READY_WAITING_ANDROID`，不是失敗；只有 backend healthy 且 broker 觀察到 fresh remote
 Android session 時才是 `DEMO_READY`。
+
+## Gate 5 host evidence boundary
+
+Gate 5 host runtime is `CLOSED_PASS` for the exact publication candidate. The
+accepted contract uses external-only LM Studio (`google/gemma-4-31b`, runtime
+context `64000`), reuses MQTT without restart, reconstructs Hermes base plus
+patches `0001`–`0010` to tree
+`47e9f1411e585769c055d0c6ee4417bebcdc6f70`, and permits exactly one model
+request at L5 (`L1=0; L2=0; L3=0; L5=1`). This is host evidence only;
+Android/Temi L4 remains a separate gate and Gate 6 is not started.
 
 ## 每個指令
 
@@ -60,7 +70,8 @@ JSON output：
   `RejectedExecutionException` count `0`。
 - `canonical.normalized.subscriptions` 是 canonical endpoint topic contract，不是 Paho
   subscribe 清單。
-- branch／HEAD 需在 private config pin，才可作完整 `DEMO_READY` claim；目前沒有 live claim。
+- branch／HEAD 需在 private config pin，才可作完整 `DEMO_READY` claim；Gate 5 host
+  evidence does not establish Android/Temi `DEMO_READY` or physical execution。
 
 ## 失敗時先做什麼
 

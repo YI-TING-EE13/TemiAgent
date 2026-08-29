@@ -1,8 +1,13 @@
 # TemiAgent Documentation Index
 
-最後審查日期：2026-08-28
+最後審查日期：2026-08-29
 
-## Gate 5B.5 handover entry points
+## Gate 5 final evidence handover entry points
+
+Gate 5 host runtime acceptance is closed with the adopted Retry #4 evidence.
+The current claim is bounded to the exact publication/runtime contract recorded
+in [CURRENT_STATUS](CURRENT_STATUS.md); Android/Temi physical acceptance remains
+a separate L4 gate and Gate 6 has not started.
 
 For a new student, use this short path rather than browsing the full document
 inventory:
@@ -46,7 +51,10 @@ troubleshooting, module READMEs, then legacy or experimental references.
 
 `CURRENT` is the maintained source for a topic. `HARDWARE_FREE_VERIFIED` means that the
 specified unit, mock or fake path actually passed; it does not prove a live device or
-external service. `LIVE_NOT_VERIFIED` means that no current live claim is made. `LEGACY`
+external service. `HOST_LIVE_VERIFIED` means that the exact bounded Gate 5 host contract
+passed, without proving Android/Temi physical execution, general GPU/viewer readiness or
+portable environment reproducibility. `LIVE_NOT_VERIFIED` means that no current live claim
+is made for that boundary. `LEGACY`
 means retained for history or compatibility and not a current procedure. `EXPERIMENTAL`
 means opt-in, non-canonical work.
 
@@ -71,14 +79,14 @@ authoritative when any prose conflicts with them.
 | Surface | Current document | Owner / verification boundary |
 |---|---|---|
 | Repository entry, scope, module map | [`README.md`](../README.md) | Root maintainers; hardware-free checks only unless recorded otherwise. |
-| Current implementation, verification and release blockers | [CURRENT_STATUS.md](CURRENT_STATUS.md) | Maintainer snapshot; update when verification or publication state changes. |
+| Current implementation, verification and release blockers | [CURRENT_STATUS.md](CURRENT_STATUS.md) | Maintainer snapshot; includes adopted Gate 5 host evidence and remaining L4/Gate 6 boundaries. |
 | Repository layout and publication boundary | [REPOSITORY_MAP.md](REPOSITORY_MAP.md) | Maintainer map; physical presence is not canonical ownership. |
 | Data flow, module boundary and capability classification | [project overview](architecture/project_overview.md) | Architecture; sections 6–13 are historical planning material. |
 | Cross-module topic, schema and update-together rule | [contract traceability](architecture/contract_traceability.md) | Bridge and contract owners; runtime schemas are authoritative. |
 | Demo lifecycle and operator workflow | [Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md) | Demo operator; `scripts/demo` is the only current lifecycle. |
 | Private Demo configuration and ownership | [Demo configuration reference](operations/demo_configuration_reference.md) | Canonical ignored owner-only `.runtime/demo/demo.env`, initializer, production and isolated `newcomer_mock` profiles; never commit values or credentials. |
 | Incident diagnosis and recovery boundary | [Demo troubleshooting](operations/demo_troubleshooting.md) | Exact-PID investigation; no broad process control. |
-| Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes the Bridge-backed software-only newcomer acceptance. Hardware, Android, GPU and Discord remain external gates. |
+| Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes the adopted bounded Gate 5 host evidence. Android/Temi physical, viewer/GPU general and Discord remain separate external gates. |
 | Bridge-owned abnormal alert, follow-up, and Demo injection | [Immediate abnormal-care flow](operations/immediate_abnormal_care_flow.md) | Bridge owner; formal injector is synthetic-only and real Discord remains an authorization-gated external path. |
 | Module commands and artifacts | Each module README in the root module index | Owning module; do not infer contracts from a README alone. |
 | External source bootstrap | [`third_party/hermes/`](../third_party/hermes/README.md) and [`third_party/llama_cpp/`](../third_party/llama_cpp/README.md) | Hermes is a formal team-remote submodule plus root-owned patches; llama.cpp remains an ignored generated checkout reconstructed from its manifest. |

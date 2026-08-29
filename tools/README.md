@@ -1,6 +1,6 @@
 # Tools 模組 README
 
-最後更新日期：2026-08-28
+最後更新日期：2026-08-29
 
 ## 本文件維護規則
 
@@ -91,11 +91,29 @@ resident `/invoke` boundary preserves the existing HTTP 200 success response;
 for a typed Hermes failure it returns HTTP 500 with only an allowlisted error
 class, original failure category and retryable flag. Provider error text,
 tracebacks, prompts and payloads do not cross this boundary. This contract is
-hardware-free tested and is not live model acceptance.
+hardware-free tested; the exact bounded Gate 5 host request was also accepted
+separately. General model behavior and GPU/viewer operation remain external
+acceptance boundaries.
+
+### Gate 5 final host-runtime evidence
+
+Gate 5B Retry #4 is the accepted host-runtime evidence for the tools lifecycle
+and resident boundary. It uses external-only production LM Studio, runtime
+context <code>64000</code> verified from provider metadata, reused MQTT without
+restart, and Hermes base plus patches <code>0001</code>–<code>0010</code> with
+final tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. The exact
+request budget is <code>L1=0; L2=0; L3=0; L5=1</code>; L2 validation is
+inference-impossible and L5 returned one validated <code>speak</code> action.
+Rollback preserved external LM/MQTT and removed all Gate-owned processes.
+
+This is <code>HOST_LIVE_VERIFIED</code> for the exact contract only. PIDs,
+run IDs, temporary worktrees and runtime directories are acceptance evidence,
+not portable tool or configuration requirements. Android/Temi physical
+acceptance remains a separate L4 gate and Gate 6 is not started.
 
 ### Canonical Demo lifecycle
 
-Gate 5B.3 current rule: production LM Studio is an external dependency. The
+Gate 5 final current rule: production LM Studio is an external dependency. The
 production lifecycle only checks its configured HTTP API readiness and never
 starts, stops, unloads, or reconfigures the provider. The `newcomer_mock`
 profile alone owns a local LM test double.

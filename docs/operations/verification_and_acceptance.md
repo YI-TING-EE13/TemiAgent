@@ -1,14 +1,46 @@
 # Verification and Acceptance Guide
 
-Status: <code>CURRENT_AUTHORITY</code>. Last reviewed for Gate 5B.5: 2026-08-28.
+Status: <code>CURRENT_AUTHORITY</code>. Last reviewed for Gate 5 final evidence:
+2026-08-29.
 
 This guide distinguishes executable hardware-free verification from external
 acceptance. Run every project command in the designated container from
-`/TemiAgent`. Gate 5B.5 is a non-live resident HTTP boundary remediation layered
-on the Gate 5B.3 Hermes failure-path work: its tests use
+<code>/TemiAgent</code>. This guide retains the Gate 5B.1, 5B.3 and 5B.5
+non-live remediation records and also adopts the separately completed Gate 5B
+Retry #4 host acceptance: its live evidence is bounded to the exact
+publication/runtime contract below. The current documentation change itself
+does not operate services, send MQTT/Discord messages, run inference, alter
+private configuration, or use a robot. The historical remediation tests use
 fake/stub providers and do not start LM Studio or any other long-running Demo
-service, send MQTT/Discord messages, alter private configuration, or use a
-robot. Do not turn a skipped external gate into a PASS claim.
+service. Do not turn a skipped external gate into a PASS claim.
+
+## Gate 5 final host-runtime acceptance
+
+Gate 5B Retry #4 is accepted as <code>GATE5_HOST_RUNTIME=CLOSED_PASS</code>.
+This record is adopted from prior execution and is not rerun by this
+documentation gate.
+
+| Evidence | Accepted result |
+|---|---|
+| Publication/runtime source | Candidate started from <code>release/github-v1@59d568b079ce260e2144c410b0f9397d8b026913</code>; Hermes pinned base plus patches <code>0001</code>–<code>0010</code> reconstructs tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. |
+| LM Studio ownership | <code>EXTERNAL_ONLY</code>; API identifier <code>google/gemma-4-31b</code>; provisioned model <code>temi/gemma-4-31b-it-qat</code>; runtime context <code>64000</code>, verified from runtime metadata; observed model maximum <code>262144</code>. |
+| MQTT | Existing broker reused, not restarted; accepted listener <code>0.0.0.0:1883</code>; explicit broker configuration remained mandatory. |
+| Layer disposition | L0 PASS; L1 PASS; L2 PASS; L3 PASS; L4 NOT_RUN_BY_SCOPE; L5 PASS. |
+| Request budget | <code>L1=0; L2=0; L3=0; L5=1</code>. |
+| L2 | Inference-impossible malformed resident request returned HTTP 400 before invocation; inference calls <code>0</code>. |
+| L3 | Bridge Unix callback produced a validated identity-result publication on <code>temi/temi-01/resident/identity/result</code>; physical side effect <code>NO</code>. |
+| L5 | HTTP 200; approximately <code>14.225686 s</code> curl and <code>14222 ms</code> resident latency; response validation PASS; one <code>speak</code> action. |
+| Failure/rollback | No context overflow, compression exhaustion, final_response KeyError, BrokenPipe, secondary 500 or unexpected runtime error; resident health after PASS; Gate-owned processes/listeners remaining <code>0</code>; LM/MQTT preserved. |
+
+The required frozen contract is production external-only LM management, model
+API identity <code>google/gemma-4-31b</code>, runtime context
+<code>64000</code>, context verification from runtime metadata, reusable
+independently managed MQTT, no tracked private-LAN fallback for
+<code>PC_IP</code>, inference-impossible L2 validation, and exact ownership
+boundaries for stop. PIDs, run IDs, temporary worktrees and transient runtime
+directories are <code>ACCEPTANCE_EVIDENCE_ONLY</code>, not portable setup
+requirements. Android/Temi physical execution, viewer/GPU general readiness,
+Discord delivery and Gate 6 remain separate or unverified.
 
 ## Preconditions and evidence vocabulary
 
@@ -30,9 +62,10 @@ git status --short
 
 ## Authoritative test matrix
 
-Run project commands inside the designated container. The Gate 5B.5 remediation
-and its inherited Gate 5B.3 work do not authorize live services, MQTT
-publication, Android control, GPU inference or Discord delivery.
+Run project commands inside the designated container. The current
+documentation/evidence adoption does not authorize live services, MQTT
+publication, Android control, inference or Discord delivery. The adopted Gate 5
+host result above is prior evidence, not a reason to rerun it.
 
 | Test | Purpose | Command | Hardware required? | Network required? | GPU required? | Expected baseline | Failure meaning |
 |---|---|---|---|---|---|---|---|
@@ -59,7 +92,12 @@ Android/Temi, camera/microphone, physical playback, LM Studio model behavior,
 GPU inference, Discord recipient delivery and live perception remain separate
 external acceptance gates.
 
-## Gate 5B.1 non-live LM ownership remediation
+The preceding external-gate statement refers to general or separate
+capabilities. The exact bounded Gate 5 host request is accepted above; this
+does not generalize to Android/Temi, camera/microphone, physical playback,
+viewer/GPU behavior, Discord recipient delivery or live perception.
+
+## Gate 5B.1 non-live LM ownership remediation (historical)
 
 Gate 5B stopped at its L1 ownership-safety gate after the managed LM path
 issued global provider commands. The remediation selects external management
@@ -82,7 +120,7 @@ issue zero global cleanup commands. Historical Gate 5B PIDs are incident
 evidence only; a future live retry must create a new process ledger. This
 implementation status is `IMPLEMENTATION_REMEDIATED_NONLIVE`, not live proof.
 
-## Gate 5B.3 Hermes compression failure-path remediation
+## Gate 5B.3 Hermes compression failure-path remediation (historical)
 
 Gate 5B's second attempt passed L0, L1, L2 and L3, then failed L5 after one
 resident `/invoke` request. The retained failure evidence is: model request
@@ -112,7 +150,7 @@ normal successful response remains unchanged. This result is
 backend context compatible with Hermes before a separately authorized Gate 5B
 retry.
 
-## Gate 5B.5 resident probe and client-disconnect boundary
+## Gate 5B.5 resident probe and client-disconnect boundary (historical)
 
 Gate 5B Retry #3 did not execute a valid malformed L2 probe. The exact request
 was an HTTP `POST` to `/invoke` with `Content-Type: application/json`, a

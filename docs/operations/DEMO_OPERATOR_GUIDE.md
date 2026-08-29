@@ -1,6 +1,6 @@
 # TemiAgent Demo 操作入口
 
-最後更新日期：2026-08-28
+最後更新日期：2026-08-29
 
 狀態：CURRENT；Demo-only。`scripts/demo` 是目前 checkout 唯一的 canonical lifecycle。private env 為每個
 service 明確宣告 `managed`、`external` 或 `disabled` ownership；`managed` 服務會由同一
@@ -30,8 +30,10 @@ inventories are reference material, not substitute lifecycle contracts.
 For new maintainers, use the [developer setup](developer_setup.md) first and
 the [deployment handover](demo_deployment_handover.md) for the host/service
 matrix. The [configuration reference](demo_configuration_reference.md) is the
-single key and secret inventory. This guide owns lifecycle actions; it does
-not authorize them during Gate 5B.1 non-live remediation.
+single key and secret inventory. This guide owns lifecycle actions;
+documentation evidence does not by itself authorize a future live transition.
+Any service operation remains separately authorized and must follow the
+exact-PID safety policy.
 
 ## Current canonical lifecycle
 
@@ -142,6 +144,27 @@ no listener PID; missing PID metadata is acceptable only with a live matching
 child contract. A visible contradictory PID, executable/path/digest mismatch,
 wrong bind or port, or failed TCP probe is a failure, and a foreign broker is
 never adopted or killed by name.
+
+### Gate 5 host acceptance snapshot
+
+Gate 5B Retry #4 is the current bounded host-runtime evidence. It passed
+L0–L3 and L5, reused the existing MQTT broker without restart, and preserved
+external LM Studio. Production LM is <code>EXTERNAL_ONLY</code>; the accepted
+API identifier is <code>google/gemma-4-31b</code>, the provisioned model is
+<code>temi/gemma-4-31b-it-qat</code>, and runtime context <code>64000</code>
+was verified from runtime metadata. Hermes reconstruction is the pinned base
+plus patches <code>0001</code>–<code>0010</code>, producing tree
+<code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>.
+
+The accepted request budget is <code>L1=0; L2=0; L3=0; L5=1</code>. L2 is
+an inference-impossible malformed resident request returning HTTP 400 before
+invocation. L3 is a Bridge callback to a validated identity-result topic with
+no physical side effect. L5 returned HTTP 200 with one validated
+<code>speak</code> action; resident health remained healthy and no compression,
+response-boundary or unexpected-runtime failure occurred. Rollback removed
+all Gate-owned processes/listeners and preserved LM/MQTT. This is
+<code>HOST_LIVE_VERIFIED</code> for the exact contract only; Android/Temi L4,
+physical execution, viewer/GPU general behavior and Gate 6 remain separate.
 
 `doctor` 與 `status` 不啟停 service，也不發布 MQTT。`restart` 只會採用已記錄、或在此明確
 restart 中以 cwd、command line、PID start identity 與 listener 驗證過的既有 Demo process。

@@ -1,7 +1,7 @@
 # Demo Deployment and Handover
 
-Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5B.3:
-2026-08-28. This document describes the canonical software
+Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5 final
+evidence: 2026-08-29. This document describes the canonical software
 stack in `<TEMIAGENT_ROOT>` and does not authorize real care, emergency, or
 Discord notification tests.
 
@@ -70,12 +70,13 @@ does not contain a developer-specific private LAN address. A deployment-specific
 endpoint belongs in the Android owner’s private configuration and must never be
 copied into a tracked template.
 
-## Service responsibility matrix
+## Service responsibility matrix (historical pre-Gate 5 baseline)
 
 The command column names the canonical lifecycle entry, not a permission to
-operate it during documentation work. The Gate 5B.3 candidate did not start or
-stop these services. A status of <code>LIVE_NOT_VERIFIED</code> means that no
-current real-device/provider claim is made.
+operate it during documentation work. The rows below preserve the pre-Gate 5
+deployment snapshot; the accepted current host disposition is recorded in the
+next section. A status of <code>LIVE_NOT_VERIFIED</code> remains valid for
+boundaries not covered by the accepted host contract.
 
 | Service | Runs on | Started by | Canonical command | Port / interface | Health check | Log location | Stop command | Dependencies | Current status |
 |---|---|---|---|---|---|---|---|---|---|
@@ -95,6 +96,30 @@ current real-device/provider claim is made.
 private root is <code>/TemiAgent/.runtime/demo</code>; custom roots must be
 absolute, owner-only and outside Git worktrees. The operator guide and
 configuration reference define the exact command grammar and validation rules.
+
+## Gate 5 accepted host disposition
+
+Gate 5B Retry #4 is the accepted bounded host-runtime evidence. The
+publication/runtime candidate passed L0–L3 and L5, then rolled back its
+Gate-owned services. It reused MQTT without restart and preserved external LM
+Studio. This table updates the historical matrix above without changing
+ownership semantics:
+
+| Boundary | Gate 5 disposition | Scope limit |
+|---|---|---|
+| Production LM Studio | <code>HOST_LIVE_VERIFIED; EXTERNAL_ONLY</code>; model API identifier <code>google/gemma-4-31b</code>, provisioned model <code>temi/gemma-4-31b-it-qat</code>, runtime context <code>64000</code> verified from metadata. | AI6 never starts/stops/unloads or globally mutates the provider; general GPU/model behavior remains separately bounded. |
+| MQTT broker | <code>HOST_LIVE_VERIFIED; REUSED; NOT_RESTARTED</code>; accepted configured listener <code>0.0.0.0:1883</code>. | Explicit broker configuration remains mandatory; no foreign listener adoption. |
+| Overview adapter | <code>HOST_LIVE_VERIFIED</code> for the accepted L0–L3 host path; Gate-owned process removed during rollback. | No claim for a Temi microphone/camera session or legacy route. |
+| Resident Hermes | <code>HOST_LIVE_VERIFIED</code> for health, inference-impossible L2 and one bounded L5 request; Gate-owned process removed during rollback. | Hermes base plus patches <code>0001</code>–<code>0010</code> must produce tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>; no Android claim. |
+| HermesTemiBridge | <code>HOST_LIVE_VERIFIED</code> for the validated L3 callback/publication path; Gate-owned processes removed during rollback. | The L3 physical side effect was <code>NO</code>; Android command execution remains L4. |
+| Gateway/viewer | <code>LIVE_NOT_VERIFIED</code> / not required by the accepted minimum path. | Optional provider, viewer/GPU and perception acceptance remain separate. |
+| Temi Android / Discord | <code>NOT_RUN_BY_SCOPE</code> / external. | No physical execution or real notification delivery was accepted. |
+
+The accepted request budget is <code>L1=0; L2=0; L3=0; L5=1</code>. PIDs,
+run IDs, temporary worktrees and transient runtime directories are
+<code>ACCEPTANCE_EVIDENCE_ONLY</code>, not deployment pins or handover
+requirements. See [verification and acceptance](verification_and_acceptance.md)
+for the redacted result and retained failure history.
 
 ## Private configuration and runtime data
 
@@ -151,13 +176,14 @@ unloads models, and never stops a provider process. The compatibility helper
 files fail closed if called directly. The newcomer mock remains lifecycle-owned
 on its isolated high port for software-only acceptance.
 
-The configured Hermes context is a requirement, not proof of the loaded
-provider context. In the Gate 5B.3 evidence, Hermes and the resident were
-configured for `64000` while the external backend rejected an approximately
-`11508`-token request at an available `4096` context. Before a future live
-retry, the external owner must provide bounded evidence that the loaded model
-context is compatible with the configured Hermes context; AI6 does not change
-that provider state during lifecycle or documentation work.
+The configured Hermes context is a requirement, not proof by itself of the
+loaded provider context. Gate 5B.3 historically exposed a mismatch: Hermes
+and the resident were configured for `64000` while the external backend
+reported an available `4096` context for an approximately `11508`-token
+request. Gate 5 final subsequently accepted external runtime metadata showing
+context `64000` and a model maximum of `262144` before the one bounded L5
+request. This is deployment evidence, not a portable provider version or
+model pin; AI6 still does not change external provider state.
 
 ```bash
 ./scripts/demo --config <PRIVATE_CONFIG_PATH> doctor

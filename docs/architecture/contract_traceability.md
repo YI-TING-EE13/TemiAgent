@@ -1,6 +1,6 @@
 # Cross-Module Contract Traceability
 
-最後審查日期：2026-08-28
+最後審查日期：2026-08-29
 
 This document identifies the authoritative source, producers, consumers, validation owner, tests and synchronization rule for TemiAgent cross-module contracts. It does not replace runtime code or schemas.
 
@@ -25,6 +25,16 @@ For current lifecycle, private configuration and acceptance evidence, use the
 [configuration reference](../operations/demo_configuration_reference.md), and
 [verification guide](../operations/verification_and_acceptance.md). These
 documents do not replace the runtime sources named in this matrix.
+
+## Gate 5 host acceptance boundary
+
+The adopted Gate 5 evidence verifies one bounded deployment of the existing
+resident/Bridge/MQTT contracts: external-only LM Studio, runtime context
+<code>64000</code> verified from provider metadata, reused MQTT, validated L2
+and L3 behavior, and one bounded L5 request. It does not change any topic,
+schema, payload, ownership or dispatch contract. Android/Temi execution,
+physical playback, general viewer/GPU behavior and real notification delivery
+remain external acceptance boundaries.
 
 ## Contract Matrix
 

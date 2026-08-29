@@ -1,7 +1,7 @@
 # Demo Troubleshooting Guide
 
-Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5B.1:
-2026-08-28.
+Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5 final
+evidence: 2026-08-29.
 
 This guide maps a symptom to read-only evidence and the smallest safe next
 decision. It does not authorize service restart, raw MQTT publication, Discord
@@ -26,6 +26,22 @@ python3 tools/show_temi_trace.py --log-dir <bridge-log-dir> --latest --json
 Record the returned `run_id`, `event_id`, error code, exact PID identity, and
 listener state. Do not print or attach private env values, credentials, raw
 care records, images, or full debug traces.
+
+## Gate 5 setup-only pitfalls
+
+Two starts failed during setup before the accepted Gate 5B Retry #4 run. Both
+were safely rolled back, changed no tracked source or configuration, and did
+not invalidate the final acceptance. They are prerequisites for a future
+authorized start, not final runtime failures:
+
+| Symptom | Read-only check | Prevention |
+|---|---|---|
+| Hermes virtual-environment executable missing | Confirm <code>hermes-agent/venv/bin/python3</code> and <code>hermes-agent/venv/bin/hermes</code> exist and are executable; run <code>./scripts/bootstrap --check</code> after external provisioning. | Provision the documented Hermes environment before starting the resident; do not substitute an upstream, local or fallback checkout. |
+| Unix-domain socket path too long | Check the resolved runtime root and callback socket lengths before start; keep all sockets below the owner-only runtime root. | Choose a short private runtime/socket root that satisfies AF_UNIX path limits; do not move sockets into the source tree or a shared public path. |
+
+Do not hard-code transient Gate 5 PIDs, run IDs, temporary worktrees or runtime
+directories as universal requirements. Use the exact current lifecycle
+evidence for an authorized run and preserve ownership failures unchanged.
 
 ## Required symptom contract
 

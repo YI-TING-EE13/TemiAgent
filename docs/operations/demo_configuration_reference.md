@@ -1,7 +1,7 @@
 # Demo Configuration Reference
 
-Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5B.1:
-2026-08-28.
+Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5 final
+evidence: 2026-08-29.
 
 This is the non-secret reference for the complete key set in
 [`config/demo.env.example`](../../config/demo.env.example). The default private
@@ -42,6 +42,27 @@ action.
 | Ownership vocabulary | `managed` means `scripts/demo` owns start, exact-PID recording and stop; `external` is health-checked only; `disabled` applies only to optional services. |
 | No implicit adoption | A listener or PID that is not an expected recorded identity fails closed; the lifecycle does not kill by process name. |
 | Defaults are not proof | A configured endpoint, gateway connection or webhook presence does not prove Android execution or notification delivery. |
+
+## Gate 5 final observed runtime contract
+
+Gate 5B Retry #4 is the accepted bounded host-runtime evidence. This section
+records the values that must remain aligned in private configuration; it does
+not authorize a start or change any runtime state.
+
+| Boundary | Frozen requirement or observed evidence |
+|---|---|
+| Production LM ownership | <code>LMSTUDIO_OWNERSHIP=external</code>; the lifecycle must never start, stop, unload, daemon-down, server-stop or globally mutate production LM Studio. |
+| External LM readiness | The provider is ready before Demo start; API identifier <code>google/gemma-4-31b</code>, provisioned model <code>temi/gemma-4-31b-it-qat</code>, and runtime context <code>64000</code> are checked from runtime metadata. Observed model maximum was <code>262144</code>; it is evidence for this deployment, not a portable pin. |
+| MQTT | Explicit broker host/port/configuration is mandatory. The accepted run reused the independently managed broker without restart; a foreign listener is never adopted by port alone. |
+| Hermes | Pinned base plus patches <code>0001</code>–<code>0010</code> must reconstruct final tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. |
+| Resident probe | L2 malformed input must fail validation before <code>ResidentHermes.invoke()</code>; it must be inference-impossible and produce HTTP 400. |
+| Request budget | The accepted bounded run records exactly <code>L1=0; L2=0; L3=0; L5=1</code>. |
+| Legacy broker endpoint input | <code>PC_IP</code> has no tracked private-LAN fallback; deployment-specific endpoints belong only in private owner configuration. |
+| Ownership and portability | Lifecycle stop targets only positively owned identities. PIDs, run IDs, temporary roots and transient runtime directories are acceptance evidence only, not configuration requirements. |
+
+The resulting state is <code>HOST_LIVE_VERIFIED</code> for this exact
+publication/runtime contract. It does not verify Android/Temi physical
+execution, viewer/GPU general readiness, Discord delivery or Gate 6.
 
 ## Complete configuration inventory
 

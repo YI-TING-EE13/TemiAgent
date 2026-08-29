@@ -1,6 +1,6 @@
 # Temi + Hermes Agent 整合專案總覽文件
 
-> 文件狀態：CURRENT architecture narrative，最後治理審查日期為 2026-08-26。
+> 文件狀態：CURRENT architecture narrative，最後治理審查日期為 2026-08-29。
 >
 > 本文件包含初期驗證計畫、里程碑與 Coding Agent 任務。第 7–13 節是歷史規劃與
 > 驗收設計，不代表所有項目目前均已實作或驗證。現況能力以根目錄 `README.md`、
@@ -37,9 +37,10 @@ Temi Android ASR/camera
 schemas, shared paths, Hermes JSON output and actions before publishing a canonical
 command request. Hermes returns JSON-only plans and never publishes MQTT or controls
 hardware. The optional anomaly viewer produces perception events only; it is not a
-general hardware dispatcher. Temi Android is an external consumer, and the current
-Gate snapshot classifies real Android, MQTT, model/GPU and live perception behavior as
-`LIVE_NOT_VERIFIED`.
+general hardware dispatcher. Temi Android is an external consumer. The current Gate 5
+host evidence classifies the exact reused MQTT and one external-model/resident/Bridge
+host path as `HOST_LIVE_VERIFIED`; Android/Temi execution, general model/GPU/viewer
+behavior and live perception remain `LIVE_NOT_VERIFIED`.
 
 Canonical V1 includes the root scripts/tools, Bridge, legacy backend compatibility
 route, canonical configuration and schemas, MQTT configuration, reviewable skills,
@@ -412,7 +413,11 @@ Bridge 不應該：
 ## 2.5 Hermes Agent
 
 **目錄位置**：`hermes-agent/`
-**目前狀態**：Resident wrapper、mock path 與 Bridge integration tests 已存在；live Hermes provider、LM Studio/model 與 GPU path 在目前 Gate snapshot 為 `LIVE_NOT_VERIFIED`。
+**目前狀態**：Resident wrapper、mock path 與 Bridge integration tests 已存在；Gate 5
+已驗證 exact host resident/provider contract（<code>HOST_LIVE_VERIFIED</code>），
+包括 external-only LM、runtime context <code>64000</code> 與一個 bounded request。
+Android/Temi physical execution、general GPU/viewer behavior 與 portable provider
+environment 仍不是此 evidence 的範圍。
 
 ### 角色
 
