@@ -1,7 +1,7 @@
 # Developer Setup and Environment Contract
 
-Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5 final evidence:
-2026-08-29.
+Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5 final evidence
+and Gate 6A.2 remote publication policy: 2026-08-29.
 
 This is the one current clean-clone setup path for a new TemiAgent maintainer.
 It prepares source, locked Python environments, private configuration and
@@ -10,9 +10,21 @@ Android, or claim that a real Temi, GPU model or Discord recipient is ready.
 The [Demo operator guide](DEMO_OPERATOR_GUIDE.md) is the authority for any
 later, separately authorized service operation.
 
-The repository has no configured root publication URL in the audited local
-snapshot. <code>TEMIAGENT_REPO_URL</code> below is therefore a required
-maintainer input; it is deliberately not replaced with a guessed URL.
+## Public publication authority and root license policy
+
+The public root repository is
+<code>https://github.com/YI-TING-EE13/TemiAgent</code>; use
+<code>https://github.com/YI-TING-EE13/TemiAgent.git</code> as the clone URL and
+<code>main</code> as the public branch. The canonical local checkout intentionally
+has no configured root remote. Gate 6A.2 found two historical RFC1918
+deployment defaults in the old remote history, with no credential or private
+data exposure; the clean <code>release/github-v1</code> candidate is the
+controlled replacement target. Gate 6B requires explicit maintainer
+authorization and a fresh exact lease before any history-replacement push.
+
+The root repository has no <code>LICENSE</code> file and grants no open-source
+license. Preserve <code>ROOT_LICENSE_POLICY=NO_LICENSE</code>; Hermes and
+llama.cpp licensing remains independent.
 
 ## Execution boundary and state labels
 
@@ -81,15 +93,14 @@ two angle-bracket values before running the relevant command.
 
 ### 1. Clone the repository
 
-The root repository URL must be supplied by the maintainer who owns the
-publication target:
+Use the recorded public publication URL:
 
 ~~~bash
-export TEMIAGENT_REPO_URL='<maintainer-provided-root-repository-url>'
+export TEMIAGENT_REPO_URL='https://github.com/YI-TING-EE13/TemiAgent.git'
 export TEMIAGENT_CLONE_PARENT='<user-selected-clone-parent>'
 export REPO_ROOT="$TEMIAGENT_CLONE_PARENT/TemiAgent"
 mkdir -p "$TEMIAGENT_CLONE_PARENT"
-git clone "$TEMIAGENT_REPO_URL" "$REPO_ROOT"
+git clone --branch main "$TEMIAGENT_REPO_URL" "$REPO_ROOT"
 cd "$REPO_ROOT"
 ~~~
 

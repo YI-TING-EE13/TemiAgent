@@ -1,13 +1,41 @@
 # AI6 TemiAgent Student Handover
 
 Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5 final evidence,
-L4.3 Android provenance adoption and L4 final evidence adoption: 2026-08-29.
+L4.3 Android provenance adoption, L4 final evidence adoption and Gate 6A.2
+remote publication policy: 2026-08-29.
 
 This page is the short handover contract for a new maintainer. Start here
 after reading the [repository README](../../README.md), then follow the
 [developer setup](../operations/developer_setup.md). It does not replace
 runtime schemas, executable validators, module READMEs or the
 [Demo operator guide](../operations/DEMO_OPERATOR_GUIDE.md).
+
+## Gate 6A.2 public publication policy
+
+The public root publication authority is
+<code>https://github.com/YI-TING-EE13/TemiAgent</code>. The public clone URL is
+<code>https://github.com/YI-TING-EE13/TemiAgent.git</code>, and the canonical
+public branch is <code>main</code>. The reviewed local publication candidate is
+<code>release/github-v1@b07c93daf8a56df1a1ec6911b2b614e18ead10f9</code>.
+
+Gate 6A.2 observed remote <code>main</code> at
+<code>f2d88ed4aecbd4f0e5163300929991f1af9cb004</code> with unrelated history.
+The two old RFC1918 defaults are classified as
+<code>NON_SECRET_PRIVATE_LAN_CONFIGURATION</code> and
+<code>HISTORICAL_CONFIGURATION_EXPOSURE</code>: the audit found no credential,
+token, password, certificate/key, personally identifiable information or real
+resident data. <code>GITHUB_PURGE_REQUIRED=MAINTAINER_OPTIONAL</code> because
+the root publication policy excludes private LAN values from new published
+trees, while an RFC1918 address alone is not a secret. The clean publication
+is a justified replacement candidate, but Gate 6B must obtain explicit
+maintainer authorization and reread the exact remote lease before any
+force-with-exact-lease push. Gate 6A.2 performed no remote mutation.
+
+Existing branches, pull-request references and external clones may retain old
+objects after a branch replacement; changing the authoritative branch cannot
+physically erase those copies. The root project has no <code>LICENSE</code> file
+and grants no open-source license: <code>ROOT_LICENSE_POLICY=NO_LICENSE</code>.
+Hermes and llama.cpp licensing remains independent.
 
 ## Gate 5 final evidence adoption
 
@@ -249,7 +277,7 @@ external owner or maintainer input. There are no <code>MISSING</code> items.
 | 1 | What is TemiAgent? | ANSWERED | AI6 is a safety-bounded Temi integration: adapter, Bridge validation/dispatch, Hermes reasoning boundary, optional perception and Android-facing contracts. Start with [README](../../README.md). |
 | 2 | Which repository/branch is authoritative? | ANSWERED | The maintainer-designated canonical runtime checkout is on root branch <code>main</code>. In this audited deployment it is mounted inside the designated container as <code>/TemiAgent</code>. This is an explicitly labeled deployment callout; generic clones use the user-selected <code>REPO_ROOT</code> in [developer setup](../operations/developer_setup.md). See [CURRENT_STATUS](../CURRENT_STATUS.md). |
 | 3 | What is publication versus runtime main? | ANSWERED | Runtime main is the maintained canonical checkout and may contain private dirty work. <code>release/github-v1</code> is the publication candidate/ref; Gate 4 used an isolated candidate and its final retry adopted the reviewed ref locally without pushing. |
-| 4 | How do I clone it? | PARTIAL | Use step 1 of [developer setup](../operations/developer_setup.md). The root publication URL is not configured in the audited local checkout and must be supplied by the publication maintainer. |
+| 4 | How do I clone it? | ANSWERED | Clone <code>https://github.com/YI-TING-EE13/TemiAgent.git</code> on public branch <code>main</code> using step 1 of [developer setup](../operations/developer_setup.md). The canonical local checkout intentionally keeps no configured root remote. |
 | 5 | How do I initialize Hermes? | ANSWERED | Run the bounded <code>git submodule update --init --recursive --depth=1</code>, then <code>./scripts/bootstrap --hermes</code> or <code>./scripts/bootstrap --sources</code>; verify the manifest and license. |
 | 6 | Why is Hermes a submodule? | ANSWERED | The team-owned base source is kept as a formal gitlink while TemiAgent keeps a reviewable root-owned patch overlay; source identity and integration changes remain separable. |
 | 7 | What is the team Hermes fork? | ANSWERED | <code>https://github.com/YI-TING-EE13/hermes-agent.git</code>; it is recorded in <code>.gitmodules</code> and <code>third_party/hermes/manifest.json</code>. |
@@ -287,8 +315,8 @@ external owner or maintainer input. There are no <code>MISSING</code> items.
 | 39 | How do I prove a fresh clone is healthy? | ANSWERED | Follow all ten [developer setup](../operations/developer_setup.md) steps, verify submodule/final trees and licenses, run the focused/full hardware-free matrix, then use read-only doctor/status. |
 | 40 | What should I check before a Demo? | ANSWERED | Confirm branch/config/runtime ownership, <code>doctor</code>, status, exact ports/PIDs, external LM Studio model/API/GPU readiness if production, the adopted Android artifact provenance, and fresh device evidence for any new action. The single accepted TTS result does not establish <code>DEMO_READY</code> for broader behavior. Do not use the LM CLI as an audit. |
 
-Handover result: <code>ANSWERED=36</code>,
-<code>PARTIAL=4</code>, <code>MISSING=0</code>. Each partial answer has an
+Handover result: <code>ANSWERED=37</code>,
+<code>PARTIAL=3</code>, <code>MISSING=0</code>. Each partial answer has an
 individual owner and future gate in the register below.
 
 ## Partial handover register
@@ -297,17 +325,17 @@ Each record identifies the fact that remains outside the portable repository
 contract and the action a student can take without guessing or changing the
 runtime boundary.
 
-### #4 — How do I clone it?
+### #4 — How do I clone it? (resolved)
 
 - <code>QUESTION_NUMBER</code>: 4
 - <code>QUESTION</code>: How do I clone it?
-- <code>STATUS</code>: PARTIAL
-- <code>WHY_PARTIAL</code>: The audited local snapshot does not contain the root publication URL, and a URL cannot be inferred safely.
-- <code>GATE5_OBSERVED_FACT</code>: Read-only <code>git remote -v</code> still returns no root remote. The local <code>release/github-v1</code> publication ref and the Gate 5 evidence baseline are local Git facts, not a public clone URL.
-- <code>MISSING_FACT</code>: The maintainer-designated public repository URL and any access requirement.
+- <code>STATUS</code>: RESOLVED
+- <code>RESOLUTION</code>: Gate 6A.2 confirmed the public root repository, clone URL and public branch <code>main</code> by unauthenticated read-only Git access and public repository metadata.
+- <code>GATE6A2_OBSERVED_FACT</code>: Remote <code>main</code> was observed at <code>f2d88ed4aecbd4f0e5163300929991f1af9cb004</code>; the local reviewed candidate remains <code>release/github-v1@b07c93daf8a56df1a1ec6911b2b614e18ead10f9</code>. The canonical local checkout intentionally has no configured root remote.
+- <code>MISSING_FACT</code>: None for public root identity. GitHub authentication and future history-replacement authorization remain repository-owner decisions.
 - <code>OWNER</code>: Publication maintainer / repository owner.
-- <code>FUTURE_GATE</code>: Final GitHub publication gate.
-- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Request the maintainer URL, substitute it only for <code>TEMIAGENT_REPO_URL</code>, and never use a local checkout, file URL or Git alternate as the publication source.
+- <code>FUTURE_GATE</code>: Gate 6B publication authorization.
+- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Set <code>TEMIAGENT_REPO_URL</code> to the recorded public clone URL, clone branch <code>main</code>, and never use a local checkout, file URL or Git alternate as the publication source.
 
 ### #10 — What tools must be installed?
 
@@ -373,8 +401,8 @@ The subsequent L4 final evidence adoption applies the same procedure from the
 exact publication ref, adds documentation-only evidence, and sets
 <code>READY_FOR_GATE6=YES</code>. The exact evidence commit is reported in the
 task handoff; the candidate ended clean and the canonical <code>main</code>
-checkout remained unchanged. The root publication URL and any push target
-remain maintainer-owned external facts.
+checkout remained unchanged. Gate 6A.2 records the public root URL and target;
+any history replacement remains a separately authorized maintainer action.
 
 ## Gate 5A.1 review handover (historical candidate)
 
@@ -405,8 +433,9 @@ dirty-path verification. Reuse the verified external MQTT listener without a
 restart; make LM Studio/API readiness, model/GPU policy, optional
 gateway/viewer resources and Android/Temi acceptance separate gates.
 
-No public root remote or approved environment/provider pins were invented by
-this handover. LAB606 Android artifact provenance and the exact canonical TTS
+The canonical checkout still has no configured root remote; Gate 6A.2 confirmed
+the public root authority without configuring or mutating that local remote.
+LAB606 Android artifact provenance and the exact canonical TTS
 physical acceptance are adopted as <code>CLOSED_PASS</code>; broader Android/
 Temi media behavior remains separate. Gate 6 is ready for release/handover
 work only.

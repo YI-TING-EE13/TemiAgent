@@ -1,11 +1,38 @@
 # TemiAgent Current Status
 
-狀態：CURRENT；governance snapshot：2026-08-29。
+狀態：CURRENT；governance snapshot：2026-08-29；Gate 6A.2 remote policy
+adopted in the isolated publication candidate。
 
 This page is the maintained status snapshot for implementation, verification,
 runtime honesty and publication blockers. It is not a runtime health endpoint and
 does not replace the runtime schemas, module READMEs or the
 [canonical Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md).
+
+## Gate 6A.2 remote publication policy (current authority)
+
+The public root publication authority is
+<code>https://github.com/YI-TING-EE13/TemiAgent</code>; the public clone URL is
+<code>https://github.com/YI-TING-EE13/TemiAgent.git</code>; and the public branch
+is <code>main</code>. The local reviewed publication candidate is
+<code>release/github-v1@b07c93daf8a56df1a1ec6911b2b614e18ead10f9</code>. The
+remote <code>main</code> currently remains at
+<code>f2d88ed4aecbd4f0e5163300929991f1af9cb004</code> with unrelated history.
+
+Gate 6A.2 classified the two old RFC1918 defaults as
+<code>NON_SECRET_PRIVATE_LAN_CONFIGURATION</code> and
+<code>HISTORICAL_CONFIGURATION_EXPOSURE</code>. The bounded remote-history scan
+found no credential, token, password, certificate/key, personally identifiable
+information or resident data. <code>GITHUB_PURGE_REQUIRED=MAINTAINER_OPTIONAL</code>:
+the publication policy excludes private LAN values from new trees, but an
+RFC1918 address alone is not a secret. The clean publication is a justified
+history-replacement candidate. Gate 6B must obtain explicit maintainer
+authorization and reread the exact remote lease before any force-with-exact-
+lease push; Gate 6A.2 performed no remote mutation. Existing branches, PR refs
+and external clones may retain old objects.
+
+The root repository has no <code>LICENSE</code> file and makes no open-source
+license grant: <code>ROOT_LICENSE_POLICY=NO_LICENSE</code>. Hermes and llama.cpp
+licensing remains independent.
 
 ## Gate 5 and L4 final evidence adoption (current authority)
 
@@ -1351,8 +1378,10 @@ levels.
 
 ## Publication and release blockers
 
-1. This local root has no configured remote. A maintainer must choose and configure
-   the team-accessible publication target before claiming clean-clone delivery.
+1. The canonical local root has no configured remote by design. Gate 6A.2
+   confirmed the team-accessible public publication target
+   <code>https://github.com/YI-TING-EE13/TemiAgent.git</code> on branch
+   <code>main</code>; a future push remains separately authorized.
 2. The historical HEAD contains the large pose checkpoint. Gate 1A removes it from
    the current index while preserving history; Gate 1B performs no history rewrite.
 3. Pose model provenance, version, license and redistribution restrictions remain
@@ -1362,9 +1391,10 @@ levels.
 5. The Hermes team remote and formal submodule contract are verified from Gate
    3.4. Gate 5 final evidence adoption advances the local
    <code>release/github-v1</code> ref from the documented publication baseline
-   to the bounded documentation/evidence commit under an old-value guard. No
-   root publication push is performed here; the public URL and push target
-   remain maintainer-owned external facts.
+   to the bounded documentation/evidence commit under an old-value guard. Gate
+   6A.2 classifies the old remote private-LAN defaults as non-secret historical
+   configuration and justifies controlled history replacement; no root
+   publication push is performed here.
 
 ## Documentation authority
 
