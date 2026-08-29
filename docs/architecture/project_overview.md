@@ -39,7 +39,8 @@ command request. Hermes returns JSON-only plans and never publishes MQTT or cont
 hardware. The optional anomaly viewer produces perception events only; it is not a
 general hardware dispatcher. Temi Android is an external consumer. The current Gate 5
 host evidence classifies the exact reused MQTT and one external-model/resident/Bridge
-host path as `HOST_LIVE_VERIFIED`; Android/Temi execution, general model/GPU/viewer
+host path as `HOST_LIVE_VERIFIED`. Adopted L4.7B evidence separately closes one
+exact canonical Android/Temi TTS transaction; general Android/media, model/GPU/viewer
 behavior and live perception remain `LIVE_NOT_VERIFIED`.
 
 Canonical V1 includes the root scripts/tools, Bridge, legacy backend compatibility

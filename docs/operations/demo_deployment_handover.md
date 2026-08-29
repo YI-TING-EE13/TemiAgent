@@ -1,7 +1,8 @@
 # Demo Deployment and Handover
 
 Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5 final
-evidence and L4.3 Android provenance adoption: 2026-08-29. This document
+evidence, L4.3 Android provenance adoption and L4 final evidence adoption:
+2026-08-29. This document
 describes the canonical software
 stack in `<TEMIAGENT_ROOT>` and does not authorize real care, emergency, or
 Discord notification tests.
@@ -90,7 +91,7 @@ boundaries not covered by the accepted host contract.
 | Action viewer | AI6 container when enabled | <code>scripts/demo</code> | <code>./scripts/demo start</code> | <code>8010</code> HTTP; <code>8011</code> llama server in production | Viewer <code>/health</code> source/llama readiness and five redacted component objects | <code>&lt;runtime-root&gt;/logs/trace/action_viewer.log</code> | <code>./scripts/demo stop</code> | Adapter frame stream, external GGUF/mmproj, generated llama server and optional pose weight | Experimental and live-unverified; not operated by Gate 5B.3. |
 | Newcomer mock LM/resident/viewer | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29134</code>, <code>29765</code>, <code>29010/29011</code> | Mock HTTP health and exact lifecycle identities | <code>&lt;runtime-root&gt;/logs/{lmstudio,hermes,trace}/</code> | <code>./scripts/demo stop</code> | Tracked mock servers and high-port profile | Not started by Gate 5B.3; software-only path is hardware-free. |
 | Newcomer mock Android/Discord | AI6 container | <code>scripts/demo</code> under <code>newcomer_mock</code> | <code>./scripts/demo start</code> | <code>29012</code> Android health; <code>29013</code> Discord mock | Mock health and canonical fake event/result evidence | <code>&lt;runtime-root&gt;/logs/mock/</code> | <code>./scripts/demo stop</code> | MQTT, Bridge, isolated mock profile | Not started by Gate 5B.3; no real device/provider contact. |
-| Temi Android App | Temi robot/device | Android owner, outside AI6 lifecycle | Android owner’s application procedure; none in AI6 | Deployment-configured broker endpoint; command/result topics | Fresh Android runtime snapshot, subscriptions, command/result evidence and physical observation | Android owner’s private evidence store | Android owner’s controlled app/device procedure | Android source/APK, device and broker reachability | External and live-unverified. |
+| Temi Android App | Temi robot/device | Android owner, outside AI6 lifecycle | Android owner’s application procedure; none in AI6 | Deployment-configured broker endpoint; command/result topics | Fresh Android runtime snapshot, subscriptions, command/result evidence and physical observation | Android owner’s private evidence store | Android owner’s controlled app/device procedure | Android source/APK, device and broker reachability | External; exact canonical TTS route CLOSED_PASS, broader Android/media behavior live-unverified. |
 | Discord provider | External provider | Bridge notification path only when explicitly authorized | No AI6 direct start command | Provider HTTPS endpoint, not an AI6 listener | Bridge redacted receipt; real success requires provider HTTP 204 evidence | Bridge notification receipt under private runtime | External owner/provider procedure | Owner-only credential env and explicit authorization | Disabled by default; live-unverified. |
 
 <code>&lt;runtime-root&gt;</code> is a documentation placeholder. The canonical
@@ -112,10 +113,10 @@ ownership semantics:
 | MQTT broker | <code>HOST_LIVE_VERIFIED; REUSED; NOT_RESTARTED</code>; accepted configured listener <code>0.0.0.0:1883</code>. | Explicit broker configuration remains mandatory; no foreign listener adoption. |
 | Overview adapter | <code>HOST_LIVE_VERIFIED</code> for the accepted L0–L3 host path; Gate-owned process removed during rollback. | No claim for a Temi microphone/camera session or legacy route. |
 | Resident Hermes | <code>HOST_LIVE_VERIFIED</code> for health, inference-impossible L2 and one bounded L5 request; Gate-owned process removed during rollback. | Hermes base plus patches <code>0001</code>–<code>0010</code> must produce tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>; no Android claim. |
-| HermesTemiBridge | <code>HOST_LIVE_VERIFIED</code> for the validated L3 callback/publication path; Gate-owned processes removed during rollback. | The L3 physical side effect was <code>NO</code>; Android command execution remains L4. |
+| HermesTemiBridge | <code>HOST_LIVE_VERIFIED</code> for the validated L3 callback/publication path; Gate-owned processes removed during rollback. | The L3 physical side effect was <code>NO</code>; the exact canonical TTS Android route is separately closed by L4.7B, while other Android actions remain separate. |
 | Gateway/viewer | <code>LIVE_NOT_VERIFIED</code> / not required by the accepted minimum path. | Optional provider, viewer/GPU and perception acceptance remain separate. |
-| Temi Android artifact provenance | <code>CLOSED_PASS</code>; LAB606 accepted the final 1.0.2 (3) artifact and exact installed-APK match. | Artifact identity does not prove physical execution, playback or device observation. |
-| Temi physical/E2E | <code>NOT_RUN_BY_SCOPE</code> / external. | No physical execution, playback or complete L4 E2E acceptance was accepted. |
+| Temi Android artifact provenance | <code>CLOSED_PASS</code>; LAB606 accepted the final 1.0.2 (3) artifact and exact installed-APK match. | Artifact identity is paired with the separately accepted exact canonical TTS transaction; it does not prove other physical actions. |
+| Temi physical/E2E | <code>CLOSED_PASS</code> for exact canonical TTS / external for broader scope. | L4.7B accepted one speak dispatch, terminal callback, successful correlated result and no movement; video/media, camera/microphone and other device paths remain separate. |
 | Discord | <code>NOT_RUN_BY_SCOPE</code> / external. | No real notification delivery was accepted. |
 
 The accepted request budget is <code>L1=0; L2=0; L3=0; L5=1</code>. PIDs,
@@ -142,9 +143,41 @@ mismatch is superseded by
 <code>SUPERSEDED_BY_AUTHORITATIVE_LAB606_PROVENANCE_RECOVERY</code>.
 
 Do not use this record to authorize ADB, installation, replacement, data reset,
-Android/Temi operation, MQTT, service operation or inference. Complete Temi
-physical/E2E acceptance remains a separate gate and
-<code>READY_FOR_GATE6=NO</code>.
+Android/Temi operation, MQTT, service operation or inference. The exact
+canonical TTS physical boundary is now closed by the separately adopted L4.7B
+evidence; broader Temi physical/E2E remains a separate gate and
+<code>READY_FOR_GATE6=YES</code> for release/handover work only.
+
+## L4 final physical acceptance handover
+
+The adopted L4.7B record used the accepted Android package
+<code>com.robotemi.agent</code>, version <code>1.0.2 (3)</code>, and one
+current Android MQTT session. LM was ready at context <code>64000</code>;
+MQTT was ready and reused; host L1 passed. One canonical speak action
+dispatched exactly once, produced one terminal <code>COMPLETED</code> TTS
+callback and one successful correlated AI6 result. Model requests, movement,
+navigation, external notification, duplicate execution and retained command
+were absent. Rollback passed with zero host-owned processes and zero orphan
+listeners; LM, MQTT, Android and canonical source were preserved.
+
+The final disposition is <code>L4_ANDROID_PROVENANCE=CLOSED_PASS</code>,
+<code>L4_ANDROID_TEMI_E2E=CLOSED_PASS</code>,
+<code>L4_FINAL=CLOSED_PASS</code>, with
+<code>FINAL_L4_CRITERIA_TOTAL=32</code>,
+<code>FINAL_L4_CRITERIA_PASS=32</code> and no additional physical run
+required. The prior timeout is
+<code>VENDOR_RUNTIME_TRANSIENT_STATE_REGRESSION</code>, strongly evidenced as
+a transient vendor runtime state failure with the exact internal component
+unproven. SDK <code>1.134.1</code> with launcher
+<code>16405-usa / 16405</code> is below documented minimum
+<code>18024</code>; that is a documented limitation, not the proven direct
+cause and not an update requirement for this handover.
+
+The post-success
+<code>Canonical TTS resolved without an active speech action</code> message is
+<code>SECONDARY_TTS_DIAGNOSTIC_WARNING=NON_BLOCKING_KNOWN_ISSUE</code>,
+possibly a state-machine diagnostic defect. It caused no second dispatch,
+terminalization or result and is not remediated here.
 
 ## Private configuration and runtime data
 

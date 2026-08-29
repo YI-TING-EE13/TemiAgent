@@ -31,10 +31,11 @@ documents do not replace the runtime sources named in this matrix.
 The adopted Gate 5 evidence verifies one bounded deployment of the existing
 resident/Bridge/MQTT contracts: external-only LM Studio, runtime context
 <code>64000</code> verified from provider metadata, reused MQTT, validated L2
-and L3 behavior, and one bounded L5 request. It does not change any topic,
-schema, payload, ownership or dispatch contract. Android/Temi execution,
-physical playback, general viewer/GPU behavior and real notification delivery
-remain external acceptance boundaries.
+and L3 behavior, and one bounded L5 request. The separately adopted L4.7B
+evidence closes one exact canonical Android/Temi TTS transaction without
+changing any topic, schema, payload, ownership or dispatch contract. Video/
+media playback, camera/microphone behavior, general viewer/GPU behavior and
+real notification delivery remain external acceptance boundaries.
 
 ## Contract Matrix
 
@@ -159,7 +160,7 @@ publication evidence.
 - **Experimental:** continuous abnormal perception and model-driven action classification.
 - **Deprecated compatibility route:** none formally removed; legacy MQTT route remains supported for Demo verification.
 - **Contract defined; integration pending:** care report and report interaction result; an upstream visual identity producer remains pending.
-- **Feature-gated integration:** Bridge media v1.1 runtime, root resident native media entry, and Demo-only manual identity/repeated-discomfort callbacks; Android identity/media mapping and real-device acceptance remain pending.
+- **Feature-gated integration:** Bridge media v1.1 runtime, root resident native media entry, and Demo-only manual identity/repeated-discomfort callbacks; the exact canonical TTS route is physically accepted, while Android identity/media mapping and broader real-device acceptance remain pending.
 - **Planned/future:** real notification workflow, clinical validation, production identity/access controls and a centralized generated topic contract.
 
 Do not rewrite a planned or experimental item as an implemented, verified or regulated capability.

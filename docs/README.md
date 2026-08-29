@@ -7,8 +7,9 @@
 Gate 5 host runtime acceptance is closed with the adopted Retry #4 evidence.
 The current claim is bounded to the exact publication/runtime contract recorded
 in [CURRENT_STATUS](CURRENT_STATUS.md); LAB606 has closed Android artifact
-provenance as a separate bounded L4 evidence item. Temi physical execution,
-device playback and Gate 6 remain unverified.
+provenance and the adopted L4.7B record closes the exact canonical TTS
+physical boundary. Broader Android/media behavior and Gate 6 functionality
+remain outside that acceptance; Gate 6 is ready for release/handover work.
 
 For a new student, use this short path rather than browsing the full document
 inventory:
@@ -52,9 +53,10 @@ troubleshooting, module READMEs, then legacy or experimental references.
 
 `CURRENT` is the maintained source for a topic. `HARDWARE_FREE_VERIFIED` means that the
 specified unit, mock or fake path actually passed; it does not prove a live device or
-external service. `HOST_LIVE_VERIFIED` means that the exact bounded Gate 5 host contract
-passed, without proving Android/Temi physical execution, general GPU/viewer readiness or
-portable environment reproducibility. `LIVE_NOT_VERIFIED` means that no current live claim
+external service. `HOST_LIVE_VERIFIED` means that the exact bounded Gate 5 host contract passed,
+without proving unrelated Android/Temi physical boundaries, general GPU/viewer
+readiness or portable environment reproducibility. `L4_ANDROID_TEMI_E2E=CLOSED_PASS`
+is limited to the one adopted canonical TTS transaction. `LIVE_NOT_VERIFIED` means that no current live claim
 is made for that boundary. `LEGACY`
 means retained for history or compatibility and not a current procedure. `EXPERIMENTAL`
 means opt-in, non-canonical work.
@@ -80,14 +82,14 @@ authoritative when any prose conflicts with them.
 | Surface | Current document | Owner / verification boundary |
 |---|---|---|
 | Repository entry, scope, module map | [`README.md`](../README.md) | Root maintainers; hardware-free checks only unless recorded otherwise. |
-| Current implementation, verification and release blockers | [CURRENT_STATUS.md](CURRENT_STATUS.md) | Maintainer snapshot; includes adopted Gate 5 host evidence, closed L4 Android artifact provenance and remaining Temi E2E/Gate 6 boundaries. |
+| Current implementation, verification and release blockers | [CURRENT_STATUS.md](CURRENT_STATUS.md) | Maintainer snapshot; includes adopted Gate 5 host evidence, closed L4 artifact provenance and exact canonical TTS E2E, plus remaining Android/media/Gate 6 boundaries. |
 | Repository layout and publication boundary | [REPOSITORY_MAP.md](REPOSITORY_MAP.md) | Maintainer map; physical presence is not canonical ownership. |
 | Data flow, module boundary and capability classification | [project overview](architecture/project_overview.md) | Architecture; sections 6–13 are historical planning material. |
 | Cross-module topic, schema and update-together rule | [contract traceability](architecture/contract_traceability.md) | Bridge and contract owners; runtime schemas are authoritative. |
 | Demo lifecycle and operator workflow | [Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md) | Demo operator; `scripts/demo` is the only current lifecycle. |
 | Private Demo configuration and ownership | [Demo configuration reference](operations/demo_configuration_reference.md) | Canonical ignored owner-only `.runtime/demo/demo.env`, initializer, production and isolated `newcomer_mock` profiles; never commit values or credentials. |
 | Incident diagnosis and recovery boundary | [Demo troubleshooting](operations/demo_troubleshooting.md) | Exact-PID investigation; no broad process control. |
-| Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes adopted Gate 5 host evidence and LAB606 Android artifact provenance. Temi physical, viewer/GPU general and Discord remain separate external gates. |
+| Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes adopted Gate 5 host evidence, Android provenance and one closed canonical TTS E2E. Media/camera, viewer/GPU general and Discord remain separate external gates. |
 | Bridge-owned abnormal alert, follow-up, and Demo injection | [Immediate abnormal-care flow](operations/immediate_abnormal_care_flow.md) | Bridge owner; formal injector is synthetic-only and real Discord remains an authorization-gated external path. |
 | Module commands and artifacts | Each module README in the root module index | Owning module; do not infer contracts from a README alone. |
 | External source bootstrap | [`third_party/hermes/`](../third_party/hermes/README.md) and [`third_party/llama_cpp/`](../third_party/llama_cpp/README.md) | Hermes is a formal team-remote submodule plus root-owned patches; llama.cpp remains an ignored generated checkout reconstructed from its manifest. |
@@ -100,7 +102,7 @@ authoritative when any prose conflicts with them.
 | [project_overview.md](architecture/project_overview.md) | Maintained mixed overview; historical plan sections labeled | Project architecture | Module map, canonical data flow and payload narrative. |
 | [contract_traceability.md](architecture/contract_traceability.md) | Maintained | Bridge and contract owners | Authoritative source, producer, consumer, test and synchronization matrix. |
 | [canonical_cross_service_contract.md](architecture/canonical_cross_service_contract.md) | Media Bridge runtime feature-gated; other integrations pending | Bridge contract owner | Identity, video and care-report topics, schemas, correlation, safety and migration. |
-| [android_cross_service_contract.md](architecture/android_cross_service_contract.md) | Implementation handoff; artifact provenance CLOSED_PASS; Temi E2E pending | Bridge contract owner and Android owner | LAB606 Android parser, state, privacy and test requirements. |
+| [android_cross_service_contract.md](architecture/android_cross_service_contract.md) | Implementation handoff; artifact provenance and exact TTS E2E CLOSED_PASS; media E2E pending | Bridge contract owner and Android owner | LAB606 Android parser, state, privacy and test requirements. |
 
 ## Operations
 

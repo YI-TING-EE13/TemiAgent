@@ -64,8 +64,11 @@ restart and reconstructs Hermes base plus patches <code>0001</code>–<code>0010
 to tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>.
 
 This is <code>HOST_LIVE_VERIFIED</code> for the exact host contract only. The
-accepted request budget is <code>L1=0; L2=0; L3=0; L5=1</code>; Android/Temi
-physical acceptance is L4 and remains separate, and Gate 6 is not started.
+accepted request budget is <code>L1=0; L2=0; L3=0; L5=1</code>. The exact
+canonical Android/Temi TTS physical boundary is separately
+<code>L4_FINAL=CLOSED_PASS</code> from adopted L4.7B evidence; broader
+Android/media acceptance remains separate, and Gate 6 is ready for
+release/handover work only.
 PIDs, run IDs, temporary worktrees and runtime roots from the acceptance are
 transient evidence, not clean-clone requirements. This documentation gate
 does not rerun live acceptance or operate any service.

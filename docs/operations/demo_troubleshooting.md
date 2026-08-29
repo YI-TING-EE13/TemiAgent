@@ -1,7 +1,8 @@
 # Demo Troubleshooting Guide
 
 Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5 final
-evidence and L4.3 Android provenance adoption: 2026-08-29.
+evidence, L4.3 Android provenance adoption and L4 final evidence adoption:
+2026-08-29.
 
 This guide maps a symptom to read-only evidence and the smallest safe next
 decision. It does not authorize service restart, raw MQTT publication, Discord
@@ -56,6 +57,8 @@ prints a credential or uses broad process control.
 | Temi cannot connect | Verify broker bind/port in MQTT status, Android endpoint configuration, the adopted artifact provenance and fresh Android session evidence. | Endpoint is not the deployment broker, firewall/routing is wrong, the installed artifact is not the accepted build, or Android is not running. | Keep AI6 client defaults loopback; use the L4.3 target only as explicitly labelled deployment evidence and request the Android owner to verify its private endpoint. | Android owner handles device/network changes. Do not turn an observed address into a tracked default or reconfigure the broker in this gate. |
 | Android artifact provenance is unclear or mismatched | Compare [CURRENT_STATUS](../CURRENT_STATUS.md)'s L4.3 artifact revision, package/version, APK hash, signer, embedded revision and installed-match disposition. | The final artifact is unavailable, an old 1.0.0 reference was used for a 1.0.2 comparison, or installed package evidence is incomplete. | Classify provenance as unresolved and stop the acceptance claim until the external Android owner supplies authoritative evidence; preserve the historical mismatch without relabelling it as a runtime failure. | Do not install, replace, reinstall, reset data, use ADB, or claim Temi E2E from artifact identity alone. |
 | Temi connected but command/result is absent | Compare Bridge trace <code>command_request_published</code>, Android subscription/session evidence and <code>cmd/result</code>. | Bridge validation failed, Android did not subscribe, or device execution is outside AI6 evidence. | Classify publication, receipt and execution as separate events; preserve event/request IDs. | Do not claim execution from publish success and do not fabricate a result. Escalate with both AI6 and Android evidence. |
+| Canonical TTS timed out after speak dispatch | Confirm the Android MQTT session, listener registration, vendor launcher health/ANR evidence and whether a terminal callback is absent. | Transient vendor runtime state, launcher/device health, transport or application callback failure. The accepted L4 incident was restored by one normal reboot without an APK/SDK/launcher change. | Do not immediately reinstall or increase the timeout. If explicitly authorized, perform one normal bounded reboot, verify package/APK/data preservation, then run one bounded TTS probe. | Repeated reboot loops are not recovery. Do not call the below-minimum launcher the proven direct cause, and do not use a raw MQTT or Android action as a workaround. |
+| TTS completes with “resolved without an active speech action” | Compare the single dispatch, callback, terminal result and executor count. | Known secondary diagnostic/state-machine issue after a successful completion. | Classify as <code>NON_BLOCKING_KNOWN_ISSUE</code>; preserve the warning for maintenance review. | Do not relabel it as the timeout root cause or remediate it in the L4 evidence-adoption gate. |
 | LM Studio unavailable | Run <code>doctor</code>; inspect the configured listener count and redacted <code>/v1/models</code> evidence for the expected identifier. | LM Studio is absent, the model/cache is not provisioned, GPU policy differs or the external service is down. | Preserve the external dependency failure and ask the LM/runtime owner to restore readiness. | Production LM is external: do not invoke <code>lms</code>, change model/context/GPU policy, reclaim port <code>1234</code>, or start/stop the provider. |
 | LM Studio CLI audit wakes an internal daemon or a legacy LM record is present | Preserve the exact redacted process/port evidence and run only the lifecycle status/doctor checks. | LM Studio CLI has global side effects and the lifecycle cannot prove ownership of legacy provider state. | Classify the provider as external/unknown, leave it untouched, and escalate to the LM/runtime owner. A future Gate 5B retry must create a fresh process ledger. | Never use <code>lms ls</code>, <code>lms ps</code>, <code>lms unload --all</code>, <code>lms server stop</code>, <code>lms daemon down</code>, <code>pkill</code> or <code>killall</code> as recovery. |
 | Bridge unavailable | Run <code>doctor</code>; inspect exact Bridge PID, private callback sockets and bounded Bridge log. | Missing locked environment, MQTT dependency, invalid config or failed process health. | Check the named error stage and source/config identity without altering runtime state. | Do not bypass the Bridge with raw command publication or direct Android control. |
@@ -70,6 +73,26 @@ prints a credential or uses broad process control.
 | Stale runtime ownership | Inspect owner-only state, recorded start identity, exact live PID and status code. | Interrupted startup/stop or state from a prior run. | Follow the exact-PID recovery policy and leave unresolved ownership visible. | Do not delete state to make <code>doctor</code> pass or adopt by port/name. |
 | Tests fail after a fresh clone | Run the failing command from [developer setup](developer_setup.md), verify submodule/tree/license and locked environments. | Missing source reconstruction, locked dependency, external binary or unsupported environment. | Preserve the first failure and classify it as source, dependency, environment or test defect. | Do not loosen lockfiles, replace pins, use a local checkout or claim clean-clone success. |
 | Discord/webhook unavailable | Check Bridge notification mode, redacted stage receipt and owner-only credential-file metadata; never print the value. | Disabled route, invalid credential file, provider error, timeout or no authorization. | Keep notification status as disabled/failed and continue only with an explicitly authorized provider plan. | Do not enable viewer-owned Discord flags, retry a real recipient blindly or call it emergency delivery. |
+
+## Canonical TTS timeout recovery
+
+The exact canonical TTS route is accepted for one bounded L4.7B transaction;
+every new device action still needs fresh authorization and evidence. If a
+new authorized attempt has an Android MQTT session, a confirmed speak
+dispatch and a registered listener but no terminal callback:
+
+1. Do not immediately reinstall TemiAgent or increase the timeout.
+2. Inspect vendor launcher health and ANR evidence.
+3. If authorized, use one normal bounded Temi reboot.
+4. Verify package, accepted APK identity and Android data preservation.
+5. Perform one bounded TTS probe and retain its callback/result evidence.
+
+Repeated reboot loops are not an accepted recovery strategy. The adopted
+history classifies the prior failure as a strongly evidenced transient vendor
+runtime state failure; the exact internal vendor component is unproven. The
+observed launcher is below the documented minimum, but that limitation is not
+the proven direct cause. The post-success diagnostic warning is
+<code>SECONDARY_TTS_DIAGNOSTIC_WARNING=NON_BLOCKING_KNOWN_ISSUE</code>.
 
 ## Triage map
 

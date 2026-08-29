@@ -7,12 +7,123 @@ runtime honesty and publication blockers. It is not a runtime health endpoint an
 does not replace the runtime schemas, module READMEs or the
 [canonical Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md).
 
-## Gate 5 final evidence adoption (current authority)
+## Gate 5 and L4 final evidence adoption (current authority)
 
 Review date: 2026-08-29. This section adopts the separately completed Gate 5B
 Retry #4 evidence; it is a documentation/evidence freeze and does not rerun
 the live acceptance. The publication baseline for the evidence candidate was
-<code>release/github-v1@59d568b079ce260e2144c410b0f9397d8b026913</code>.
+<code>release/github-v1@8b4a7db5f4d4e6736ee3652c56447012cb6e0a3a</code>; the
+host acceptance evidence itself was recorded at
+<code>59d568b079ce260e2144c410b0f9397d8b026913</code>.
+
+### L4 final physical acceptance adoption
+
+Review date: 2026-08-29. This section adopts the cumulative L4.3, L4.4,
+L4.5, LAB606 TTS-R1/TTS-R2 and L4.7B evidence. L4.7B already exercised one
+bounded real Android/Temi canonical TTS transaction after a human-performed
+normal reboot, so this documentation gate performs no runtime execution, TTS,
+MQTT transaction, ADB mutation, inference or service operation.
+
+The accepted source is
+<code>L4.7B_POST_REBOOT_SINGLE_CANONICAL_TTS</code> with final status
+<code>AI6_TEMIAGENT_L4_7B_POST_REBOOT_TTS_RESTORED</code>. The accepted Android
+artifact is package <code>com.robotemi.agent</code>, version
+<code>1.0.2 (3)</code>, SHA-256
+<code>c0f54cd46930c05caf2f556a2e4e1e26570b8401c0034546b57c6faca27c043</code>;
+the existing installation was accepted as-is. The run used the current
+Android MQTT session, external LM readiness with context <code>64000</code>,
+and a reused MQTT broker. The one explicit speak action dispatched once,
+received one terminal <code>COMPLETED</code> TTS callback and one successful
+correlated AI6 result. Model request count was <code>0</code>; movement,
+navigation, external notification, duplicate execution and retained command
+were all <code>NO</code>. Host rollback passed with zero host-owned processes
+and zero orphan listeners, while LM, MQTT, Android state and canonical source
+were preserved.
+
+The 32 mandatory criteria were reconstructed from the final L4 contract and
+mapped without weakening any requirement:
+
+| # | Required criterion | Adopted evidence | Result |
+|---:|---|---|---|
+| 1 | Exact publication authority | Runtime acceptance used the accepted publication authority; the release ref was unchanged during the run. | <code>PASS</code> |
+| 2 | Android provenance closed | L4.3/LAB606 authoritative provenance is <code>CLOSED_PASS</code>. | <code>PASS</code> |
+| 3 | Accepted Android artifact installed | Package, version, APK hash, signer and embedded revision matched; install was <code>ACCEPTED_AS_IS</code>. | <code>PASS</code> |
+| 4 | Temi target reachable | L4.7B reached the real target and observed a current device session. | <code>PASS</code> |
+| 5 | LM ready with context 64000 | LM was <code>READY</code>; runtime context was <code>64000</code>. | <code>PASS</code> |
+| 6 | MQTT ready and reused | MQTT was <code>READY / REUSED</code> and was not restarted. | <code>PASS</code> |
+| 7 | Host L1 passed | L4.7B recorded <code>HOST_L1=PASS</code>. | <code>PASS</code> |
+| 8 | Current Android MQTT session | Android MQTT session was current for the accepted transaction. | <code>PASS</code> |
+| 9 | Real Android executor route | The real Android ingress, executor and device-side TTS path were exercised. | <code>PASS</code> |
+| 10 | Non-motion action | The only action was a canonical <code>speak</code>; no movement or navigation command was issued. | <code>PASS</code> |
+| 11 | Exactly one explicit transaction | L4.7B recorded one explicit TTS transaction. | <code>PASS</code> |
+| 12 | Android ingress | Android ingress was <code>PASS</code>. | <code>PASS</code> |
+| 13 | Android validation | Android validation was <code>PASS</code>. | <code>PASS</code> |
+| 14 | Android executor | Executor execution count was exactly <code>1</code>. | <code>PASS</code> |
+| 15 | Terminal TTS callback | One terminal callback was observed with sequence <code>COMPLETED</code>. | <code>PASS</code> |
+| 16 | Android result success | Terminal TTS result status was <code>success</code>. | <code>PASS</code> |
+| 17 | AI6 result receipt | AI6 result receipt was <code>PASS</code>. | <code>PASS</code> |
+| 18 | Request/result correlation | Request/result correlation was <code>PASS</code>. | <code>PASS</code> |
+| 19 | Executor count exactly one | Android executor count was <code>1</code>, with one callback. | <code>PASS</code> |
+| 20 | No duplicate execution | Duplicate execution was <code>NO</code>. | <code>PASS</code> |
+| 21 | No retained command | Command retained was <code>NO</code>. | <code>PASS</code> |
+| 22 | No model request | Model request count was <code>0</code>. | <code>PASS</code> |
+| 23 | No navigation or movement | Physical movement and navigation command were both <code>NO</code>. | <code>PASS</code> |
+| 24 | No external notification | External notification was <code>NO</code>. | <code>PASS</code> |
+| 25 | Rollback passed | Host rollback was <code>PASS</code>. | <code>PASS</code> |
+| 26 | No host orphan listeners | Host-owned processes remaining and orphan listeners were both <code>0</code>. | <code>PASS</code> |
+| 27 | LM preserved | LM was preserved and remained externally owned. | <code>PASS</code> |
+| 28 | MQTT preserved | MQTT was preserved and not restarted. | <code>PASS</code> |
+| 29 | Android preserved | Android state was preserved; no APK replacement or update occurred. | <code>PASS</code> |
+| 30 | Canonical source preserved | <code>CANONICAL_CHANGED=NO</code>. | <code>PASS</code> |
+| 31 | Release preserved during runtime test | <code>RELEASE_REF_CHANGED=NO</code> during L4.7B. | <code>PASS</code> |
+| 32 | No push | <code>PUSH=NO</code>. | <code>PASS</code> |
+
+<code>FINAL_L4_CRITERIA_TOTAL=32</code>,
+<code>FINAL_L4_CRITERIA_PASS=32</code>,
+<code>FINAL_L4_CRITERIA_FAIL=0</code>,
+<code>FINAL_L4_CRITERIA_UNRESOLVED=0</code>.
+<code>L4_7B_SATISFIES_FINAL_L4_BOUNDARY=YES</code> and
+<code>ADDITIONAL_PHYSICAL_L4_RUN_REQUIRED=NO</code>.
+
+#### L4 failure history and deployment limitation
+
+The earlier callback timeout and the later restored callback used the same
+Temi SDK <code>1.134.1</code>, launcher <code>16405-usa / 16405</code>, accepted
+APK and 30-second timeout. Historical evidence also showed the same SDK and
+launcher architecture completing TTS before the current failure. Vendor
+ANR/runtime instability was observed before the failed attempt; one normal
+human-performed reboot restored vendor health and the terminal callback without
+an APK, SDK or launcher change. The required classification is
+<code>TTS_FAILURE_ROOT_CAUSE_CLASS=VENDOR_RUNTIME_TRANSIENT_STATE_REGRESSION</code>.
+This is strongly evidenced as a transient vendor runtime state failure; the
+exact internal vendor component failure was not directly observable.
+
+| Deployment fact | Classification |
+|---|---|
+| Temi SDK | <code>1.134.1</code> |
+| Observed launcher | <code>16405-usa / 16405</code> |
+| Official documented minimum launcher | <code>18024</code> |
+| Deployment class | <code>UNSUPPORTED_OR_BELOW_DOCUMENTED_MINIMUM_DEPLOYMENT</code> |
+| Direct regression conclusion | Below-minimum launcher is a documented compatibility limitation, not the proven direct cause of this regression. |
+
+The current evidence does not claim official compatibility and does not
+require a Temi software update for this handover. Future deployment should
+prefer vendor-supported launcher compatibility when operationally feasible.
+
+The successful L4.7B run also emitted
+<code>Canonical TTS resolved without an active speech action</code> after the
+successful completion. No second dispatch, terminalization or result occurred,
+and duplicate execution remained <code>NO</code>. This is
+<code>SECONDARY_TTS_DIAGNOSTIC_WARNING=NON_BLOCKING_KNOWN_ISSUE</code>, possibly
+a <code>STATE_MACHINE_DIAGNOSTIC_DEFECT</code>; it is not the root cause of the
+earlier timeout and is not remediated in this gate.
+
+This closes the exact canonical TTS physical boundary only. Broader Android
+camera/microphone behavior, video/media playback, general viewer/GPU behavior,
+Discord delivery, live perception and other hardware actions remain separate
+or unverified. Gate 6 is now release/handover-only readiness:
+<code>READY_FOR_GATE6=YES</code>; it must not rerun Gate 5 or L4 functionality
+unless a new release-blocking contradiction is discovered.
 
 ### Frozen gate disposition
 
@@ -25,9 +136,9 @@ the live acceptance. The publication baseline for the evidence candidate was
 | Gate 5B.5 resident probe safety | <code>CLOSED_PASS</code> | L2 validation is inference-impossible and client disconnects do not trigger a second response. |
 | Gate 5B live runtime acceptance | <code>CLOSED_PASS</code> | Retry #4 passed the bounded host L0–L3 and L5 contract; L4 was not run by scope. |
 | Gate 5 host runtime | <code>CLOSED_PASS</code> | The exact publication/runtime contract is host-live accepted, not a physical-device or portable-environment claim. |
-| L4 Android artifact provenance | <code>CLOSED_PASS</code> | LAB606 evidence identifies the installed Android APK as the accepted final 1.0.2 (3) artifact; this does not claim physical execution. |
-| L4 Temi physical/E2E acceptance | <code>NOT_RUN_BY_SCOPE / SEPARATE_GATE</code> | Android behavior, device session, physical playback and physical observation remain external. |
-| Gate 6 | <code>NOT_STARTED</code> | No Gate 6 work is implied by this adoption. |
+| L4 Android artifact provenance | <code>CLOSED_PASS</code> | LAB606 evidence identifies the installed Android APK as the accepted final 1.0.2 (3) artifact; the exact canonical TTS route is closed by the L4.7B evidence below. |
+| L4 Temi physical/E2E acceptance | <code>CLOSED_PASS</code> | One bounded canonical TTS transaction reached the real Android executor, completed its terminal callback and correlated a successful result; broader Android/media boundaries remain separate. |
+| Gate 6 | <code>READY_FOR_GATE6=YES / NOT_STARTED</code> | Only release, handover, final authority and publication-readiness work remains. |
 
 ### Accepted host evidence
 
@@ -37,7 +148,7 @@ the live acceptance. The publication baseline for the evidence candidate was
 | Production LM ownership | <code>EXTERNAL_ONLY</code>; expected model <code>google/gemma-4-31b</code> for model API identity, provisioned model <code>temi/gemma-4-31b-it-qat</code>; runtime context <code>64000</code>; observed model maximum <code>262144</code>. |
 | LM lifecycle safety | External LM was ready before Demo start and was preserved; the lifecycle did not start, stop, unload, daemon-down, server-stop or globally mutate it. Context was verified from runtime metadata, not configuration alone. |
 | MQTT | Existing broker was reused and not restarted; one accepted listener was <code>0.0.0.0:1883</code>. Explicit broker configuration and independent ownership remain mandatory. |
-| Layer results | L0 PASS; L1 PASS; L2 PASS; L3 PASS; L4 Android provenance CLOSED_PASS; L4 Temi E2E NOT_RUN_BY_SCOPE; L5 PASS. |
+| Layer results | L0 PASS; L1 PASS; L2 PASS; L3 PASS; L4 Android provenance CLOSED_PASS; L4 canonical TTS E2E CLOSED_PASS; L5 PASS. |
 | Model-request budget | <code>L1=0; L2=0; L3=0; L5=1</code>, recorded invariant <code>0 → 0 → 0 → 1</code>. |
 | L2 malformed probe | Controlled HTTP 400 validation failure before resident invocation; inference calls <code>0</code>. |
 | L3 no-op path | Bridge Unix callback produced validated MQTT identity-result publication on <code>temi/temi-01/resident/identity/result</code>; physical side effect <code>NO</code>. |
@@ -121,10 +232,12 @@ acceptance artifact. It is superseded by
 <code>SUPERSEDED_BY_AUTHORITATIVE_LAB606_PROVENANCE_RECOVERY</code>, not erased
 from historical records.
 
-<code>L4_ANDROID_PROVENANCE=CLOSED_PASS</code> and
-<code>READY_FOR_L4_E2E=YES</code>. Temi physical execution, playback, device
-observation and the complete L4 E2E remain <code>NOT_YET_RUN</code>;
-<code>READY_FOR_GATE6=NO</code>. The accepted Gate 5 host runtime remains
+<code>L4_ANDROID_PROVENANCE=CLOSED_PASS</code> was the provenance-stage result.
+The L4.7B record now closes the exact canonical TTS physical boundary as
+<code>L4_ANDROID_TEMI_E2E=CLOSED_PASS</code> and
+<code>L4_FINAL=CLOSED_PASS</code>; see the adopted criteria matrix above.
+Broader Android/media behavior remains separately bounded, and
+<code>READY_FOR_GATE6=YES</code>. The accepted Gate 5 host runtime remains
 bounded to L0–L3 and L5.
 
 ## Gate 4.1 handover repair candidate (historical)
@@ -737,7 +850,8 @@ L0 source/config/port preflight
   -> L1 minimum service readiness
   -> L2 local functional path without physical side effect
   -> L3 cross-service synthetic/no-op path without physical side effect
-  -> L4 Android/Temi E2E only with separate device authorization
+  -> L4 exact canonical Android/Temi TTS E2E accepted from L4.7B evidence
+  -> broader Android/media E2E only with separate device authorization
   -> L5 one bounded model/inference request after model readiness
 ~~~
 
@@ -770,7 +884,7 @@ External rows have no start command.
 | L1/Bridge | Locked Bridge env and callback/runtime paths ready; resident healthy | Lifecycle command; internal executable is <code>uv run --extra mqtt hermes-temi-bridge --env-file hermes_temi_bridge/.env.example</code> | Callback/health, exact process identity, trace directory and validator state | Opens callback/transport boundary; dispatch remains validator-bound | Lifecycle stop exact Bridge record; preserve trace/log evidence | Bridge owner |
 | L2/local path | L1 all pass | Use existing software-only resident/Bridge health and local callback/no-op contract; no raw MQTT command | Valid schema/trace transition with no physical executor | Nonphysical local event/trace only | Stop progression; reverse exact owned records | Verification owner |
 | L3/cross-service no-op | L2 pass and synthetic/no-op fixture authorized | Use the existing canonical synthetic event/trace acceptance harness; no direct raw publish | Adapter/resident/Bridge contract and synthetic result correlate by run/trace ID | Nonphysical synthetic transport only | Stop progression; reverse exact owned records | Verification owner |
-| L4/Android/Temi | L3 pass plus separate device-owner authorization | <code>DO_NOT_START</code> from AI6; use the Android owner’s separately authorized session | Fresh Android subscription, accepted/started or playing result and physical observation | Physical device action | Device-owner rollback; AI6 stops only its exact owned processes | Android/Temi owner |
+| L4/Android/Temi | L3 pass plus separate device-owner authorization | <code>DO_NOT_START</code> from AI6; the adopted L4.7B evidence supplies the accepted exact TTS session | One fresh Android subscription, one speak dispatch, terminal callback, successful result and physical observation; future actions require fresh evidence | Physical device action | Device-owner rollback; AI6 stops only its exact owned processes | Android/Temi owner |
 | L5/model inference | L1 model readiness, L2/L3 pass, explicit bounded inference approval | One bounded non-sensitive request through the resident contract; no unrestricted prompt | Valid bounded Hermes JSON response and validator result within timeout | Model inference only; no automatic physical action | Stop progression; reverse exact owned records | Model/verification owner |
 | Optional gateway/viewer | Not required by minimum path; resources/owners separately ready | <code>DO_NOT_START</code> by default; enable only in a separately reviewed config | Gateway health or viewer/llama/resource health when explicitly enabled | Additional service/listener and optional perception path | Stop exact optional records before L3 records | Optional-service owner |
 
@@ -808,7 +922,7 @@ only the rollback boundary owned by the current run.
 | L1 service readiness | L0 PASS; LM/MQTT ownership decisions made | LM API/model/context/GPU gate; MQTT status/lineage/TCP; adapter/resident/Bridge health and exact PID records | Minimum publication services ready, with MQTT reused | Do not advance; mark failed owner and retain logs | Stop only exact Gate 5B-owned records in reverse; canonical MQTT/llmster untouched. |
 | L2 local functional path | L1 PASS | Local resident/Bridge callback, schema and no-op validation with synthetic input | Valid local trace and bounded response; no physical executor | Block cross-service tests and retain redacted trace | Reverse exact owned software records. |
 | L3 cross-service functional path | L2 PASS and synthetic/no-op fixture approved | Adapter/resident/Bridge event/trace correlation and validator-bound synthetic result | Cross-service contract passes without Android/Temi side effect | Block device/model acceptance | Reverse exact owned software records; no raw MQTT fabrication. |
-| L4 Android/Temi E2E | L3 PASS plus explicit device-owner authorization | Fresh Android subscription, accepted/started or playing result, Bridge trace and physical observation | Device result and observation agree for each authorized action | Stop device test and record device-owner recovery; do not relabel software evidence | Device-owner rollback plus reverse exact AI6-owned software records. |
+| L4 Android/Temi E2E | L3 PASS plus explicit device-owner authorization | L4.7B accepted one fresh Android TTS session, one speak action, terminal callback, result and physical observation; future actions require fresh evidence | The exact canonical TTS result and observation agree; broader media/camera paths remain separate | Stop device test and record device-owner recovery; do not relabel software evidence | Device-owner rollback plus reverse exact AI6-owned software records. |
 | L5 model/inference | L1-L3 PASS, API readiness PASS and explicit bounded request approval | One synthetic non-sensitive request with timeout, valid Hermes JSON and validator result | Model functionality is proven separately from service readiness; no automatic physical action | Block acceptance, preserve redacted evidence and classify model failure | Reverse exact AI6-owned records; never stop pre-existing external processes. |
 
 If a later Gate 5B run fails, rollback is the reverse of the records created
@@ -821,11 +935,12 @@ No name-based kill, broad pattern, reboot or runtime-data deletion is allowed.
 ### Physical side effects and model readiness
 
 L0-L3 remain software-only. L4 is physical Android/Temi acceptance only with
-separate device-owner authorization and observation; L5 is nonphysical by
-default and requires its own bounded model approval. No Android command,
-physical Temi motion, notification delivery or real-care action may be used
-as an unapproved smoke test. A separate device owner must authorize and observe
-Android/Temi acceptance,
+separate device-owner authorization and observation; the exact canonical TTS
+boundary is closed by the adopted L4.7B evidence, while each new action and
+broader media path requires fresh evidence. L5 is nonphysical by default and
+requires its own bounded model approval. No Android command, physical Temi
+motion, notification delivery or real-care action may be used as an unapproved
+smoke test. A separate device owner must authorize and observe Android/Temi acceptance,
 including accepted/started or playing result evidence and the corresponding
 Bridge trace. A Bridge publish alone is not physical proof.
 
@@ -1171,23 +1286,26 @@ to this workspace.
 `IMPLEMENTED` means code exists. `HARDWARE_FREE_VERIFIED` means the named unit,
 mock or fake path actually passed. `HOST_LIVE_VERIFIED` means the exact bounded
 Gate 5 deployment contract passed in the designated host; it does not prove
-physical Android/Temi execution, general viewer/GPU behavior or portable
-environment reproducibility. `LIVE_NOT_VERIFIED` means no current live claim is
-made for that boundary. `LEGACY`, `EXPERIMENTAL` and `DEMO_ONLY` are scope
-labels, not stronger verification levels.
+unrelated Android/Temi physical boundaries, general viewer/GPU behavior or
+portable environment reproducibility. `L4_ANDROID_TEMI_E2E=CLOSED_PASS` is
+limited to the one adopted canonical TTS transaction. `LIVE_NOT_VERIFIED`
+means no current live claim is made for that boundary. `LEGACY`,
+`EXPERIMENTAL` and `DEMO_ONLY` are scope labels, not stronger verification
+levels.
 
 | Capability | State | Evidence boundary |
 |---|---|---|
-| Bridge validation, schemas and dispatch boundary | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; HOST_LIVE_VERIFIED` | Gate 5 L3 exercised the validated callback/publication path without physical side effect; real Android execution remains external. |
+| Bridge validation, schemas and dispatch boundary | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; HOST_LIVE_VERIFIED` | Gate 5 L3 exercised the validated callback/publication path without physical side effect; physical Android execution outside the exact accepted TTS route remains external. |
+| Canonical Android/Temi TTS command/result route | `IMPLEMENTED; L4_ANDROID_TEMI_E2E=CLOSED_PASS` | L4.7B accepted one post-reboot canonical speak action, terminal callback and correlated success result; no general Android or hardware claim follows. |
 | Canonical ASR adapter route | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED` | Adapter and Bridge software paths are tested; Temi microphone/session evidence is not current. |
 | Media v1.1 command/result route | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED` | Fake Android media lifecycle is tested; real playback is not verified. |
-| Resident Hermes wrapper/mock route | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; HOST_LIVE_VERIFIED` | Gate 5 accepted resident health, inference-impossible L2 and one bounded L5 request with external-only LM; Android/Temi remains external. |
+| Resident Hermes wrapper/mock route | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; HOST_LIVE_VERIFIED` | Gate 5 accepted resident health, inference-impossible L2 and one bounded L5 request with external-only LM; broader Android/Temi behavior remains external. |
 | Immediate abnormal-care Bridge route | `IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED` | Synthetic event, bounded notification, Hermes follow-up and action validation are tested; real recipient/device execution is not. |
-| Gate 5 host runtime: external LM, MQTT, resident and Bridge | `HOST_LIVE_VERIFIED` | Exact publication/runtime candidate passed L0–L3 and L5; MQTT was reused, LM was preserved, and L4 physical acceptance was not run. |
+| Gate 5 host runtime: external LM, MQTT, resident and Bridge | `HOST_LIVE_VERIFIED` | Exact publication/runtime candidate passed L0–L3 and L5; MQTT was reused and LM was preserved. The separate exact L4 TTS acceptance is recorded above. |
 | Structured care memory | `DEMO_ONLY; HARDWARE_FREE_VERIFIED` | Tracked memory is synthetic/de-identified fixture material; runtime and production data are excluded. |
 | Legacy ASR/video/local-VLM route | `LEGACY; LIVE_NOT_VERIFIED` | `temi_backend/` remains for compatibility; historical hardware observations are not current evidence. |
 | Continuous abnormal perception viewer | `EXPERIMENTAL; LIVE_NOT_VERIFIED` | Optional viewer/event producer; model output is not medical or fall-detection certification. |
-| Temi Android, physical camera/microphone/playback, viewer/GPU general behavior, Discord and real perception | `LIVE_NOT_VERIFIED` | External hardware/provider boundaries remain separate or unverified; Gate 5 host evidence must not be generalized. |
+| Temi Android camera/microphone/media, viewer/GPU general behavior, Discord and real perception | `LIVE_NOT_VERIFIED` | External hardware/provider boundaries remain separate or unverified; the exact adopted TTS route must not be generalized to them. |
 
 ## External, generated and optional artifacts
 
@@ -1280,7 +1398,7 @@ remains hardware-free and did not start a long-running service:
 | `python3 tools/e2e_test_runner.py` | PASS; `status:ok` with mock command topic |
 | `python3 tools/media_v11_fake_e2e.py` | PASS; 4 request traces, 7 result traces, cached replay confirmed |
 | `python3 tools/validate_documentation.py` | HISTORICAL Gate 1B evidence; the current inventory definition and count are maintained in <code>DOCUMENT_AUTHORITY_MAP.md</code>. |
-| Live Temi/Android/MQTT/LM Studio/GPU/Discord/perception gates | SKIPPED / LIVE_NOT_VERIFIED |
+| Historical Gate 1B live Temi/Android/MQTT/LM Studio/GPU/Discord/perception snapshot | SKIPPED / LIVE_NOT_VERIFIED; superseded for the exact canonical TTS route by the adopted L4.7B evidence |
 
 No service was started merely to validate documentation.
 

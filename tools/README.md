@@ -108,8 +108,11 @@ Rollback preserved external LM/MQTT and removed all Gate-owned processes.
 
 This is <code>HOST_LIVE_VERIFIED</code> for the exact contract only. PIDs,
 run IDs, temporary worktrees and runtime directories are acceptance evidence,
-not portable tool or configuration requirements. Android/Temi physical
-acceptance remains a separate L4 gate and Gate 6 is not started.
+not portable tool or configuration requirements. The exact canonical
+Android/Temi TTS physical acceptance is separately
+<code>L4_FINAL=CLOSED_PASS</code> from adopted L4.7B evidence; broader
+Android/media acceptance remains separate and Gate 6 is ready for
+release/handover work only.
 
 ### Canonical Demo lifecycle
 

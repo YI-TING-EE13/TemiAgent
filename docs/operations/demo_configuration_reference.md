@@ -1,7 +1,7 @@
 # Demo Configuration Reference
 
 Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5 final
-evidence: 2026-08-29.
+and L4 final evidence adoption: 2026-08-29.
 
 This is the non-secret reference for the complete key set in
 [`config/demo.env.example`](../../config/demo.env.example). The default private
@@ -61,8 +61,11 @@ not authorize a start or change any runtime state.
 | Ownership and portability | Lifecycle stop targets only positively owned identities. PIDs, run IDs, temporary roots and transient runtime directories are acceptance evidence only, not configuration requirements. |
 
 The resulting state is <code>HOST_LIVE_VERIFIED</code> for this exact
-publication/runtime contract. It does not verify Android/Temi physical
-execution, viewer/GPU general readiness, Discord delivery or Gate 6.
+publication/runtime contract. The adopted L4.7B record separately closes one
+exact canonical Android/Temi TTS transaction as
+<code>L4_FINAL=CLOSED_PASS</code>; video/media, camera/microphone, viewer/GPU
+general readiness, Discord delivery and broader Android behavior remain
+unverified. Gate 6 is ready for release/handover work only.
 
 ## Complete configuration inventory
 

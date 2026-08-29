@@ -163,10 +163,12 @@ no physical side effect. L5 returned HTTP 200 with one validated
 <code>speak</code> action; resident health remained healthy and no compression,
 response-boundary or unexpected-runtime failure occurred. Rollback removed
 all Gate-owned processes/listeners and preserved LM/MQTT. This is
-<code>HOST_LIVE_VERIFIED</code> for the exact contract only; Android artifact
-provenance is separately <code>CLOSED_PASS</code>, while Temi physical
-execution, viewer/GPU general behavior, complete L4 E2E and Gate 6 remain
-separate.
+<code>HOST_LIVE_VERIFIED</code> for the exact host contract only. The exact
+canonical Android/Temi TTS boundary is separately
+<code>L4_ANDROID_TEMI_E2E=CLOSED_PASS</code> from the adopted L4.7B evidence;
+viewer/GPU general behavior, video/media playback, camera/microphone, broader
+Android behavior and other physical actions remain separate.
+<code>READY_FOR_GATE6=YES</code> means Gate 6 is release/handover-only.
 
 ### L4.3 Android artifact provenance snapshot
 
@@ -186,9 +188,11 @@ The observed target <code>192.168.50.204:5555</code> is classified
 <code>OBSERVED_AI6_DEPLOYMENT</code> and is evidence only, never a portable
 default. This snapshot does not authorize ADB, installation, replacement,
 reinstall, data reset, Android/Temi operation, MQTT, service operation or
-inference. Temi physical playback, device observation and complete L4 E2E are
-still <code>NOT_YET_RUN</code>; use the [verification guide](verification_and_acceptance.md)
-for the authoritative provenance record and remaining gate boundary.
+inference. The exact canonical TTS physical boundary is now closed by the
+adopted L4.7B evidence; video/media playback, camera/microphone and broader
+device behavior remain outside that acceptance. Use the
+[verification guide](verification_and_acceptance.md) for the authoritative
+criteria and remaining boundary.
 
 `doctor` 與 `status` 不啟停 service，也不發布 MQTT。`restart` 只會採用已記錄、或在此明確
 restart 中以 cwd、command line、PID start identity 與 listener 驗證過的既有 Demo process。
@@ -216,6 +220,34 @@ every Git worktree. Lifecycle writes only below the selected root:
 metadata 會寫到 private `data/shared`；lifecycle 不寫入 repository 的 `temi_shared/`、`logs/`
 或 `memory/`。
 
+## L4 final physical acceptance snapshot
+
+The final L4 disposition is <code>L4_FINAL=CLOSED_PASS</code> and
+<code>L4_ANDROID_TEMI_E2E=CLOSED_PASS</code>. The adopted
+<code>L4.7B_POST_REBOOT_SINGLE_CANONICAL_TTS</code> evidence records one
+explicit speak dispatch, one terminal <code>COMPLETED</code> TTS callback and
+one successful correlated AI6 result using the accepted Android 1.0.2 (3)
+artifact. Android ingress, validation and executor execution passed; model
+requests, movement, navigation, notification, duplicate execution and
+retained command were zero/none. Rollback passed, with LM, MQTT, Android state
+and canonical source preserved. No additional physical L4 run is required.
+
+The same evidence classifies the earlier timeout as
+<code>VENDOR_RUNTIME_TRANSIENT_STATE_REGRESSION</code>: a strongly evidenced
+transient vendor runtime state failure, with the exact internal component
+unproven. The device uses SDK <code>1.134.1</code> with observed launcher
+<code>16405-usa / 16405</code>, below the documented minimum
+<code>18024</code>. This is an unsupported/below-minimum deployment
+limitation, not the proven direct cause, and does not require an update for
+the current handover.
+
+After successful completion, the Android log also emitted
+<code>Canonical TTS resolved without an active speech action</code>. Because
+there was no second dispatch, terminalization or result, classify it as
+<code>SECONDARY_TTS_DIAGNOSTIC_WARNING=NON_BLOCKING_KNOWN_ISSUE</code>, possibly
+a <code>STATE_MACHINE_DIAGNOSTIC_DEFECT</code>. Do not treat it as the timeout
+root cause or remediate it in this gate.
+
 ## Status, logs and common failures
 
 `status` is the read-only lifecycle summary. It reports readiness, ownership, listeners,
@@ -240,6 +272,25 @@ repository. Keep `DEBUG_TRACE_FULL=false` for normal Demo operation.
 | `SERVICE_HEALTH_FAILED` or `MODEL_LOAD_FAILED` | Read the named service health response and its private log path; do not relabel a missing model as ready. |
 | `PID_IDENTITY_MISMATCH` or `STOP_INCOMPLETE_OWNERSHIP` | Preserve state, verify PID/cwd/executable/command line, and follow [safe service operations](safe_service_operations.md). |
 | `STOP_TIMEOUT` | Recheck the same verified PID and protected listeners; do not use `pkill` or `killall`. |
+
+### Canonical TTS timeout recovery boundary
+
+If an authorized canonical TTS attempt times out while Android MQTT remains
+connected, the speak dispatch is confirmed and no terminal callback arrives:
+
+1. Do not immediately reinstall TemiAgent.
+2. Do not immediately increase the timeout.
+3. Inspect the vendor launcher health and ANR evidence.
+4. If an operational owner authorizes it, use one normal bounded Temi reboot.
+5. Verify package, accepted APK identity and Android data preservation.
+6. Perform one bounded TTS probe and record the callback/result evidence.
+
+Repeated reboot loops are not an accepted recovery strategy. The L4.7B
+evidence classifies the prior incident as a transient vendor runtime state
+failure; the below-minimum launcher is a documented limitation, not a proven
+direct cause. The post-success
+<code>Canonical TTS resolved without an active speech action</code> message is
+a non-blocking known diagnostic issue, not a callback-timeout explanation.
 
 受控 Media Demo 的 effective flags 必須都是 `true`：
 

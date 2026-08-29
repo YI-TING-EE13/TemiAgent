@@ -1,15 +1,21 @@
 # Temi Android Cross-Service Contract 摘要
 
-最後審查日期：2026-07-26
+最後審查日期：2026-08-29
 
 本文件提供 LAB606 Temi Android App 實作者需要的最小 contract。完整語意、範例與
 相容性規則見 [canonical cross-service contract](canonical_cross_service_contract.md)；
 runtime schemas 位於 `hermes_temi_bridge/schemas/`。AI6 repository 不包含 Android
-source，本文件不代表 Android 功能已實作或通過真機驗證。
+source；L4.7B 已採納一條 exact canonical TTS 真機驗收，但本文件不代表 broader
+Android/media、camera/microphone 或其他硬體功能已實作或通過真機驗證。
 AI6 Bridge 已提供預設關閉的 media v1.1 producer/result consumer 與 root-owned resident
 Hermes Media callback；Android
 仍須自行實作 durable idempotency、player state machine 與 schema validation。Bridge 的
 process-local registry 不是 Android persistence 的替代品。
+
+L4 final disposition: <code>L4_ANDROID_PROVENANCE=CLOSED_PASS</code> and
+<code>L4_ANDROID_TEMI_E2E=CLOSED_PASS</code> for one bounded canonical
+post-reboot TTS transaction. The accepted evidence is not a new implementation
+contract and does not close the video/media state machine described below.
 
 ## Topic 與 direction
 

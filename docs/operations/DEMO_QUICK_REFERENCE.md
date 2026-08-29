@@ -26,7 +26,8 @@ cd /TemiAgent
 
 `start` 成功後請以 `status` 判讀 readiness。沒有 fresh Android MQTT session 時，正確結果是
 `BACKEND_READY_WAITING_ANDROID`，不是失敗；只有 backend healthy 且 broker 觀察到 fresh remote
-Android session 時才是 `DEMO_READY`。
+Android session 時才是 `DEMO_READY`。這個 readiness 狀態不會取代已接受的單一 L4 TTS
+證據，也不代表 broader Android/media 行為已驗證。
 
 ## Gate 5 host evidence boundary
 
@@ -37,8 +38,10 @@ patches `0001`–`0010` to tree
 `47e9f1411e585769c055d0c6ee4417bebcdc6f70`, and permits exactly one model
 request at L5 (`L1=0; L2=0; L3=0; L5=1`). This is host evidence only;
 LAB606 Android artifact provenance is <code>CLOSED_PASS</code> for the accepted
-1.0.2 (3) APK; Temi physical/E2E L4 remains a separate gate and Gate 6 is not
-started.
+1.0.2 (3) APK, and the adopted L4.7B evidence closes the exact canonical TTS
+physical/E2E boundary as <code>CLOSED_PASS</code>. Broader Android/media,
+camera/microphone and general device behavior remain separate; Gate 6 is ready
+for release/handover work only.
 
 ## 每個指令
 
@@ -73,8 +76,8 @@ JSON output：
 - `canonical.normalized.subscriptions` 是 canonical endpoint topic contract，不是 Paho
   subscribe 清單。
 - branch／HEAD 需在 private config pin，才可作完整 `DEMO_READY` claim；Gate 5 host
-  evidence and Android artifact provenance do not establish Android/Temi
-  `DEMO_READY` or physical execution。See [CURRENT_STATUS](../CURRENT_STATUS.md)
+  evidence and the single accepted TTS transaction do not establish broader
+  Android/Temi `DEMO_READY` or physical execution。See [CURRENT_STATUS](../CURRENT_STATUS.md)
   for the accepted artifact identity and evidence-only target classification。
 
 ## 失敗時先做什麼
