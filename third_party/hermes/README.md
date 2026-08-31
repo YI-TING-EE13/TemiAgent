@@ -60,7 +60,7 @@ python3 tools/run_bounded_process.py \
   --kill-grace-seconds 2 \
   -- git submodule update --init --recursive --depth=1
 ./scripts/bootstrap --hermes
-(cd hermes-agent && uv sync --frozen)
+(cd hermes-agent && ./setup-hermes.sh)
 test -x hermes-agent/venv/bin/python3
 test -x hermes-agent/venv/bin/hermes
 ```
@@ -73,8 +73,9 @@ object policy before applying patches. A second invocation verifies the final
 tree and is a no-op.
 
 `./scripts/bootstrap --sources` is the combined source setup command. Run the
-submodule initialization above first; the command then runs Hermes setup and
-the independent optional llama.cpp reconstruction. `./scripts/bootstrap
+submodule initialization above first; the command then reconstructs the
+Hermes source and the independent optional llama.cpp checkout. It does not
+run `setup-hermes.sh` or install Python dependencies. `./scripts/bootstrap
 --check` remains the readiness check after the documented dependency
 environments have been provisioned. None of these commands starts a service,
 publishes MQTT, installs an APK, or runs model inference.
@@ -83,10 +84,18 @@ After patch reconstruction, the root index still records the base gitlink while
 the submodule worktree contains the local patched integration branch. The
 expected state is `PINNED_BASE_PLUS_PATCHED_WORKTREE`; a generated nested
 worktree change is not an arbitrary source-dirtiness waiver. Verify the final
-tree and keep the generated nested commit out of the root gitlink. The locked
-`uv sync --frozen` creates the ignored
+tree and keep the generated nested commit out of the root gitlink.
+
+`hermes-agent/setup-hermes.sh` is the source-owned provisioning entrypoint. It
+creates or recreates `hermes-agent/venv` with Python 3.11, sets
+`UV_PROJECT_ENVIRONMENT` to that directory, and uses the checked-in `uv.lock`
+with its locked sync path. The expected executable paths are
 `hermes-agent/venv/bin/python3` and `hermes-agent/venv/bin/hermes`; their
 presence is required by `bootstrap --check` but is not a root source commit.
+Do not replace this entrypoint with a bare `uv sync`: the default uv project
+environment is `.venv`, which is not equivalent to the required `venv`.
+Never create or copy an old Hermes environment or use the canonical dirty
+worktree as a runtime donor.
 
 ## Skills and ownership
 

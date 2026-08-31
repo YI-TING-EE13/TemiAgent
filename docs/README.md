@@ -193,7 +193,10 @@ material, not runtime source.
 
 For Hermes, initialize the root submodule from the team remote, run the
 documented bootstrap to apply patches `0001`–`0010`, then run
-`(cd hermes-agent && uv sync --frozen)` to provision the locked environment.
+`(cd hermes-agent && ./setup-hermes.sh)` to provision the source-owned
+`hermes-agent/venv` environment. See
+[the Hermes dependency contract](../third_party/hermes/README.md) for the
+exact setup behavior.
 The llama.cpp source checkout and approved build are separate generated
 artifacts. The final Hermes patched tree is verified by content identity;
 generated local submodule commit IDs are not dependency authority. If the team

@@ -137,19 +137,21 @@ Use the checked-in locks without changing them:
 (cd hermes_temi_bridge && uv sync --frozen --extra mqtt)
 (cd temi_backend && uv sync --frozen)
 (cd anomaly_detection && uv sync --frozen)
-cd hermes-agent
-uv sync --frozen
-cd ..
+(cd hermes-agent && ./setup-hermes.sh)
 ~~~
 
 The root source bootstrap reconstructs sources but does not install the Hermes
-environment or build llama.cpp. Hermes source evidence declares Python
+environment or build llama.cpp. The source-owned Hermes setup script creates or
+recreates <code>hermes-agent/venv</code> with Python 3.11 and routes its locked
+installation to that directory. Hermes source evidence declares Python
 <code>>=3.11</code> and a <code>hermes</code> console script.
 <code>hermes-agent/venv/bin/python3</code> and
 <code>hermes-agent/venv/bin/hermes</code> must exist and be executable before a
 production-oriented readiness check can pass. The required install/build
 authority is the owner-approved container and the checked-in lockfiles; do not
-invent a replacement environment.
+invent, copy, or substitute an environment. The TemiAgent modules use their
+own project-local <code>.venv</code> directories; <code>.venv</code> is not
+equivalent to the Hermes <code>venv</code>.
 
 ### 6. What is required for the viewer?
 

@@ -161,7 +161,8 @@ It never starts a service and never downloads a model:
 (cd hermes_temi_bridge && uv sync --frozen --extra mqtt)
 (cd temi_backend && uv sync --frozen)
 (cd anomaly_detection && uv sync --frozen)
-(cd hermes-agent && uv sync --frozen)
+# Hermes uses the setup entrypoint owned by the reconstructed source.
+(cd hermes-agent && ./setup-hermes.sh)
 ~~~
 
 <code>--sources</code> verifies the formal Hermes submodule, applies patches
@@ -182,9 +183,14 @@ The Python dependency floors and lockfiles are:
 
 The root source bootstrap reconstructs Hermes and llama.cpp source but does not
 install the Hermes environment or build <code>llama-server</code>. The
-source-native locked Hermes method above creates
-<code>hermes-agent/venv/bin/python3</code> and
-<code>hermes-agent/venv/bin/hermes</code>. LM Studio remains an external
+reconstructed Hermes source owns its environment setup through
+<code>hermes-agent/setup-hermes.sh</code>. That script creates or recreates
+<code>hermes-agent/venv</code> with Python 3.11, targets that directory through
+<code>UV_PROJECT_ENVIRONMENT</code>, and uses the checked-in Hermes
+<code>uv.lock</code> with its locked sync path. Do not replace this entrypoint
+with a bare <code>uv sync</code>: the default uv project environment is
+<code>hermes-agent/.venv</code>, which is not the layout checked by bootstrap.
+Do not create or copy an old environment. LM Studio remains an external
 owner-provisioned service; its CLI is not used by this setup.
 
 ### 5. Create private/local configuration
@@ -233,7 +239,7 @@ Provision the following through the owner-approved external systems:
 
 | Artifact | Required for | Provisioning truth | Ready evidence |
 |---|---|---|---|
-| Hermes <code>venv/bin/python3</code> and <code>venv/bin/hermes</code> | Production resident/gateway | Reconstruct the patched source, then run <code>(cd hermes-agent && uv sync --frozen)</code> using the checked-in <code>pyproject.toml</code>/<code>uv.lock</code>; Python floor is <code>>=3.11</code>. | Both executables are executable and <code>./scripts/bootstrap --check</code> passes the Hermes checks. |
+| Hermes <code>venv/bin/python3</code> and <code>venv/bin/hermes</code> | Production resident/gateway | Reconstruct the patched source, then run the source-owned <code>(cd hermes-agent && ./setup-hermes.sh)</code>; it targets <code>venv</code> with Python 3.11 and the checked-in <code>uv.lock</code>. | Both executables are executable and <code>./scripts/bootstrap --check</code> passes the Hermes checks. |
 | LM Studio and <code>temi/gemma-4-31b-it-qat</code> | Production LM route | External LM Studio installation, model/cache and GPU owner; no portable download recipe or version pin is tracked. The lifecycle does not invoke <code>lms</code>. | Exactly one configured listener, <code>/v1/models</code>, identifier <code>google/gemma-4-31b</code>, and runtime metadata context <code>64000</code> with the external context/GPU policy pass. |
 | llama.cpp <code>llama-server</code> build | Production action viewer | Reconstruct the pinned checkout, then use an owner-approved build. Observed AI6 cache evidence is <code>Release</code>, <code>Ninja</code>, <code>GGML_CUDA=ON</code> and <code>CMAKE_CUDA_ARCHITECTURES=native</code>; these are not portable pins. | Configured executable exists and viewer health reports <code>llama_server_ready</code>. In the validated AI6 deployment its SHA-256 was <code>6827638842194c9903da14662737b1e5c7d35effa6353506a329d31f85029585</code>. |
 | Viewer GGUF/mmproj | Production action viewer | External model/cache provision; source and redistribution authority are external. | Configured regular files exist and viewer health passes. |
@@ -339,13 +345,13 @@ invitation to invent one.
 | Linux host | Docker host and approved mount | Required | Not pinned: <code>ENVIRONMENT_PIN_GAP</code> | Maintainer/container platform | <code>docker exec -it yiting.TemiAgent_gpu_all bash</code> | Host-side platform owns Docker; project commands remain in the container. |
 | <code>yiting.TemiAgent_gpu_all</code> | Designated isolated execution environment | Required | Image tag/digest not pinned: <code>ENVIRONMENT_PIN_GAP</code> | Maintainer-provided container | <code>docker inspect yiting.TemiAgent_gpu_all</code> on host | Do not substitute another container for official evidence. |
 | Python | Root tools and project runtimes | Required | <code>>=3.12</code> | Container image plus <code>uv</code> | <code>python3 --version</code> | Three <code>pyproject.toml</code> files declare the floor; no patch-level pin. |
-| uv | Locked Python environment manager | Required | 0.10.12 observed; not pinned | Approved container/tooling | <code>uv --version</code> | Use <code>uv sync --frozen</code>; do not update locks during setup. |
+| uv | Locked Python environment manager | Required | 0.10.12 observed; not pinned | Approved container/tooling | <code>uv --version</code> | Use the project-specific locked commands in step 4 for TemiAgent modules; use <code>hermes-agent/setup-hermes.sh</code> for Hermes. Do not update locks during setup. |
 | Git | Root/submodule/source reconstruction | Required | 2.43.0 observed; not pinned | Approved container/tooling | <code>git --version</code> | Hermes source acquisition is through the formal submodule only. |
 | Bash | Tracked bootstrap/lifecycle scripts | Required | 5.2.21 observed; minimum not declared | Approved container/tooling | <code>bash --version</code> | Scripts require modern Bash features such as <code>mapfile</code>. |
 | Mosquitto and client tools | Managed local MQTT broker | Required for MQTT/full runtime | 2.0.18 observed; package/image not pinned | Container package or approved image | <code>mosquitto -h</code> | Tracked <code>mqtt/mosquitto.conf</code> is local Demo configuration; listener exposure is deployment-controlled. |
 | Python lockfiles | Bridge/backend/anomaly dependencies | Required for corresponding suites | Lockfile pins are authoritative | <code>uv sync --frozen</code> in each project | Commands in step 8 | Project dependency floors are not substitutes for the lockfiles. |
 | Formal Hermes submodule | Resident/gateway source base | Required for production and Hermes tests | Base commit and final tree pinned in manifest | <code>git submodule update</code> then <code>./scripts/bootstrap --hermes</code> | <code>./scripts/bootstrap --check</code> | External team remote plus root-owned patches; no fallback. |
-| Hermes virtual environment | Resident/gateway execution | Required for production | Python <code>>=3.11</code>; dependency versions are frozen by <code>hermes-agent/uv.lock</code> | <code>cd hermes-agent && uv sync --frozen</code> after source reconstruction | <code>test -x hermes-agent/venv/bin/python3 && test -x hermes-agent/venv/bin/hermes</code> | Generated environment is external/ignored; root bootstrap verifies presence but does not create it. |
+| Hermes virtual environment | Resident/gateway execution | Required for production | Python <code>>=3.11</code>; dependency versions are frozen by <code>hermes-agent/uv.lock</code> | <code>cd hermes-agent && ./setup-hermes.sh</code> after source reconstruction | <code>test -x hermes-agent/venv/bin/python3 && test -x hermes-agent/venv/bin/hermes</code> | The source-owned script creates the external/ignored <code>venv</code>; root bootstrap verifies presence but does not create it. |
 | LM Studio API | Production external model service | Required for production; not needed by fake E2E | Version not pinned: <code>ENVIRONMENT_PIN_GAP</code> | External owner provisions the installed application and model cache | External owner’s API readiness; AI6 checks one listener and <code>/v1/models</code> and never invokes the CLI | Model/cache/license are external; no model is published or lifecycle-owned. |
 | CUDA driver/GPU | Production LM Studio and optional viewer | Required for production model/viewer paths | GPU/driver/CUDA not pinned: <code>ENVIRONMENT_PIN_GAP</code> | Host/maintainer provisioning | Lifecycle GPU policy check | Production policy names visible devices <code>0,1</code>; viewer config names device <code>3</code>; Gate 5 accepted one bounded L5 request, not general viewer/GPU readiness. |
 | llama.cpp | Optional action viewer server | Optional feature, but current bootstrap check expects its binary | Commit <code>0b7154066e8544ed88d92ae2132cc1e055cf6304</code>; tree <code>1020a771795f406b8891d18ee607b4da3783fa7f</code> | <code>./scripts/bootstrap --llama-cpp</code>, then approved build | <code>test -x anomaly_detection/third_party/llama.cpp/build/bin/llama-server</code> | Generated ignored checkout; observed AI6 build flags and binary hash are not portable pins. |

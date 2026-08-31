@@ -17,7 +17,8 @@ warm-start and real-Temi Media evidence procedure, not a second lifecycle author
 
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
-cd /TemiAgent
+export REPO_ROOT=<selected-operator-workspace>
+cd "$REPO_ROOT"
 ```
 
 準備 Git worktree 外的 private env，mode 必須是 `0600`，並設定一個 worktree 外、mode
@@ -132,7 +133,7 @@ mosquitto_sub -h "$MQTT_BROKER_HOST" -p "$MQTT_BROKER_PORT" -t "temi/$robot_id/c
 在另一個 terminal 檢視 current Bridge trace：
 
 ```bash
-python3 /TemiAgent/tools/show_temi_trace.py --log-dir "$LOG_DIR" --latest --full
+python3 "$REPO_ROOT/tools/show_temi_trace.py" --log-dir "$LOG_DIR" --latest --full
 ```
 
 對 Temi 依序說：

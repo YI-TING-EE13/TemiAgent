@@ -50,8 +50,10 @@ It starts no service, installs no dependency, downloads no model, and does not
 build `llama-server`. `--hermes` and `--llama-cpp` remain focused source-only
 commands. `--check` makes no credentials, starts no service, and changes no
 runtime state, but it is a readiness gate that requires the documented Hermes
-and module environments to already exist. `--sync` uses each existing project's
-`uv sync --frozen`; it does not update lockfiles. The Hermes submodule remains
+and module environments to already exist. `--sync` uses the existing TemiAgent
+module environments with their `uv sync --frozen` commands; it does not
+provision Hermes and does not update lockfiles. Run the source-owned
+`hermes-agent/setup-hermes.sh` separately for the Hermes environment. The Hermes submodule remains
 formally tracked at the base gitlink while its generated patched worktree is
 local state; the root gitlink remains pinned while the patched nested worktree
 and its ignored environment are generated state. A generated nested worktree

@@ -74,9 +74,15 @@ prerequisites:
 (cd hermes_temi_bridge && uv sync --frozen --extra mqtt)
 (cd temi_backend && uv sync --frozen)
 (cd anomaly_detection && uv sync --frozen)
-(cd hermes-agent && uv sync --frozen)
+(cd hermes-agent && ./setup-hermes.sh)
 ./scripts/bootstrap --check
 ```
+
+The Hermes source-owned setup entrypoint creates the required
+`hermes-agent/venv` environment after source reconstruction. Do not substitute
+a bare `uv sync`, a `.venv` directory, or an environment from the canonical
+dirty worktree. See [the Hermes dependency contract](../../third_party/hermes/README.md)
+for the source-defined setup behavior.
 
 Select the private configuration:
 
@@ -448,7 +454,7 @@ mosquitto_sub -h "$MQTT_BROKER_HOST" -p "$MQTT_BROKER_PORT" \
 
 ```bash
 ./scripts/demo --config <private-demo-env> status
-python3 /TemiAgent/tools/show_temi_trace.py --log-dir "$LOG_DIR" --latest --full
+python3 "$REPO_ROOT/tools/show_temi_trace.py" --log-dir "$LOG_DIR" --latest --full
 ```
 
 依序對 Temi 說下列語句，且每一步都等待 Android lifecycle result 再繼續：

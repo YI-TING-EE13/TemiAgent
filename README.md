@@ -179,13 +179,20 @@ python3 tools/run_bounded_process.py \
   --kill-grace-seconds 2 \
   -- git submodule update --init --recursive --depth=1
 ./scripts/bootstrap --sources
-(cd hermes-agent && uv sync --frozen)
+(cd hermes-agent && ./setup-hermes.sh)
 ./scripts/bootstrap --check
 ./scripts/demo --config <PRIVATE_PRODUCTION_CONFIG> --json doctor
 ./scripts/demo --config <PRIVATE_PRODUCTION_CONFIG> start
 ./scripts/demo --config <PRIVATE_PRODUCTION_CONFIG> --json status
 ./scripts/demo --config <PRIVATE_PRODUCTION_CONFIG> stop
 ```
+
+The Hermes setup command is owned by the reconstructed Hermes source and
+creates the `hermes-agent/venv` layout checked by bootstrap. See
+[third_party/hermes/README.md](third_party/hermes/README.md) for the
+source-defined setup behavior. TemiAgent modules use their own project-local
+`.venv` environments as described in [developer setup](docs/operations/developer_setup.md);
+those layouts are not interchangeable.
 
 The default `init-config` path is for the isolated `newcomer_mock` profile.
 Production requires an owner-only private config outside the worktree. The
