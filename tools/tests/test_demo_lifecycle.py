@@ -329,6 +329,7 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             config = demo.load_config(self.make_config(Path(temporary)))
             with (
                 mock.patch.object(demo, "_listener_count", return_value=1),
+                mock.patch.object(demo, "_mqtt_tcp_ready", return_value=True),
                 mock.patch.object(demo, "_lmstudio_ready", return_value=False),
                 mock.patch.object(demo, "_lmstudio_lms") as lms,
                 mock.patch.object(demo.os, "kill") as kill,
