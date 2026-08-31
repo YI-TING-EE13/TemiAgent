@@ -2,8 +2,8 @@
 
 最後審查日期：2026-08-31；D2B consolidated。
 
-The current operator source is a clean clone of public `main` at
-`8fead49d66ab0a9d016a7dfe495b336146bbe957`. The protected dirty
+The current operator source is a clean clone of public `main`. The previous
+public baseline was `8fead49d66ab0a9d016a7dfe495b336146bbe957`; the protected dirty
 designated-container development mount is not a portable operator workspace.
 The [Demo operator guide](DEMO_OPERATOR_GUIDE.md) owns the current
 `doctor → start → status → stop` sequence; this policy owns exact identity,

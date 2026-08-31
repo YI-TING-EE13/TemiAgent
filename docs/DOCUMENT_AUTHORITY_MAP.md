@@ -19,10 +19,11 @@ deleted, and historical evidence was not rewritten into a current procedure.
 
 ## Publication and workspace identity
 
-The publication authority is
-`https://github.com/YI-TING-EE13/TemiAgent`, branch `main`, exact HEAD
+The public repository's `main` branch is the publication authority. This
+documentation lineage follows the previous public baseline
 `8fead49d66ab0a9d016a7dfe495b336146bbe957` and tree
-`e5fa932b01cc1f885cd36023464a18f11bdf060a`. The root publication has no
+`e5fa932b01cc1f885cd36023464a18f11bdf060a`, and records the completed D2B
+and D2B.2 documentation remediation. The root publication has no
 `LICENSE` file: `ROOT_LICENSE_POLICY=NO_LICENSE`.
 
 The portable operator begins from a clean public-main clone. The protected

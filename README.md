@@ -6,10 +6,12 @@ TemiAgent 是以 Temi robot 為實體載具、Hermes Agent 為認知核心的 em
 
 ## Publication and operator disposition
 
-The current publication authority is
-`https://github.com/YI-TING-EE13/TemiAgent`, branch `main`, exact HEAD
-`8fead49d66ab0a9d016a7dfe495b336146bbe957`, tree
-`e5fa932b01cc1f885cd36023464a18f11bdf060a`. The root publication has no
+The public repository
+`https://github.com/YI-TING-EE13/TemiAgent`, branch `main`, is the
+publication authority. This documentation lineage follows the previous public
+baseline `8fead49d66ab0a9d016a7dfe495b336146bbe957`, tree
+`e5fa932b01cc1f885cd36023464a18f11bdf060a`, and includes the completed D2B
+and D2B.2 documentation remediation. The root publication has no
 `LICENSE` file: `ROOT_LICENSE_POLICY=NO_LICENSE`. Gate 5, Android provenance,
 L4 and Gate 6 are `CLOSED_PASS` at their documented boundaries, and D2A is
 `CLOSED_PASS` for the observed AI6 deployment.

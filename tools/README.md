@@ -2,9 +2,10 @@
 
 最後更新日期：2026-08-31；D2B documentation consolidation。
 
-The current publication authority is public `main` at
+The public repository's `main` branch is the publication authority. The
+previous public baseline was
 `8fead49d66ab0a9d016a7dfe495b336146bbe957` with tree
-`e5fa932b01cc1f885cd36023464a18f11bdf060a`. Commands below that use
+`e5fa932b01cc1f885cd36023464a18f11bdf060a`; commands below that use
 `/TemiAgent` are designated-container module examples; portable operator
 instructions use a clean clone and `REPO_ROOT` in the
 [Demo operator guide](../docs/operations/DEMO_OPERATOR_GUIDE.md).

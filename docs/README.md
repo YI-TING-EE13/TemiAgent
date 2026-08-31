@@ -4,10 +4,11 @@
 
 ## Final publication and operator disposition
 
-The current publication authority is the public repository
-`https://github.com/YI-TING-EE13/TemiAgent`, branch `main`, at exact HEAD
+The public repository's `main` branch is the publication authority. This
+documentation lineage follows the previous public baseline
 `8fead49d66ab0a9d016a7dfe495b336146bbe957` and tree
-`e5fa932b01cc1f885cd36023464a18f11bdf060a`. The root publication has no
+`e5fa932b01cc1f885cd36023464a18f11bdf060a`, and includes the completed D2B
+and D2B.2 documentation remediation. The root publication has no
 `LICENSE` file: `ROOT_LICENSE_POLICY=NO_LICENSE`.
 
 Gate 5, Android provenance, L4 and Gate 6 are `CLOSED_PASS`. D2A is
@@ -29,8 +30,9 @@ The current claim is bounded to the exact publication/runtime contract recorded
 in [CURRENT_STATUS](CURRENT_STATUS.md); LAB606 has closed Android artifact
 provenance and the adopted L4.7B record closes the exact canonical TTS
 physical boundary. Broader Android/media behavior remains outside that
-acceptance. Gate 6 publication and handover consolidation is `CLOSED_PASS`;
-it does not imply a push, release tag or broader physical acceptance.
+acceptance. Gate 6 publication and handover consolidation is `CLOSED_PASS`; the
+D2B and D2B.2 documentation gates are complete. This status does not imply a
+release tag or broader physical acceptance.
 
 For a new student, use this short path rather than browsing the full document
 inventory:

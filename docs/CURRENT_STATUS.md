@@ -9,14 +9,13 @@ does not replace the runtime schemas, module READMEs or the
 
 ## Publication, operator and D2B disposition
 
-The public publication authority is
-<code>https://github.com/YI-TING-EE13/TemiAgent</code>, branch
-<code>main</code>, at exact HEAD
+The public repository's <code>main</code> branch is the publication authority.
+This documentation lineage follows the previous public baseline
 <code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> and tree
-<code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>. The root publication has
+<code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>, and records the
+completed D2B and D2B.2 documentation remediation. The root publication has
 no <code>LICENSE</code> file:
-<code>ROOT_LICENSE_POLICY=NO_LICENSE</code>. No push, history rewrite or
-public-branch mutation is part of D2B.
+<code>ROOT_LICENSE_POLICY=NO_LICENSE</code>.
 
 The protected canonical development worktree is the intentionally dirty
 designated-container mount <code>/TemiAgent</code> at HEAD
@@ -42,11 +41,11 @@ failures. A free port or rc0 alone does not establish deployment readiness.
 
 Review date: 2026-08-29. This section adopts the separately completed Gate 5B
 Retry #4 evidence; it is a documentation/evidence freeze and does not rerun
-the live acceptance. The current publication authority for this handover is
-the public <code>main</code> commit
-<code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> with tree
-<code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>; the bounded host
-runtime evidence is carried forward only for the contract stated here.
+the live acceptance. The accepted runtime evidence was recorded against the
+previous public baseline <code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code>
+with tree <code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>; the current
+documentation lineage retains that source ancestry. The bounded host runtime
+evidence is carried forward only for the contract stated here.
 
 ### L4 final physical acceptance adoption
 
@@ -154,8 +153,8 @@ This closes the exact canonical TTS physical boundary only. Broader Android
 camera/microphone behavior, video/media playback, general viewer/GPU behavior,
 Discord delivery, live perception and other hardware actions remain separate
 or unverified. Gate 6 documentation, publication-authority and handover work is
-<code>CLOSED_PASS</code>. This closure does not imply a push, release tag or
-new Gate 5/L4 runtime execution; broader Android/media and viewer/GPU claims
+<code>CLOSED_PASS</code>. This closure does not imply a release tag or new
+Gate 5/L4 runtime execution; broader Android/media and viewer/GPU claims
 remain separately bounded.
 
 ### Frozen gate disposition
@@ -171,7 +170,7 @@ remain separately bounded.
 | Gate 5 host runtime | <code>CLOSED_PASS</code> | The exact publication/runtime contract is host-live accepted, not a physical-device or portable-environment claim. |
 | L4 Android artifact provenance | <code>CLOSED_PASS</code> | LAB606 evidence identifies the installed Android APK as the accepted final 1.0.2 (3) artifact; the exact canonical TTS route is closed by the L4.7B evidence below. |
 | L4 Temi physical/E2E acceptance | <code>CLOSED_PASS</code> | One bounded canonical TTS transaction reached the real Android executor, completed its terminal callback and correlated a successful result; broader Android/media boundaries remain separate. |
-| Gate 6 | <code>CLOSED_PASS</code> | Publication authority, documentation consolidation, handover routing and release-readiness records are aligned; no push or runtime execution is implied. |
+| Gate 6 | <code>CLOSED_PASS</code> | Publication authority, documentation consolidation, handover routing and release-readiness records are aligned; publication does not imply runtime execution. |
 
 ### Accepted host evidence
 
@@ -1389,12 +1388,12 @@ levels.
 
 ## Publication and release blockers
 
-1. The public publication authority is
-   <code>https://github.com/YI-TING-EE13/TemiAgent</code>, branch
-   <code>main</code>, exact HEAD
-   <code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> and tree
+1. The public repository's <code>main</code> branch is the publication
+   authority. The previous public baseline was
+   <code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> with tree
    <code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>. The root publication
-   has no <code>LICENSE</code> file; no push or history rewrite is part of D2B.
+   has no <code>LICENSE</code> file. D2B and D2B.2 were documentation-only
+   gates; neither performed a history rewrite or runtime operation.
 2. The historical HEAD contains the large pose checkpoint. Gate 1A removes it from
    the current index while preserving history; Gate 1B performs no history rewrite.
 3. Pose model provenance, version, license and redistribution restrictions remain
@@ -1405,7 +1404,8 @@ levels.
    3.4 and the current dependency contract is restated in the operator and
    third-party READMEs. Historical release refs and private-LAN observations
    are retained only as dated evidence; they are not current operator
-   defaults and no root publication push is performed here.
+   defaults. Release refs and runtime operations remain outside this
+   documentation record.
 
 ## Documentation authority
 

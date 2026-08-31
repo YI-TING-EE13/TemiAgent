@@ -24,7 +24,7 @@ documentation gate.
 
 | Evidence | Accepted result |
 |---|---|
-| Publication/runtime source | Current authority is public <code>main</code> at HEAD <code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code>, tree <code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>; the accepted host record uses the Hermes pinned base plus patches <code>0001</code>–<code>0010</code> and final tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. |
+| Publication/runtime source | Accepted host evidence was recorded against the previous public baseline <code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code>, tree <code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>; public <code>main</code> remains the publication authority, and the documentation lineage retains that source ancestry. The accepted host record uses the Hermes pinned base plus patches <code>0001</code>–<code>0010</code> and final tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. |
 | LM Studio ownership | <code>EXTERNAL_ONLY</code>; API identifier <code>google/gemma-4-31b</code>; provisioned model <code>temi/gemma-4-31b-it-qat</code>; runtime context <code>64000</code>, verified from runtime metadata; observed model maximum <code>262144</code>. |
 | MQTT | Existing broker reused, not restarted; accepted listener <code>0.0.0.0:1883</code>; explicit broker configuration remained mandatory. |
 | Layer disposition | L0 PASS; L1 PASS; L2 PASS; L3 PASS; L4 Android provenance CLOSED_PASS; L4 canonical TTS E2E CLOSED_PASS; L5 PASS. |
@@ -132,7 +132,7 @@ actions require their own fresh evidence; video/media playback, camera/
 microphone, general viewer/GPU behavior, Discord delivery, live perception
 and other physical actions remain separate or unverified. Gate 6 publication,
 authority and handover consolidation is <code>CLOSED_PASS</code> for this
-documentation boundary; it does not imply a push or a new runtime operation.
+documentation boundary; publication does not imply a new runtime operation.
 
 ## Preconditions and evidence vocabulary
 

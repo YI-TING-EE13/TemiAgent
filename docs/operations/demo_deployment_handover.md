@@ -62,14 +62,15 @@ waiver. The llama.cpp checkout remains ignored. If the team remote cannot be rea
 the submodule failure and stop; no original-upstream, local-checkout, file-URL,
 cache or alternate-object fallback is allowed.
 
-## D2B current deployment identity
+## Reviewed AI6 deployment identity
 
-The public authority is
-<code>https://github.com/YI-TING-EE13/TemiAgent</code>, branch
-<code>main</code>, HEAD
+The reviewed AI6 source lineage follows the previous public baseline
 <code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code>, tree
-<code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>. The root license policy
-is <code>NO_LICENSE</code>. A clean clone is the portable operator source.
+<code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>, from
+<code>https://github.com/YI-TING-EE13/TemiAgent</code> branch <code>main</code>.
+The public <code>main</code> branch is the publication authority, and a clean
+clone of that branch is the portable operator source. The root license policy
+is <code>NO_LICENSE</code>.
 
 `/opt/TemiAgent-operator` is the
 <code>VALIDATED_AI6_OPERATOR_WORKSPACE</code> observed by D2A, with private
@@ -188,7 +189,7 @@ Android/Temi operation, MQTT, service operation or inference. The exact
 canonical TTS physical boundary is now closed by the separately adopted L4.7B
 evidence; broader Temi physical/E2E remains a separate gate and
 Gate 6 publication, authority and handover consolidation is
-<code>CLOSED_PASS</code>; this does not authorize a push, release tag or new
+<code>CLOSED_PASS</code>; this record does not authorize a release tag or new
 runtime operation.
 
 ## L4 final physical acceptance handover

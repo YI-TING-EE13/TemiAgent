@@ -7,12 +7,14 @@ Use this map with [CURRENT_STATUS.md](CURRENT_STATUS.md) and the
 development mount without being canonical V1 source, a current contract owner or
 publication material.
 
-The public publication baseline is repository
+The public repository's `main` branch is the publication authority. The
+previous public baseline was
 `https://github.com/YI-TING-EE13/TemiAgent`, branch `main`, HEAD
 `8fead49d66ab0a9d016a7dfe495b336146bbe957`, tree
-`e5fa932b01cc1f885cd36023464a18f11bdf060a`; the root license policy is
-`NO_LICENSE`. A clean clone of that public branch is the portable operator
-source. The mounted `/TemiAgent` checkout is a protected development
+`e5fa932b01cc1f885cd36023464a18f11bdf060a`; the documentation lineage
+includes the completed D2B and D2B.2 remediation. The root license policy is
+`NO_LICENSE`. A clean clone of the current public branch is the portable
+operator source. The mounted `/TemiAgent` checkout is a protected development
 workspace and may be dirty; it is not a portable operator default.
 
 `/opt/TemiAgent-operator` is the `VALIDATED_AI6_OPERATOR_WORKSPACE` observed

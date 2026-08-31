@@ -5,9 +5,9 @@
 最後審查日期：2026-08-31（D2B）。
 
 本頁是 current operator guide 的 compact companion，不是第二個 lifecycle
-authority。Portable operation starts from a clean clone of public `main` at
-`8fead49d66ab0a9d016a7dfe495b336146bbe957`
-(tree `e5fa932b01cc1f885cd36023464a18f11bdf060a`). The protected dirty
+authority。Portable operation starts from a clean clone of public `main`. The previous
+public baseline was `8fead49d66ab0a9d016a7dfe495b336146bbe957`
+(tree `e5fa932b01cc1f885cd36023464a18f11bdf060a`); the protected dirty
 `/TemiAgent` mount and the observed
 `/opt/TemiAgent-operator` deployment are not generic student workspaces.
 The published root has no `LICENSE` file: `ROOT_LICENSE_POLICY=NO_LICENSE`.

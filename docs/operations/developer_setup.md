@@ -14,10 +14,11 @@ later, separately authorized service operation.
 The public root repository is
 <code>https://github.com/YI-TING-EE13/TemiAgent</code>; use
 <code>https://github.com/YI-TING-EE13/TemiAgent.git</code> as the clone URL and
-<code>main</code> as the public branch. The current public HEAD is
-<code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> and its tree is
-<code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>. No public push or
-history replacement is part of this setup document.
+<code>main</code> as the public branch. The previous public baseline was
+<code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> with tree
+<code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>; this setup path follows
+that source lineage. No public push or history replacement is part of this
+setup document.
 
 The root repository has no <code>LICENSE</code> file and grants no open-source
 license. Preserve <code>ROOT_LICENSE_POLICY=NO_LICENSE</code>; Hermes and

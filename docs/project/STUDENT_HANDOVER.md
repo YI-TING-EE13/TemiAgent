@@ -18,8 +18,8 @@ The portable source is a clean clone of public <code>main</code>:
 |---|---|
 | Public repository | <code>https://github.com/YI-TING-EE13/TemiAgent</code> |
 | Public branch | <code>main</code> |
-| Public HEAD | <code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> |
-| Public tree | <code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code> |
+| Previous public baseline HEAD | <code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> |
+| Previous public baseline tree | <code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code> |
 | Root license | <code>NO_LICENSE</code>; no root <code>LICENSE</code> file is present |
 | Protected canonical development worktree | Host path withheld from publication docs; designated-container <code>/TemiAgent</code>, HEAD <code>12aff3bfdfe526c17a25a2681aea2afad7112b33</code>, intentionally dirty |
 | Validated AI6 operator workspace | <code>/opt/TemiAgent-operator</code> |
@@ -315,9 +315,10 @@ The root publication has <code>NO_LICENSE</code>; do not add a license claim.
 Do not publish secrets, private LAN addresses, user paths, runtime data, model
 caches, weights, recordings, checkpoints or real resident data. Cross-module
 contract changes must update runtime authority, producers, consumers, tests,
-module docs and reader-schema copies together. A documentation-only D2B change
-may be reviewed in its isolated branch, but it does not push public
-<code>main</code> or modify the canonical dirty worktree.
+module docs and reader-schema copies together. D2B was a documentation-only
+change reviewed in its isolated branch; D2B.2 completed the targeted
+documentation remediation. Neither gate modified the canonical dirty worktree
+or runtime.
 
 ## Known limitations and escalation
 
