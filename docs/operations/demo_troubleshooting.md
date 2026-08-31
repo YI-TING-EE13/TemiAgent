@@ -1,8 +1,8 @@
 # Demo Troubleshooting Guide
 
 Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5 final
-evidence, L4.3 Android provenance adoption and L4 final evidence adoption:
-2026-08-29.
+evidence, L4.3 Android provenance adoption, L4 final evidence adoption and D2B:
+2026-08-31.
 
 This guide maps a symptom to read-only evidence and the smallest safe next
 decision. It does not authorize service restart, raw MQTT publication, Discord
@@ -14,13 +14,17 @@ state change.
 
 ## First evidence, before intervention
 
-Run inside the designated container and project root:
+Run read-only checks inside the designated container from a clean public-main
+clone. The protected <code>/TemiAgent</code> checkout is not an operator
+workspace, and the observed AI6 <code>/opt/TemiAgent-operator</code> path is
+deployment evidence rather than a portable default:
 
 ```bash
-cd /TemiAgent
-./scripts/demo init-config
-./scripts/demo doctor
-./scripts/demo status
+export REPO_ROOT=<clean-public-main-clone>
+export PRIVATE_CONFIG=<private-production-config>
+cd "$REPO_ROOT"
+./scripts/demo --config "$PRIVATE_CONFIG" --json doctor
+./scripts/demo --config "$PRIVATE_CONFIG" --json status
 python3 tools/show_temi_trace.py --log-dir <bridge-log-dir> --latest --json
 ```
 
@@ -43,6 +47,15 @@ authorized start, not final runtime failures:
 Do not hard-code transient Gate 5 PIDs, run IDs, temporary worktrees or runtime
 directories as universal requirements. Use the exact current lifecycle
 evidence for an authorized run and preserve ownership failures unchanged.
+
+If the required Hermes virtual environment, llama-server build or another
+owner-provisioned artifact is absent, stop and report
+<code>AI6_TEMIAGENT_D2A_DEPENDENCY_PROVISIONING_REQUIRED</code>. List the missing
+artifact, the publication-specified provisioning method and expected location,
+whether tracked operator source would change, whether network/package
+installation/build is needed, and whether maintainer authorization is needed.
+Do not start the Demo, borrow dependencies from the canonical dirty worktree,
+copy an unknown old environment, or weaken a readiness check.
 
 ## Required symptom contract
 

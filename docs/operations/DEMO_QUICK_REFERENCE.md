@@ -1,95 +1,86 @@
 # TemiAgent Demo 快速參考
 
-狀態：CURRENT companion；完整 lifecycle 只以 [Demo 操作入口](DEMO_OPERATOR_GUIDE.md) 為準。
-最後審查日期：2026-08-29
+狀態：`CURRENT_REFERENCE`；完整 lifecycle 只以
+[Demo 操作入口](DEMO_OPERATOR_GUIDE.md) 為準。
+最後審查日期：2026-08-31（D2B）。
 
-完整說明請看 [Demo 新手操作手冊](DEMO_OPERATOR_GUIDE.md)、
-[設定參考](demo_configuration_reference.md)與
-[troubleshooting](demo_troubleshooting.md)。所有 `<...>` 都是 operator 自行提供的
-placeholder；不要把真實 endpoint、path、hash 或 account 寫入 tracked file。
+本頁是 current operator guide 的 compact companion，不是第二個 lifecycle
+authority。Portable operation starts from a clean clone of public `main` at
+`8fead49d66ab0a9d016a7dfe495b336146bbe957`
+(tree `e5fa932b01cc1f885cd36023464a18f11bdf060a`). The protected dirty
+`/TemiAgent` mount and the observed
+`/opt/TemiAgent-operator` deployment are not generic student workspaces.
+The published root has no `LICENSE` file: `ROOT_LICENSE_POLICY=NO_LICENSE`.
 
-新手的完整 clone/environment 順序見 [developer setup](developer_setup.md)，
-責任拓撲見 [deployment handover](demo_deployment_handover.md)；本頁只是
-companion，不是第二個 lifecycle authority。
+## 最短 current flow
 
-## 最短流程
+Provision the documented dependencies and private configuration first, then
+run the following from the designated container. `<REPO_ROOT>` must identify
+the clean public-main clone and `<PRIVATE_CONFIG>` must be an owner-only
+private configuration file outside the worktree.
 
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
-cd /TemiAgent
-./scripts/demo --config <private-demo-config> doctor
-./scripts/demo --config <private-demo-config> start
-./scripts/demo --config <private-demo-config> status
-./scripts/demo --config <private-demo-config> restart
-./scripts/demo --config <private-demo-config> stop
+export REPO_ROOT=<clean-public-main-clone>
+cd "$REPO_ROOT"
+./scripts/bootstrap --check
+./scripts/demo --config <PRIVATE_CONFIG> --json doctor
+./scripts/demo --config <PRIVATE_CONFIG> start
+./scripts/demo --config <PRIVATE_CONFIG> --json status
+./scripts/demo --config <PRIVATE_CONFIG> stop
 ```
 
-`start` 成功後請以 `status` 判讀 readiness。沒有 fresh Android MQTT session 時，正確結果是
-`BACKEND_READY_WAITING_ANDROID`，不是失敗；只有 backend healthy 且 broker 觀察到 fresh remote
-Android session 時才是 `DEMO_READY`。這個 readiness 狀態不會取代已接受的單一 L4 TTS
-證據，也不代表 broader Android/media 行為已驗證。
+This is one bounded `start → status → stop` rehearsal. Do not retry a failed
+operation or substitute a different PID, executable, worktree or dependency
+source. Inspect the failure and follow the [safe service policy](safe_service_operations.md)
+before any separately authorized recovery.
 
-## Gate 5 host evidence boundary
+## 結果判讀
 
-Gate 5 host runtime is `CLOSED_PASS` for the exact publication candidate. The
-accepted contract uses external-only LM Studio (`google/gemma-4-31b`, runtime
-context `64000`), reuses MQTT without restart, reconstructs Hermes base plus
-patches `0001`–`0010` to tree
-`47e9f1411e585769c055d0c6ee4417bebcdc6f70`, and permits exactly one model
-request at L5 (`L1=0; L2=0; L3=0; L5=1`). This is host evidence only;
-LAB606 Android artifact provenance is <code>CLOSED_PASS</code> for the accepted
-1.0.2 (3) APK, and the adopted L4.7B evidence closes the exact canonical TTS
-physical/E2E boundary as <code>CLOSED_PASS</code>. Broader Android/media,
-camera/microphone and general device behavior remain separate; Gate 6 is ready
-for release/handover work only.
+| Command | Meaning |
+|---|---|
+| `bootstrap --check` | Reconstructed source, locked environments, generated artifacts and required external prerequisites are ready. |
+| `doctor` | Read-only machine-readable preflight. `PASS`, `WARNING`, `FAIL` and `SKIPPED` are the current check statuses. |
+| `start` | Starts only positively owned managed services and waits for their health gates. |
+| `status` | Read-only ownership and health summary. After start, `DEMO_READY` or `BACKEND_READY_WAITING_ANDROID` is valid. |
+| `stop` | Stops only recorded managed identities and preserves external services. A clean stop reports no owned processes or orphan listeners. |
 
-## 每個指令
+A pre-start doctor may return rc0 with `BACKEND_NOT_READY` and zero required
+failures when a managed service is simply stopped or Android is not connected.
+That does not mean `DEMO_READY`. Missing provisioned artifacts, invalid
+configuration, malformed health, failed required readiness or an unowned
+listener is a blocking `FAIL`. Do not operate Android or Temi to manufacture
+`DEMO_READY`.
 
-| Command | What it does | Safe result |
-|---|---|---|
-| `doctor` | 唯讀診斷 source、config、artifact、live evidence、service、Care、port 與 PID。 | `PASS`／`PENDING`／`WARNING`／`FAIL` 加 recovery。 |
-| `start` | 以 recorded ownership 啟動 managed services，並執行 health gates。 | `DEMO_READY` 或 `BACKEND_READY_WAITING_ANDROID`。 |
-| `restart` | 先保存 pre-restart evidence，再只停止並重啟已驗證的 Demo processes。 | 同 `start`；不處理 unknown listener。 |
-| `status` | 唯讀 ownership／health／artifact／live summary。 | 不輸出 credential；owner-only paths remain private。 |
-| `trace-export` | 匯出既有 de-identified trace summary。 | 不發布 MQTT event。 |
-| `stop` | 停止 active run 的 owned process。 | `DEMO_STOPPED`；external services preserved。 |
-| `identity`、`seed`、`verify` | 已明確啟用的 synthetic identity/care Demo helper。 | 只在正式 guide 的 feature gates 都成立時使用。 |
+## Ownership and safety boundary
 
-Compatibility parser names and historical lifecycle terminology are documented only in the
-[legacy operations reference](demo_operations_runbook.md); do not copy them into a current
-operator command sequence.
+- Production LM Studio is `external` and must already be READY. The lifecycle
+  checks its configured API/model identity and never invokes `lms`, starts,
+  stops, unloads, restarts or reconfigures the provider.
+- MQTT is either explicitly `managed` or explicitly `external`. The accepted
+  AI6 deployment reused an external healthy broker; it was not adopted by
+  port. Never stop or replace an external broker from this flow.
+- Stop uses recorded exact-PID identity and fails closed on unknown listeners,
+  stale state or identity mismatch. Never use `pkill`, `killall`, name-wide
+  termination or port-only adoption.
+- No model request, MQTT robot command, TTS, movement, navigation, media
+  action, Android/ADB operation or external notification is part of this
+  software-only rehearsal.
 
-JSON output：
+The operator guide records the AI6-only llama-server path/hash and the D2A
+runtime-isolation evidence. Those observed values are acceptance evidence,
+not portable defaults or permission to fall back to canonical dirty-worktree
+artifacts.
 
-```bash
-./scripts/demo --config <private-demo-config> --json doctor
-./scripts/demo --config <private-demo-config> --json start
-```
-
-## Android evidence 一句話
-
-- static canonical artifact：驗證 APK、exact canonical text、fingerprint、endpoint／robot／topic
-  contract；其 `observed_at` 不決定 freshness。
-- live runtime evidence：每次授權的 `start`／`restart` 都必須是新 snapshot，驗證 connected、實際
-  subscriptions active、identity `unknown`、null media session、兩個空 outbox、fatal `0` 與
-  `RejectedExecutionException` count `0`。
-- `canonical.normalized.subscriptions` 是 canonical endpoint topic contract，不是 Paho
-  subscribe 清單。
-- branch／HEAD 需在 private config pin，才可作完整 `DEMO_READY` claim；Gate 5 host
-  evidence and the single accepted TTS transaction do not establish broader
-  Android/Temi `DEMO_READY` or physical execution。See [CURRENT_STATUS](../CURRENT_STATUS.md)
-  for the accepted artifact identity and evidence-only target classification。
-
-## 失敗時先做什麼
+## Failure first actions
 
 | Output | First action |
 |---|---|
-| `BACKEND_NOT_READY` | 執行 `doctor`，只處理列出的 `FAIL`／`PENDING`。 |
-| Android live `PENDING` | 由 Android 匯出 fresh owner-only runtime snapshot。 |
-| Android live `FAIL` | 修正 schema／fingerprint／contract；不要重用 static JSON。 |
-| Broker／PID `FAIL` | 不要 broad-kill；確認 selected ownership mode。 |
-| Care permission `FAIL` | 修正 private parent `0700` 與 store `0600`。 |
-| `DEMO_STOPPED` | 確認 owned listener 消失；外部 LM Studio／Broker 留在原狀是正確結果。 |
+| `BACKEND_NOT_READY` | Read the JSON doctor/status findings; fix only an explicitly authorized dependency or configuration issue. |
+| Required `FAIL` | Preserve the named check and stop. Do not bypass it by changing source, ports, lockfiles or runtime ownership. |
+| `BACKEND_READY_WAITING_ANDROID` | Treat the software backend as ready while Android remains an external boundary; do not issue device commands. |
+| Unknown listener or stale PID | Capture exact PID, start identity, cwd and command line, then follow the safe service policy. |
+| `DEMO_STOPPED` | Confirm owned processes/listeners are gone and LM/MQTT remain untouched. |
 
-遇到 stale PID、unknown listener 或 rollback 異常時，依
-[safe service operations](safe_service_operations.md) 做 exact-PID investigation。
+For feature-specific details, use the [configuration reference](demo_configuration_reference.md),
+[troubleshooting](demo_troubleshooting.md), and [verification guide](verification_and_acceptance.md).

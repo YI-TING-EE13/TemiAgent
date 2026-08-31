@@ -1,13 +1,15 @@
 # Demo Configuration Reference
 
-Status: <code>CURRENT_AUTHORITY</code>; Demo-only. Last reviewed for Gate 5 final
-and L4 final evidence adoption: 2026-08-29.
+Status: <code>CURRENT_AUTHORITY</code>; D2B consolidated on 2026-08-31.
 
 This is the non-secret reference for the complete key set in
-[`config/demo.env.example`](../../config/demo.env.example). The default private
-file is the exact ignored owner-only `/TemiAgent/.runtime/demo/demo.env`, made
-by `scripts/demo init-config`; explicit custom configs remain outside every
-worktree. `tools/demo_lifecycle.py` and Bridge `BridgeConfig` are authoritative.
+[`config/demo.env.example`](../../config/demo.env.example). The default newcomer
+config is an ignored owner-only file below the selected clone's private runtime
+root, made by `scripts/demo init-config`; explicit production configs remain
+outside every worktree. In the validated AI6 deployment the private runtime
+root was `/opt/TemiAgent-operator/.runtime/demo`, but that is observed
+`VALIDATED_AI6_OPERATOR_WORKSPACE` evidence, not a portable default.
+`tools/demo_lifecycle.py` and Bridge `BridgeConfig` are authoritative.
 
 Never copy a private env, Discord env, token, webhook, account name, real
 endpoint, user-specific host path, care record, or runtime export into Git.
@@ -18,7 +20,8 @@ values.
 
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
-cd /TemiAgent
+export REPO_ROOT=<clean-public-main-clone>
+cd "$REPO_ROOT"
 python3 tools/run_bounded_process.py \
   --timeout-seconds 120 \
   --kill-grace-seconds 2 \
@@ -38,7 +41,7 @@ action.
 | Rule | Meaning |
 |---|---|
 | Private-file ownership | The private env and its parent are owned only by the lifecycle user; the env mode is exactly `0600`. |
-| Canonical runtime root | Default mutable paths are below ignored `/TemiAgent/.runtime/demo`; explicit custom roots remain outside every Git worktree and owner-only. |
+| Canonical runtime root | Portable mutable paths are below an ignored owner-only `<runtime-root>` outside the source worktree; the validated AI6 root `/opt/TemiAgent-operator/.runtime/demo` is observed evidence. |
 | Ownership vocabulary | `managed` means `scripts/demo` owns start, exact-PID recording and stop; `external` is health-checked only; `disabled` applies only to optional services. |
 | No implicit adoption | A listener or PID that is not an expected recorded identity fails closed; the lifecycle does not kill by process name. |
 | Defaults are not proof | A configured endpoint, gateway connection or webhook presence does not prove Android execution or notification delivery. |
@@ -65,7 +68,8 @@ publication/runtime contract. The adopted L4.7B record separately closes one
 exact canonical Android/Temi TTS transaction as
 <code>L4_FINAL=CLOSED_PASS</code>; video/media, camera/microphone, viewer/GPU
 general readiness, Discord delivery and broader Android behavior remain
-unverified. Gate 6 is ready for release/handover work only.
+unverified. Gate 6 publication, authority and handover consolidation is
+<code>CLOSED_PASS</code>; no push or new runtime operation is implied.
 
 ## Complete configuration inventory
 
@@ -128,6 +132,12 @@ resolved values to those modules, but direct module READMEs do not create an
 alternate current deployment contract.
 
 ## Runtime paths
+
+The tracked example and the designated-container development profile may show
+`/TemiAgent/.runtime/demo` because that is the repository's container-local
+template layout. It is not a universal operator path. A portable operator
+must resolve `TEMIAGENT_RUNTIME_ROOT` to an owner-only location outside every
+Git worktree, and the validated AI6 absolute root is evidence only.
 
 | Key | Required form / purpose | Constraint |
 |---|---|---|
@@ -230,10 +240,14 @@ production profile.
 
 Use `doctor` as a machine-readable readiness report, not as an assertion that
 an unchecked service works. Every check has `name`, `status`, `code`,
-`message`, and `required`. A required unavailable endpoint, timeout, malformed
-health payload, missing entrypoint, or unowned listener is `FAIL` and makes the
-CLI exit non-zero. A not-yet-started managed endpoint is `WARNING`; a profile
-or real-device exclusion is `SKIPPED`; neither makes the command fail.
+`message`, and `required`. The current status vocabulary is `PASS`,
+`WARNING`, `FAIL` and `SKIPPED`; `PENDING` is not a current
+doctor taxonomy. A pre-start production check may report `BACKEND_NOT_READY` with
+zero required failures when a managed service is simply stopped or Android is
+not connected; that is not `DEMO_READY`. Missing provisioned artifacts,
+invalid configuration, malformed health, failed required readiness or an
+unowned listener is `FAIL` and blocks start. Profile exclusions and unavailable
+optional/real-device boundaries are `SKIPPED` or `WARNING` as reported.
 
 ## Bridge and resident contract
 

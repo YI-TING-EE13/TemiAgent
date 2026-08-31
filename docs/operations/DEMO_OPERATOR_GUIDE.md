@@ -1,21 +1,29 @@
 # TemiAgent Demo 操作入口
 
-最後更新日期：2026-08-29
+最後更新日期：2026-08-31；D2B consolidated。
 
-狀態：CURRENT；Demo-only。`scripts/demo` 是目前 checkout 唯一的 canonical lifecycle。private env 為每個
-service 明確宣告 `managed`、`external` 或 `disabled` ownership；`managed` 服務會由同一
-lifecycle 啟動、記錄 exact PID identity、health-check 與停止，`external` 服務只 health-check
-且永不由 lifecycle 停止。Production LM Studio is required but externally
-managed; only the `newcomer_mock` profile manages a local LM test double.
-The production lifecycle can manage Mosquitto, Overview adapter, resident
-Hermes, Bridge, Hermes gateway and viewer; Android 預設 external。
+狀態：CURRENT_AUTHORITY；Demo-only。`scripts/demo` 是目前 checkout 唯一的
+canonical lifecycle。private env 為每個 service 明確宣告 `managed`、
+`external` 或 `disabled` ownership；`managed` 服務會由同一 lifecycle
+啟動、記錄 exact PID identity、health-check 與停止，`external` 服務只
+health-check 且永不由 lifecycle 停止。Production LM Studio 與 AI6 驗證
+部署中的 MQTT 都是 external/reused；只有 `newcomer_mock` profile 管理
+local test doubles。D2A 與 Gate 6 為 `CLOSED_PASS`，但本文件不會因此
+把 observed AI6 path 宣稱為 portable default。
 
-所有操作必須在指定 container 的 `/TemiAgent` 執行：
+所有操作必須在指定 container 執行。Portable operator 使用從 public
+`main` 建立的 clean clone；不要把 protected dirty canonical checkout
+當作 operator workspace：
 
 ```bash
 docker exec -it yiting.TemiAgent_gpu_all bash
-cd /TemiAgent
+cd <clean-public-main-clone>
 ```
+
+`/opt/TemiAgent-operator` 是 D2A 觀察到的
+`VALIDATED_AI6_OPERATOR_WORKSPACE`，其 private runtime root 是
+`/opt/TemiAgent-operator/.runtime/demo`。這些絕對路徑、runtime artifact
+與 transient PID 都是 observed AI6 evidence，不是一般 newcomer 的設定。
 
 ## Current documentation boundary
 
@@ -37,14 +45,18 @@ exact-PID safety policy.
 
 ## Current canonical lifecycle
 
-Canonical config is the ignored, owner-only `/TemiAgent/.runtime/demo/demo.env`;
-`./scripts/demo init-config` creates it and the paired runtime root without a
-credential. It defaults to the safe `newcomer_mock` profile. Use an explicit
-absolute `--config` only for a separately owned custom deployment.
+The portable operator does not assume a canonical development path. Set
+`REPO_ROOT` to a clean clone of public `main` and set
+`PRIVATE_CONFIG` to an absolute owner-only config outside the worktree.
+The validated AI6 deployment used `/opt/TemiAgent-operator` as
+`VALIDATED_AI6_OPERATOR_WORKSPACE` and
+`/opt/TemiAgent-operator/.runtime/demo` as its private runtime root.
+The default `init-config` newcomer profile is a local mock profile; it is
+not a substitute for production dependency provisioning.
 
-From a clean source checkout, initialize the formal Hermes submodule, then
+From the clean source checkout, initialize the formal Hermes submodule and
 reconstruct the reviewed external source pins. These commands do not install
-dependencies or start a service:
+runtime environments, build a binary, start a service or contact Android:
 
 ```bash
 python3 tools/run_bounded_process.py \
@@ -54,37 +66,49 @@ python3 tools/run_bounded_process.py \
 ./scripts/bootstrap --sources
 ```
 
-After the documented Hermes and module environments exist, check those pins and
-runtime prerequisites:
+Provision the locked module environments and the Hermes runtime environment
+using [developer_setup.md](developer_setup.md), then check source and runtime
+prerequisites:
 
 ```bash
+(cd hermes_temi_bridge && uv sync --frozen --extra mqtt)
+(cd temi_backend && uv sync --frozen)
+(cd anomaly_detection && uv sync --frozen)
+(cd hermes-agent && uv sync --frozen)
 ./scripts/bootstrap --check
 ```
 
-Create or select the private configuration:
+Select the private configuration:
 
 ```bash
-./scripts/demo init-config
-./scripts/demo init-config --profile production --force
+export REPO_ROOT=<clean-public-main-clone>
+export PRIVATE_CONFIG=<private-production-config>
+cd "$REPO_ROOT"
 ```
 
-The five primary full-stack lifecycle operations are:
+The one current production sequence is exactly:
 
 ```bash
-./scripts/demo doctor
-./scripts/demo start
-./scripts/demo status
-./scripts/demo restart
-./scripts/demo stop
+./scripts/demo --config "$PRIVATE_CONFIG" --json doctor
+./scripts/demo --config "$PRIVATE_CONFIG" start
+./scripts/demo --config "$PRIVATE_CONFIG" --json status
+./scripts/demo --config "$PRIVATE_CONFIG" stop
 ```
 
-For a broker-only transition, use the separate MQTT command group:
+Run each command once under its authorization. Do not retry or substitute
+another PID/workspace after a precondition changes. `restart` is a
+compatibility selector, not part of this bounded sequence.
+
+The MQTT-only command group is managed-contract-only:
 
 ```bash
-./scripts/demo mqtt start
-./scripts/demo mqtt status
-./scripts/demo mqtt stop
+./scripts/demo --config "$PRIVATE_CONFIG" --json mqtt status
 ```
+
+Do not run `mqtt start` or `mqtt stop` for the validated AI6
+external/reused broker. Those transitions are allowed only when the selected
+private config explicitly declares a lifecycle-owned managed broker and an
+independent authorization covers that operation.
 
 The parser also exposes the following supported setup, compatibility and
 feature selectors. They are not a second operator sequence:
@@ -97,7 +121,7 @@ feature selectors. They are not a second operator sequence:
 | <code>status</code> | Read-only lifecycle summary. |
 | <code>mqtt {start|status|stop}</code> | The only service-specific lifecycle selector; MQTT-only start/stop is not a full-stack transition and there is no <code>mqtt restart</code>. |
 | <code>trace-export</code> | Writes a bounded owner-only evidence bundle; it is not a service transition. |
-| <code>up</code>, <code>down</code> | Compatibility aliases for full start/stop retained by the parser; use the five primary names in new procedures. |
+| <code>up</code>, <code>down</code> | Compatibility aliases for full start/stop retained by the parser; use <code>doctor</code>, <code>start</code>, <code>status</code> and <code>stop</code> in new procedures. |
 | <code>deploy [--backend-only]</code> | Specialized compatibility/deployment helper; use only with a separately reviewed deployment plan. |
 | <code>identity {father|mother|unknown|status}</code> | Controlled Demo identity callback helper; it can change private Demo state and is not visual identity. |
 | <code>seed repeated-discomfort</code>, <code>verify repeated-discomfort</code> | Synthetic private care fixture helper and read-only verification; Demo-only and not a live care claim. |
@@ -111,10 +135,10 @@ selector, for example
 
 Production configuration must set `LMSTUDIO_OWNERSHIP=external`. The LM
 provider and its model/cache/GPU setup belong to the external runtime owner.
-Before `scripts/demo start`, `doctor` or the explicit preflight must show one
-configured LM API listener and a ready HTTP model-list response containing the
-configured `LMSTUDIO_API_IDENTIFIER` (normally `google/gemma-4-31b`). The
-lifecycle never invokes `lms`, starts a real LM process, loads or unloads a
+Before the bounded lifecycle, verify one listener at `http://127.0.0.1:1234`,
+a ready `/v1/models` response containing API identifier `google/gemma-4-31b`,
+local model identity `temi/gemma-4-31b-it-qat` and runtime context `64000`.
+The lifecycle never invokes `lms`, starts a real LM process, loads or unloads a
 model, or stops/reconfigures a provider. It fails closed when the endpoint is
 absent, malformed, duplicated or not model-compatible.
 
@@ -126,13 +150,13 @@ audits and must not be used as routine recovery. The retained LM helper names
 are compatibility guards that fail closed. The local `newcomer_mock` profile
 is the only profile allowed to manage the tracked mock LM server.
 
-The MQTT-only commands use the primary worktree's canonical private config and
-`/TemiAgent/.runtime/demo` owner-only runtime root. They operate only the
-managed Mosquitto broker on `1883`; they never dispatch the full Demo lifecycle
-or touch LM Studio, Hermes, Bridge, resident, viewer, gateway, adapter or
-Android. `mqtt status` is read-only. Start refuses a listener that cannot be
-proven to be the exact managed child, and stop signals only the recorded exact
-supervisor/child lineage.
+The MQTT-only selector is read-only for the validated AI6 deployment. Its
+broker is `MQTT_OWNERSHIP=external` and is a healthy/reused dependency on
+port `1883`; do not run `mqtt start` or `mqtt stop` against it.
+A managed broker may use those selectors only when the private config declares
+managed ownership, exact supervisor/child lineage is verified, and a separate
+authorization covers the transition. Never adopt or stop an occupied
+external/unknown listener.
 
 The managed supervisor launches the resolved absolute Mosquitto executable
 with the canonical broker config and records an owner-only child contract:
@@ -167,8 +191,25 @@ all Gate-owned processes/listeners and preserved LM/MQTT. This is
 canonical Android/Temi TTS boundary is separately
 <code>L4_ANDROID_TEMI_E2E=CLOSED_PASS</code> from the adopted L4.7B evidence;
 viewer/GPU general behavior, video/media playback, camera/microphone, broader
-Android behavior and other physical actions remain separate.
-<code>READY_FOR_GATE6=YES</code> means Gate 6 is release/handover-only.
+Android behavior and other physical actions remain separate. Gate 6 publication,
+authority and handover consolidation is <code>CLOSED_PASS</code>; this does not
+imply a push, release tag or broader physical acceptance.
+
+### D2A validated operator isolation evidence
+
+The D2A operator workspace was <code>/opt/TemiAgent-operator</code>. Every
+operator-managed process, cwd, command line and generated runtime artifact was
+under that workspace. The viewer llama child executed:
+
+<code>/opt/TemiAgent-operator/anomaly_detection/third_party/llama.cpp/build/bin/llama-server</code>
+
+with SHA-256
+<code>6827638842194c9903da14662737b1e5c7d35effa6353506a329d31f85029585</code>.
+<code>CANONICAL_LLAMA_BINARY_USED=NO</code> and
+<code>ACTIVE_OPERATOR_CANONICAL_PATH_LEAK_COUNT=0</code>. These are observed
+AI6 evidence, not portable requirements; a fresh deployment must verify its
+own selected artifact identity and never use a canonical-worktree fallback.
+Pose was not provisioned and is not a required readiness claim.
 
 ### L4.3 Android artifact provenance snapshot
 
@@ -202,9 +243,10 @@ do not belong in a current operator procedure.
 
 ## Private runtime layout
 
-The default config fixes `TEMIAGENT_RUNTIME_ROOT` at the ignored owner-only
-`/TemiAgent/.runtime/demo` root. Explicit custom config roots remain outside
-every Git worktree. Lifecycle writes only below the selected root:
+The selected private config fixes `TEMIAGENT_RUNTIME_ROOT` below its owner-only
+runtime root. For a portable clone, use `<runtime-root>` outside the source
+worktree; the validated AI6 deployment used `/opt/TemiAgent-operator/.runtime/demo`.
+Lifecycle writes only below the selected root:
 
 ```text
 <runtime-root>/

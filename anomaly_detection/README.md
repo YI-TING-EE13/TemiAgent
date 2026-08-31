@@ -1,11 +1,17 @@
 # Temi 異常偵測串流 Viewer
 
 狀態：<code>CURRENT_AUTHORITY</code> for this module; <code>EXPERIMENTAL</code>；
+本文件於 2026-08-31 由 D2B 重新對齊；
 viewer 與 abnormal perception event producer 可用於 Demo/研究，
 但目前沒有真機、GPU、外部模型服務或 production perception 的 live verification claim。
 viewer 只產生受 Bridge 驗證的 perception event，不擁有 canonical hardware dispatch。
 The canonical managed viewer lifecycle is [scripts/demo](../docs/operations/DEMO_OPERATOR_GUIDE.md);
-the direct commands in this README are module-local development/reference commands.
+the direct commands and legacy module-local ports in this README are
+development/reference commands, not the current production operator sequence.
+The portable operator starts from a clean public-main clone. Do not treat the
+designated-container `/TemiAgent` mount or an untracked model/build path there
+as a runtime fallback; the observed AI6 viewer executable identity is recorded
+only in the operator guide.
 
 這個資料夾是一個獨立的 `uv` 專案，用來測試 Temi camera 的持續影像接收。
 
@@ -263,7 +269,11 @@ Memory boundary；viewer 不會因偵測結果直接控制硬體或通知收件�
 - server 在記憶體中只保留最新 JPEG frame。
 - 這是測試 viewer，不是最終版異常行為模型 pipeline。
 
-## 8010 安全重啟
+## 8010 module-local restart reference
+
+This section is retained for module-level development and historical
+investigation. It is not an alternative to `scripts/demo` and must not be
+used to operate the validated AI6 deployment.
 
 不要用 `pkill -f` 或寬鬆的 process-name pattern 重啟這個服務。像 `pkill -f "temi_action_viewer.py ..."` 這類 pattern 可能會 match 到正在執行 restart command 的 shell，導致 shell 在服務重新啟動前先殺掉自己。
 
@@ -276,13 +286,18 @@ cd /TemiAgent/anomaly_detection
 
 這個 script 只會檢查目前 listen 在 `8010` port 的 process，確認該 PID 是從 `/TemiAgent/anomaly_detection` 執行的 `temi_action_viewer.py`，然後只停止該 PID 並啟動新的 viewer。它不會碰 MQTT、8080 ingest、8081 frame broadcast、Hermes resident server、Bridge，或 8000 live viewer。
 
-正式 Demo 預設 `ABNORMAL_COOLDOWN_SECONDS=180`。重啟後可以用以下指令確認：
+The module-local direct viewer default is not the production operator contract.
+The current Demo resolves its port and cooldown from the private config.
+重啟後可以用以下指令確認：
 
 ```bash
 curl -sS http://127.0.0.1:8010/health | grep abnormal_cooldown_seconds
 ```
 
-## 一鍵關閉 anomaly_detection 服務
+## module-local viewer stop reference
+
+This section is retained for module-level development only. Current operator
+shutdown must use the exact lifecycle command in the operator guide.
 
 若要只關閉 `/TemiAgent/anomaly_detection` 目前管理的 action viewer 服務，使用：
 

@@ -1,441 +1,338 @@
 # AI6 TemiAgent Student Handover
 
-Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5 final evidence,
-L4.3 Android provenance adoption, L4 final evidence adoption and Gate 6A.2
-remote publication policy: 2026-08-29.
+Status: CURRENT_AUTHORITY; D2B consolidated on 2026-08-31.
 
-This page is the short handover contract for a new maintainer. Start here
-after reading the [repository README](../../README.md), then follow the
-[developer setup](../operations/developer_setup.md). It does not replace
-runtime schemas, executable validators, module READMEs or the
-[Demo operator guide](../operations/DEMO_OPERATOR_GUIDE.md).
+This is the newcomer handover for the public TemiAgent publication. Runtime
+schemas, executable validators, module READMEs and [AGENTS.md](../../AGENTS.md)
+remain authoritative when prose differs. The one current operator procedure is
+[DEMO_OPERATOR_GUIDE.md](../operations/DEMO_OPERATOR_GUIDE.md).
 
-## Gate 6A.2 public publication policy
+## The first rule
 
-The public root publication authority is
-<code>https://github.com/YI-TING-EE13/TemiAgent</code>. The public clone URL is
-<code>https://github.com/YI-TING-EE13/TemiAgent.git</code>, and the canonical
-public branch is <code>main</code>. The reviewed local publication candidate is
-<code>release/github-v1@b07c93daf8a56df1a1ec6911b2b614e18ead10f9</code>.
+Do not use the dirty canonical development worktree as an operator workspace
+and do not commit unknown dirty files to make a readiness check pass.
 
-Gate 6A.2 observed remote <code>main</code> at
-<code>f2d88ed4aecbd4f0e5163300929991f1af9cb004</code> with unrelated history.
-The two old RFC1918 defaults are classified as
-<code>NON_SECRET_PRIVATE_LAN_CONFIGURATION</code> and
-<code>HISTORICAL_CONFIGURATION_EXPOSURE</code>: the audit found no credential,
-token, password, certificate/key, personally identifiable information or real
-resident data. <code>GITHUB_PURGE_REQUIRED=MAINTAINER_OPTIONAL</code> because
-the root publication policy excludes private LAN values from new published
-trees, while an RFC1918 address alone is not a secret. The clean publication
-is a justified replacement candidate, but Gate 6B must obtain explicit
-maintainer authorization and reread the exact remote lease before any
-force-with-exact-lease push. Gate 6A.2 performed no remote mutation.
+The portable source is a clean clone of public <code>main</code>:
 
-Existing branches, pull-request references and external clones may retain old
-objects after a branch replacement; changing the authoritative branch cannot
-physically erase those copies. The root project has no <code>LICENSE</code> file
-and grants no open-source license: <code>ROOT_LICENSE_POLICY=NO_LICENSE</code>.
-Hermes and llama.cpp licensing remains independent.
-
-## Gate 5 final evidence adoption
-
-Gate 5 host runtime acceptance is closed by the separately completed Gate 5B
-Retry #4. This documentation freeze adopts that evidence; it does not rerun
-the live stack. The accepted publication baseline was
-<code>release/github-v1@59d568b079ce260e2144c410b0f9397d8b026913</code>.
-
-The frozen production contract is:
-
-- LM Studio is <code>EXTERNAL_ONLY</code>. The lifecycle never starts, stops,
-  unloads, daemon-downs, server-stops or globally mutates the provider.
-- External readiness must be established before Demo start. The expected API
-  identifier is <code>google/gemma-4-31b</code>, runtime context is
-  <code>64000</code>, and context must be verified from runtime metadata.
-- MQTT is independently managed/reusable; the accepted run reused the
-  configured broker without restart. Explicit broker configuration remains
-  mandatory and no tracked private-LAN fallback is allowed for <code>PC_IP</code>.
-- Hermes reconstruction is the pinned base plus patches
-  <code>0001</code>–<code>0010</code> producing tree
-  <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>.
-- L2 malformed input is inference-impossible. The accepted request budget is
-  exactly <code>L1=0; L2=0; L3=0; L5=1</code>.
-- Lifecycle stop targets only positively owned process identities. Pre-existing
-  LM/MQTT processes remain foreign/external unless explicitly proven otherwise.
-
-Gate status is <code>GATE5_HOST_RUNTIME=CLOSED_PASS</code>.
-<code>L4_ANDROID_PROVENANCE=CLOSED_PASS</code> is adopted from LAB606 evidence;
-the installed Android 1.0.2 (3) artifact is accepted as-is. The later
-<code>L4.7B_POST_REBOOT_SINGLE_CANONICAL_TTS</code> evidence closes the exact
-canonical Android/Temi TTS boundary as
-<code>L4_ANDROID_TEMI_E2E=CLOSED_PASS</code> and
-<code>L4_FINAL=CLOSED_PASS</code>. Broader device/media behavior and
-camera/microphone remain separate. <code>READY_FOR_GATE6=YES</code> and
-<code>GATE6=NOT_STARTED</code> for release/handover scope only.
-
-The accepted host evidence includes L0–L3 PASS, L5 PASS, L2 HTTP 400 before
-inference, L3 validated identity-result publication without physical side
-effect, and L5 HTTP 200 with one validated <code>speak</code> action. The
-accepted L4 evidence adds one real Android TTS dispatch, one terminal callback
-and one successful correlated result with no model request or movement.
-Rollback left zero Gate-owned processes/listeners and preserved the external
-LM and canonical MQTT broker. PIDs, run IDs, temporary worktrees and runtime
-directories are <code>ACCEPTANCE_EVIDENCE_ONLY</code>, not portable
-requirements. See [CURRENT_STATUS](../CURRENT_STATUS.md) and the
-[verification guide](../operations/verification_and_acceptance.md) for the
-criteria, redacted evidence and retained failed-attempt history.
-
-## L4.3 Android provenance adoption
-
-LAB606 reports <code>LAB606_ANDROID_FINAL_ARTIFACT_PROVENANCE_CONFIRMED</code>.
-The external Android repository is on branch <code>main</code> at revision
-<code>3e2fc0376e5b5ca3992e697fc030cdc08173c639</code>; accepted baseline
-<code>8c458888657efca5384c6d51e5ec57e8b385d987</code> is an ancestor and no
-post-baseline implementation, build-config or signing changes were found.
-
-The accepted artifact is
-<code>temi-agent-android-public/app/build/outputs/apk/demo/app-demo.apk</code>,
-package <code>com.robotemi.agent</code>, version <code>1.0.2 (3)</code>, with
-SHA-256 <code>c0f54cd46930c05caf2f556a2e4e1e26570b8401c0034546b57c6faca27c043</code>.
-Its signer certificate digest is
-<code>4D:A8:46:1B:45:B0:2F:AD:CB:04:2F:63:15:1F:EE:05:D5:6E:BD:51:05:EB:72:1D:7D:62:E3:0B:88:51:3A:7F</code>;
-schemes v1/v2 are present, debuggable is <code>NO</code>, and the embedded
-revision is the accepted baseline. The observed target
-<code>&lt;observed-private-deployment-address&gt;:5555</code> is classified
-<code>OBSERVED_AI6_DEPLOYMENT</code> and is not a portable default.
-
-Installed package, version, hash, signer, embedded revision and whole-APK
-content match the accepted artifact: <code>EXACT_APK_MATCH</code>.
-<code>ANDROID_PROVENANCE=CLOSED_PASS</code> and
-<code>ACCEPTED_AS_IS</code> mean no replacement, reinstall or data reset was
-performed. The earlier E2DD reference is retained only as the legacy 1.0.0 (1)
-acceptance artifact; the L4.2 mismatch finding is superseded by
-<code>SUPERSEDED_BY_AUTHORITATIVE_LAB606_PROVENANCE_RECOVERY</code>.
-
-This closes artifact provenance only. It does not claim Android behavior,
-physical playback, device observation or complete Temi E2E acceptance, and it
-does not authorize ADB, MQTT, service or inference operations.
-
-## L4 final physical acceptance adoption
-
-The cumulative L4 evidence closes the exact canonical TTS physical boundary.
-The accepted source is <code>L4.7B_POST_REBOOT_SINGLE_CANONICAL_TTS</code>:
-one post-reboot real Android/Temi transaction using the accepted
-<code>com.robotemi.agent</code> version <code>1.0.2 (3)</code> APK,
-SHA-256 <code>c0f54cd46930c05caf2f556a2e4e1e26570b8401c0034546b57c6faca27c043</code>.
-Android MQTT was current, LM was ready at context <code>64000</code>, MQTT
-was ready/reused, and host L1 passed. One speak action dispatched exactly
-once, Android ingress/validation/executor passed, one terminal
-<code>COMPLETED</code> callback arrived, and the AI6 result was successful and
-correlated. Model requests, movement, navigation, notification, duplicates
-and retained command were all zero/none. Rollback passed, with LM, MQTT,
-Android state and canonical source preserved.
-
-All 32 mandatory final-L4 criteria passed:
-<code>FINAL_L4_CRITERIA_TOTAL=32</code>,
-<code>FINAL_L4_CRITERIA_PASS=32</code>,
-<code>FINAL_L4_CRITERIA_FAIL=0</code>,
-<code>FINAL_L4_CRITERIA_UNRESOLVED=0</code>.
-Therefore <code>L4_ANDROID_TEMI_E2E=CLOSED_PASS</code>,
-<code>L4_FINAL=CLOSED_PASS</code> and
-<code>ADDITIONAL_PHYSICAL_L4_RUN_REQUIRED=NO</code>.
-
-The earlier TTS timeout is classified
-<code>VENDOR_RUNTIME_TRANSIENT_STATE_REGRESSION</code>: strongly evidenced
-transient vendor runtime state failure, with the exact internal vendor
-component unproven. The same SDK <code>1.134.1</code>, launcher
-<code>16405-usa / 16405</code>, accepted APK and 30-second timeout were used;
-one normal human-performed reboot restored vendor health and the terminal
-callback without an APK, SDK or launcher change. The launcher is below the
-documented minimum <code>18024</code>, classified
-<code>UNSUPPORTED_OR_BELOW_DOCUMENTED_MINIMUM_DEPLOYMENT</code>; this is a
-documented limitation, not the proven direct cause. Do not claim official
-compatibility or require an update for this handover.
-
-The post-success message
-<code>Canonical TTS resolved without an active speech action</code> is a
-<code>SECONDARY_TTS_DIAGNOSTIC_WARNING=NON_BLOCKING_KNOWN_ISSUE</code>,
-possibly a <code>STATE_MACHINE_DIAGNOSTIC_DEFECT</code>. No second dispatch,
-terminalization or result occurred; it is not the timeout root cause and is
-not remediated here. Broader media/camera/microphone and other Android
-behavior remain separate.
-
-## Gate 5B.1 LM ownership repair (historical remediation)
-
-Gate 5B stopped at the L1 ownership-safety gate because the former managed LM
-path used global `lms` cleanup against pre-existing provider state. Production
-LM Studio is now `LMSTUDIO_OWNERSHIP=external`: the lifecycle requires one
-configured listener and a compatible HTTP `/v1/models` response, but never
-starts, stops, unloads, or reconfigures the provider. Only the newcomer mock
-LM server is lifecycle-managed. A legacy/unknown LM record is preserved and
-causes `STOP_INCOMPLETE_OWNERSHIP`; a future live retry must create a fresh
-process ledger. The historical PIDs `1051985` and `1051997` are incident
-evidence only and must not be recreated or treated as current requirements.
-
-This repair is `IMPLEMENTATION_REMEDIATED_NONLIVE`. Direct `lms ls`, `lms ps`,
-`lms unload --all`, `lms server stop`, and `lms daemon down` are not read-only
-audits. The accepted ephemeral-input security pattern remains a mode `0700`
-private runtime root containing the mode `0600` config file.
-
-## Gate 5B.3 Hermes compression failure repair (historical remediation)
-
-The second Gate 5B attempt passed L0–L3 and failed L5 after one resident
-request. The external LM backend rejected an approximately `11508`-token
-request at an available `4096` context even though the configured Hermes and
-resident context was `64000`; the first request plus three recovery retries
-therefore exhausted compression. The resident began with session
-`temi-resident`, zero history, no memory and no checkpoint, and the one-turn
-prompt had no removable middle. This is classified as
-`MODEL/API_CONFIGURATION_MISMATCH`, not stale session or memory pressure.
-
-The ten-patch Hermes overlay now returns typed bounded failure metadata and
-never assumes a failed result contains `final_response`. The resident maps
-that error to a safe HTTP 500 response and remains healthy. Patch 0010 and the
-new reconstructed tree are hardware-free verified; the result is
-`IMPLEMENTED_NONLIVE`, not live model verification. A future Gate 5B retry
-requires separately verified external provider context compatibility.
-
-## Start here
-
-| Order | Read | Decision it answers |
-|---:|---|---|
-| 1 | [README](../../README.md) | What the repository is, what it is not, and where the canonical boundaries are. |
-| 2 | [CURRENT_STATUS](../CURRENT_STATUS.md) | What is verified, external, experimental, historical or currently unverified. |
-| 3 | [REPOSITORY_MAP](../REPOSITORY_MAP.md) | Which directories are source, generated, runtime-only or historical. |
-| 4 | [Developer setup](../operations/developer_setup.md) | How to prepare a clean clone in the designated container. |
-| 5 | [Contract traceability](../architecture/contract_traceability.md) | Which code/schema owns each cross-module contract. |
-| 6 | [Deployment handover](../operations/demo_deployment_handover.md) | Which host, container, device or external provider owns each service. |
-| 7 | [Demo operator guide](../operations/DEMO_OPERATOR_GUIDE.md) | The exact current lifecycle grammar and safe ownership semantics. |
-| 8 | [Configuration reference](../operations/demo_configuration_reference.md) | Private paths, flags, ports, credentials and validation. |
-| 9 | [Verification and acceptance](../operations/verification_and_acceptance.md) | Which checks are hardware-free and which require an external gate. |
-| 10 | [Troubleshooting](../operations/demo_troubleshooting.md) | The symptom-to-evidence path when a check fails. |
-
-## Authority map
-
-The first document in this table is the current prose authority for the topic.
-Executable source and runtime schemas remain the final authority when prose
-conflicts with them. Supplemental documents must defer to these entries.
-
-| Topic | Current authority | Source/verification boundary |
-|---|---|---|
-| Repository scope and entry | [README](../../README.md) | Root source and governance; no medical, emergency or autonomous-care claim. |
-| Current implementation/status | [CURRENT_STATUS](../CURRENT_STATUS.md) | Maintainer snapshot; real devices, providers and GPU remain live-unverified unless fresh evidence is recorded. |
-| Repository/publication layout | [REPOSITORY_MAP](../REPOSITORY_MAP.md) | Git paths, submodule/gitlink, generated source and runtime boundary. |
-| Architecture | [project overview](../architecture/project_overview.md) | Module boundaries; runtime code and schemas win over historical sections. |
-| Cross-module contracts | [contract traceability](../architecture/contract_traceability.md) | Runtime schemas under <code>hermes_temi_bridge/schemas/</code> are authoritative. |
-| Developer setup/environment | [developer setup](../operations/developer_setup.md) | Container, submodule, locked environments, external artifacts and clean-clone order. |
-| External dependencies | [developer setup](../operations/developer_setup.md) (with source-specific [Hermes](../../third_party/hermes/README.md) and [llama.cpp](../../third_party/llama_cpp/README.md) references) | One onboarding authority; source-specific manifests, pins, licenses and reconstruction scripts remain linked there. |
-| Configuration | [configuration reference](../operations/demo_configuration_reference.md) | <code>tools/demo_lifecycle.py</code>, tracked templates and private runtime validation. |
-| Secrets | [configuration reference](../operations/demo_configuration_reference.md) | Owner-only private env and credential file rules; no secret value is tracked. |
-| Demo lifecycle | [Demo operator guide](../operations/DEMO_OPERATOR_GUIDE.md) | <code>scripts/demo</code> parser, exact process identity and readiness gates. |
-| Deployment and host ownership | [deployment handover](../operations/demo_deployment_handover.md) | AI6 host/container, Temi/Android, LAB606 and external provider responsibilities. |
-| Service safety/recovery | [safe service operations](../operations/safe_service_operations.md) | Exact PID, port, rollback and containment policy. |
-| MQTT transport | [MQTT module README](../../mqtt/README.md) | Broker configuration and topic index; Bridge code/schema owns message validation. |
-| Bridge | [Bridge README](../../hermes_temi_bridge/README.md) | Bridge module behavior; runtime schemas and validators are authoritative. |
-| Hermes integration | [Hermes dependency README](../../third_party/hermes/README.md) | Formal team submodule plus root-owned ten-patch overlay and bounded failure contract. |
-| Anomaly backend | [anomaly README](../../anomaly_detection/README.md) | Optional experimental event producer/viewer; never a general dispatcher. |
-| Troubleshooting | [Demo troubleshooting](../operations/demo_troubleshooting.md) | Read-only evidence and safe escalation. |
-| Testing/acceptance | [verification and acceptance](../operations/verification_and_acceptance.md) | Hardware-free suite matrix and external acceptance boundaries. |
-| Student handover | This document | Reading order, questions and release handover. |
-| Release process | The release section of this document | Candidate review/adoption is separate from root push; Gate 4's final retry adopted the reviewed ref locally, but did not push. |
-
-## System boundary in one paragraph
-
-Temi Android produces ASR/camera-side events and consumes allowlisted command
-requests. The overview adapter adapts legacy inputs; it does not own command
-dispatch. Hermes returns JSON-only plans. HermesTemiBridge validates events,
-paths, Hermes output and actions, then owns command publication. The Android
-application owns hardware execution and command results. Anomaly detection is
-an optional event producer. The product path is Temi Android to the AI6 MQTT
-broker; a LAB606 host TCP connection to the broker is not a required product
-path.
-
-The current Android-facing values are:
-
-| Contract | Value |
+| Field | Current authority |
 |---|---|
-| Robot ID used by the accepted AI6 contract | <code>temi-01</code> |
-| Command topic | <code>temi/temi-01/cmd/request</code> |
-| Result topic | <code>temi/temi-01/cmd/result</code> |
-| Delivery | QoS 1, <code>retain=false</code> |
-| Schema authority | <code>hermes_temi_bridge/schemas/</code> |
-| Android source/APK | External to this repository; no AI6 claim of device implementation or live playback. |
+| Public repository | <code>https://github.com/YI-TING-EE13/TemiAgent</code> |
+| Public branch | <code>main</code> |
+| Public HEAD | <code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> |
+| Public tree | <code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code> |
+| Root license | <code>NO_LICENSE</code>; no root <code>LICENSE</code> file is present |
+| Protected canonical development worktree | Host path withheld from publication docs; designated-container <code>/TemiAgent</code>, HEAD <code>12aff3bfdfe526c17a25a2681aea2afad7112b33</code>, intentionally dirty |
+| Validated AI6 operator workspace | <code>/opt/TemiAgent-operator</code> |
+| Validated AI6 private runtime root | <code>/opt/TemiAgent-operator/.runtime/demo</code> |
 
-The values above are contract values, not a public LAN endpoint. The tracked
-production client default is loopback; the broker listener binds according to
-the controlled local Mosquitto configuration. A deployment-specific Android
-endpoint belongs in private configuration or the Android owner’s handover,
-never in a public template.
+The <code>/opt/TemiAgent-operator</code> row is
+<code>VALIDATED_AI6_OPERATOR_WORKSPACE</code> evidence from D2A. It is not a
+universal portable path. A new student creates a clean public-main clone and
+supplies a private runtime root for that clone. Never edit, commit, stash,
+reset, clean, merge, rebase or checkout over the protected canonical worktree.
 
-## Forty-question handover gap matrix
+## Current gate disposition
 
-<code>ANSWERED</code> means the AI6 repository gives a source-backed answer.
-<code>PARTIAL</code> means the answer is explicit but requires the named
-external owner or maintainer input. There are no <code>MISSING</code> items.
+<code>D2A_STATUS=CLOSED_PASS</code>. D2A validated one bounded operator
+lifecycle in the AI6 workspace and preserved LM Studio and MQTT.
+<code>Gate 5=CLOSED_PASS</code>, <code>ANDROID_PROVENANCE=CLOSED_PASS</code>,
+<code>L4_FINAL=CLOSED_PASS</code>, and <code>Gate 6=CLOSED_PASS</code> at their
+stated boundaries. Gate closure does not imply that a clean clone contains
+external dependencies, model bytes, an Android device, or a push to the public
+repository.
 
-| # | Question | Status | Answer and authoritative path |
-|---:|---|---|---|
-| 1 | What is TemiAgent? | ANSWERED | AI6 is a safety-bounded Temi integration: adapter, Bridge validation/dispatch, Hermes reasoning boundary, optional perception and Android-facing contracts. Start with [README](../../README.md). |
-| 2 | Which repository/branch is authoritative? | ANSWERED | The maintainer-designated canonical runtime checkout is on root branch <code>main</code>. In this audited deployment it is mounted inside the designated container as <code>/TemiAgent</code>. This is an explicitly labeled deployment callout; generic clones use the user-selected <code>REPO_ROOT</code> in [developer setup](../operations/developer_setup.md). See [CURRENT_STATUS](../CURRENT_STATUS.md). |
-| 3 | What is publication versus runtime main? | ANSWERED | Runtime main is the maintained canonical checkout and may contain private dirty work. <code>release/github-v1</code> is the publication candidate/ref; Gate 4 used an isolated candidate and its final retry adopted the reviewed ref locally without pushing. |
-| 4 | How do I clone it? | ANSWERED | Clone <code>https://github.com/YI-TING-EE13/TemiAgent.git</code> on public branch <code>main</code> using step 1 of [developer setup](../operations/developer_setup.md). The canonical local checkout intentionally keeps no configured root remote. |
-| 5 | How do I initialize Hermes? | ANSWERED | Run the bounded <code>git submodule update --init --recursive --depth=1</code>, then <code>./scripts/bootstrap --hermes</code> or <code>./scripts/bootstrap --sources</code>; verify the manifest and license. |
-| 6 | Why is Hermes a submodule? | ANSWERED | The team-owned base source is kept as a formal gitlink while TemiAgent keeps a reviewable root-owned patch overlay; source identity and integration changes remain separable. |
-| 7 | What is the team Hermes fork? | ANSWERED | <code>https://github.com/YI-TING-EE13/hermes-agent.git</code>; it is recorded in <code>.gitmodules</code> and <code>third_party/hermes/manifest.json</code>. |
-| 8 | How do patches work? | ANSWERED | The pinned base commit is checked, patches <code>0001</code> through <code>0010</code> are applied in order, the final tree and license are verified, and generated local commit IDs are not dependency identity. |
-| 9 | What external dependencies exist? | ANSWERED | Hermes source/runtime, llama.cpp source/build, LM Studio/model/cache, viewer models, optional pose weight, Android media/APK and optional Discord provider are external. See [developer setup](../operations/developer_setup.md). |
-| 10 | What tools must be installed? | PARTIAL | The designated container must provide Python, uv, Git, Bash and Mosquitto; Docker/image availability is host-owned. Installation source for the container and several host tools is a maintainer dependency, documented as an environment pin gap. |
-| 11 | Which versions matter? | PARTIAL | Python <code>>=3.12</code> and lockfiles are source-backed. Observed tool versions are recorded as snapshots; uv, Git, Bash, Mosquitto, container image, LM Studio and CUDA/driver versions are not pinned and are explicit <code>ENVIRONMENT_PIN_GAP</code>s. |
-| 12 | How is the Python environment created? | ANSWERED | Run <code>uv sync --frozen</code> in each project, with <code>--extra mqtt</code> for <code>hermes_temi_bridge</code>; lockfiles must not be updated during setup. |
-| 13 | Where do private configs go? | ANSWERED | The canonical ignored config is <code>/TemiAgent/.runtime/demo/demo.env</code>; custom configs are absolute owner-only files outside Git worktrees. |
-| 14 | Where do secrets go? | ANSWERED | Credentials belong only in owner-only private env files, especially the separately referenced Discord env file; mode <code>0600</code>, owner-only parent, never tracked or printed. |
-| 15 | What must never be committed? | ANSWERED | Real credentials, webhook URLs, private LAN addresses, user paths, real care records, images, logs, runtime state, model caches/weights, recordings, checkpoints and generated source checkouts. |
-| 16 | Where do models go? | ANSWERED | LM Studio cache and viewer GGUF/mmproj are external under configured private locations; model identifiers are tracked, model bytes are not. Optional pose weights require provenance approval. |
-| 17 | Which services exist? | ANSWERED | Production LM Studio is an external dependency; managed AI6 services include MQTT, overview adapter, resident Hermes, Bridge, optional gateway and viewer. The newcomer mock additionally manages local Android/Discord/model/resident/viewer doubles. |
-| 18 | Which machine runs each service? | ANSWERED | The AI6 container runs the software stack; the AI6 host provides Docker/mount; Temi Android runs outside AI6; LAB606 is a development/control host; external providers own their services. See [deployment handover](../operations/demo_deployment_handover.md). |
-| 19 | How do I check service status? | ANSWERED | Use read-only <code>./scripts/demo --json doctor</code>, <code>./scripts/demo --json status</code>, or the MQTT-only <code>./scripts/demo --json mqtt status</code> where its canonical production config applies. |
-| 20 | How do I start services? | ANSWERED | Only an authorized operator may run <code>./scripts/demo start</code>; production LM readiness must already pass as an external precondition and the lifecycle starts no real LM provider. The exact contract is in [DEMO_OPERATOR_GUIDE](../operations/DEMO_OPERATOR_GUIDE.md). MQTT-only has its separate <code>mqtt start</code> selector. |
-| 21 | How do I safely stop services? | ANSWERED | Use <code>./scripts/demo stop</code> or the exact MQTT-only <code>mqtt stop</code>; the lifecycle signals only recorded verified identities, refuses foreign/unowned processes, and never stops production LM Studio. |
-| 22 | How do I diagnose failures? | ANSWERED | Preserve the read-only JSON, run the checks named in [troubleshooting](../operations/demo_troubleshooting.md), inspect exact PID/port/log evidence, and escalate without broad process control. |
-| 23 | What ports/interfaces matter? | ANSWERED | Production defaults are LM Studio <code>1234</code>, MQTT <code>1883</code>, adapter <code>8080/8081</code>, resident <code>8765</code>, viewer <code>8010/8011</code>; newcomer uses isolated high ports. Unix callback sockets remain private runtime paths. |
-| 24 | How does Temi reach MQTT? | ANSWERED | The Android app connects to the deployment-configured AI6 broker endpoint; AI6 client defaults are loopback and do not publish a lab address. The broker and Android owner must agree on reachability. |
-| 25 | What is robot_id? | ANSWERED | The accepted AI6 robot identifier is <code>temi-01</code>; Bridge allowlists it and topic paths use the robot ID. Unknown or disallowed IDs are validation failures. |
-| 26 | What are command/result topics? | ANSWERED | Requests use <code>temi/{robot_id}/cmd/request</code>; Android results use <code>temi/{robot_id}/cmd/result</code>; the concrete accepted ID is <code>temi-01</code>. |
-| 27 | Where are schemas? | ANSWERED | Runtime authority is <code>hermes_temi_bridge/schemas/</code>; <code>docs/schemas/</code> is a synchronized reader copy. The traceability map owns the mapping and update-together rule. |
-| 28 | How does Bridge fit in? | ANSWERED | It is the canonical safety boundary: validates inbound events, paths, Hermes JSON and actions, then owns command dispatch and trace evidence. |
-| 29 | How does Hermes fit in? | ANSWERED | Hermes is a JSON-only reasoning runtime behind the resident wrapper; it does not publish MQTT or control hardware directly. |
-| 30 | How does anomaly detection fit in? | ANSWERED | It is an optional experimental perception/event producer and viewer; it is not a general hardware dispatcher or medical/fall-detection service. |
-| 31 | Which tests run without hardware? | ANSWERED | Bridge, backend, anomaly, tools, lifecycle, schema, external-dependency, docs, mock E2E and media-fake suites are hardware-free when their locked environments are present. |
-| 32 | Which tests require hardware? | PARTIAL | Broader Android/Temi sessions, video/media playback, camera and microphone remain separate device-owner tests; the exact canonical TTS route is accepted only for one bounded L4.7B transaction. |
-| 33 | What is currently verified? | ANSWERED | Gate 3 recorded clean-clone Hermes/llama reproducibility, licenses, source manifests and the hardware-free matrix; Gate 5 closes the bounded host runtime, L4.3 closes final Android artifact provenance and L4.7B closes the exact canonical TTS physical boundary. Viewer/GPU general readiness, Discord, real perception and broader Android/media paths remain separate or unverified. |
-| 34 | What remains experimental? | ANSWERED | Optional anomaly viewer, pose preprocessing, local model/viewer deployment and feature-gated media/identity/care Demo paths remain bounded or external; see [CURRENT_STATUS](../CURRENT_STATUS.md). |
-| 35 | What is legacy? | ANSWERED | Dated first-year, streaming, direct-service and broad historical runbooks are retained as evidence and marked <code>LEGACY</code>; current lifecycle authority remains <code>scripts/demo</code>. |
-| 36 | Which docs are current authority? | ANSWERED | Use this authority map, [README](../../README.md), [CURRENT_STATUS](../CURRENT_STATUS.md), [REPOSITORY_MAP](../REPOSITORY_MAP.md), [developer setup](../operations/developer_setup.md), [operator guide](../operations/DEMO_OPERATOR_GUIDE.md), deployment, configuration, testing and troubleshooting. |
-| 37 | How do I update dependencies? | ANSWERED | Change the owning project declaration and lockfile together, run affected tests and docs/security checks, update authority/status documentation, and obtain maintainer review. |
-| 38 | How do I make a release? | ANSWERED | Prepare an isolated candidate from the exact publication ref, run the required validation, make one bounded documentation/evidence commit, and use an old-value-guarded local fast-forward; any root push remains separately authorized. Gate 5 final evidence adoption demonstrates this procedure. |
-| 39 | How do I prove a fresh clone is healthy? | ANSWERED | Follow all ten [developer setup](../operations/developer_setup.md) steps, verify submodule/final trees and licenses, run the focused/full hardware-free matrix, then use read-only doctor/status. |
-| 40 | What should I check before a Demo? | ANSWERED | Confirm branch/config/runtime ownership, <code>doctor</code>, status, exact ports/PIDs, external LM Studio model/API/GPU readiness if production, the adopted Android artifact provenance, and fresh device evidence for any new action. The single accepted TTS result does not establish <code>DEMO_READY</code> for broader behavior. Do not use the LM CLI as an audit. |
+The accepted Android boundary is one canonical TTS transaction. General
+camera, microphone, media playback, viewer/GPU, Discord, perception and other
+physical actions remain separate or unverified. The installed Android artifact
+is package <code>com.robotemi.agent</code>, version <code>1.0.2 (3)</code>,
+SHA-256
+<code>c0f54cd46930c05caf2f556a2e4e1e26570b8401c0034546b57c6faca27c043</code>.
+The observed launcher is <code>16405-usa / 16405</code>, below the documented
+minimum <code>18024</code>; this is a deployment limitation, not a proven
+direct cause of the historical TTS timeout.
 
-Handover result: <code>ANSWERED=37</code>,
-<code>PARTIAL=3</code>, <code>MISSING=0</code>. Each partial answer has an
-individual owner and future gate in the register below.
+## Newcomer path
 
-## Partial handover register
+Read and follow these documents in order:
 
-Each record identifies the fact that remains outside the portable repository
-contract and the action a student can take without guessing or changing the
-runtime boundary.
+1. [README](../../README.md) for scope and safety boundaries.
+2. [CURRENT_STATUS](../CURRENT_STATUS.md) for evidence and limitations.
+3. [REPOSITORY_MAP](../REPOSITORY_MAP.md) for source, generated and runtime boundaries.
+4. [Developer setup](../operations/developer_setup.md) for clean-clone provisioning.
+5. [Configuration reference](../operations/demo_configuration_reference.md) for private keys and ownership.
+6. [DEMO_OPERATOR_GUIDE](../operations/DEMO_OPERATOR_GUIDE.md) for the only current lifecycle.
+7. [Verification and acceptance](../operations/verification_and_acceptance.md) for test claims.
+8. [Troubleshooting](../operations/demo_troubleshooting.md) for read-only failure handling.
 
-### #4 — How do I clone it? (resolved)
+All project reads, setup, tests and later authorized operations occur in the
+designated container:
 
-- <code>QUESTION_NUMBER</code>: 4
-- <code>QUESTION</code>: How do I clone it?
-- <code>STATUS</code>: RESOLVED
-- <code>RESOLUTION</code>: Gate 6A.2 confirmed the public root repository, clone URL and public branch <code>main</code> by unauthenticated read-only Git access and public repository metadata.
-- <code>GATE6A2_OBSERVED_FACT</code>: Remote <code>main</code> was observed at <code>f2d88ed4aecbd4f0e5163300929991f1af9cb004</code>; the local reviewed candidate remains <code>release/github-v1@b07c93daf8a56df1a1ec6911b2b614e18ead10f9</code>. The canonical local checkout intentionally has no configured root remote.
-- <code>MISSING_FACT</code>: None for public root identity. GitHub authentication and future history-replacement authorization remain repository-owner decisions.
-- <code>OWNER</code>: Publication maintainer / repository owner.
-- <code>FUTURE_GATE</code>: Gate 6B publication authorization.
-- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Set <code>TEMIAGENT_REPO_URL</code> to the recorded public clone URL, clone branch <code>main</code>, and never use a local checkout, file URL or Git alternate as the publication source.
+~~~bash
+docker exec -it yiting.TemiAgent_gpu_all bash
+cd <clean-clone-root>
+pwd
+git rev-parse --show-toplevel
+git status --short
+~~~
 
-### #10 — What tools must be installed?
+The container path is a command boundary, not a license to use the protected
+<code>/TemiAgent</code> mount. A clean clone may use any owner-approved
+<code>REPO_ROOT</code>.
 
-- <code>QUESTION_NUMBER</code>: 10
-- <code>QUESTION</code>: What tools must be installed?
-- <code>STATUS</code>: PARTIAL
-- <code>WHY_PARTIAL</code>: The repository requires a designated container and host Docker support but does not own their provisioning.
-- <code>GATE5_OBSERVED_FACT</code>: The accepted host had the designated container and required runtime toolchain available for the bounded Gate 5 checks; the observed image/tool versions and absent optional tools remain deployment observations, not installation requirements or pins.
-- <code>MISSING_FACT</code>: The approved container image, Docker host provisioning and installation source for the required container tools.
-- <code>OWNER</code>: AI6 container/infrastructure maintainer.
-- <code>FUTURE_GATE</code>: Gate 5 runtime/environment acceptance.
-- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Use the designated container and record <code>python3 --version</code>, <code>uv --version</code>, <code>git --version</code>, <code>bash --version</code> and <code>mosquitto -h</code>; do not add an ad-hoc host or image recipe.
+## Seventeen newcomer questions
 
-### #11 — Which versions matter?
+### 1. What is TemiAgent?
 
-- <code>QUESTION_NUMBER</code>: 11
-- <code>QUESTION</code>: Which versions matter?
-- <code>STATUS</code>: PARTIAL
-- <code>WHY_PARTIAL</code>: Python floors and lockfiles are source-backed, but several host, container and provider versions remain unpinned.
-- <code>GATE5_OBSERVED_FACT</code>: The accepted host evidence records the designated toolchain and external LM/model context, but observed Python/uv/Git/Bash/Mosquitto/CUDA/driver/provider versions remain deployment observations. None of these observations closes the environment-pin gap.
-- <code>MISSING_FACT</code>: Approved versions or digests for uv, Git, Bash, Mosquitto, the container image, LM Studio and CUDA/driver software.
-- <code>OWNER</code>: AI6 environment maintainer.
-- <code>FUTURE_GATE</code>: Gate 5 runtime/environment acceptance.
-- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Use the checked-in lockfiles and record observed tool versions as evidence; do not invent minimums or update lockfiles to hide an environment gap.
+It is a safety-bounded Temi integration: legacy ASR/video compatibility,
+canonical event adaptation, Hermes JSON-only reasoning, Bridge validation and
+allowlisted command publication, optional perception, and an external Android
+executor. It is not a medical device, emergency service, guaranteed fall
+detector or autonomous care system.
 
-### #32 — Which tests require hardware?
+### 2. Which repository and ref are authoritative?
 
-- <code>QUESTION_NUMBER</code>: 32
-- <code>QUESTION</code>: Which tests require hardware?
-- <code>STATUS</code>: PARTIAL
-- <code>WHY_PARTIAL</code>: Broader Android/Temi sessions, video/media playback, camera and microphone remain external; the exact canonical TTS route is accepted only for one bounded transaction.
-- <code>GATE5_OBSERVED_FACT</code>: Gate 5 accepted one bounded host L5 model request and L0–L3 software path. L4.3 accepted the final Android 1.0.2 (3) artifact provenance and exact installed-APK match; L4.7B then accepted one post-reboot Android/Temi TTS dispatch, terminal callback and correlated success result. General viewer/GPU and other hardware behavior remain outside this evidence.
-- <code>MISSING_FACT</code>: Fresh evidence for any new Android/Temi action or broader media/camera/microphone path.
-- <code>OWNER</code>: Temi Android/device integration owner.
-- <code>FUTURE_GATE</code>: Separate Android/media/device acceptance for any scope beyond the adopted canonical TTS transaction.
-- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Run the hardware-free Bridge, backend, anomaly, tools and mock/fake checks; for a new device action request a separately authorized acceptance record and do not generalize the single TTS result.
+The public repository and branch are the exact values in the table above. A
+clean clone of public <code>main</code> is the portable publication and
+operator source. The canonical local development mount is a protected,
+intentionally dirty workspace; its files are not a student deployment
+baseline.
 
-## Resolved handover records
+### 3. How do I create the workspace?
 
-### #38 — How do I make a release?
+Inside the designated container, clone the public branch into a new directory:
 
-- <code>QUESTION_NUMBER</code>: 38
-- <code>QUESTION</code>: How do I make a release?
-- <code>STATUS</code>: RESOLVED for local evidence-ref adoption
-- <code>RESOLUTION</code>: Gate 5 created an isolated candidate from the exact publication baseline, ran the required documentation/security/authority review, made one bounded documentation/evidence commit, and fast-forwarded <code>release/github-v1</code> with an old-value guard. Root publication push remains a separate maintainer action.
-- <code>GATE5_OBSERVED_FACT</code>: The accepted local release procedure is now evidenced by this Gate 5 adoption. The root checkout still has no configured remote, and no push was performed.
-- <code>OWNER</code>: Release maintainer / repository owner.
-- <code>FUTURE_ACTION</code>: A maintainer may select/configure the public root remote and perform a separately authorized push; that action is not part of this local adoption.
-- <code>WHAT_STUDENT_CAN_DO_NOW</code>: Reuse the isolated-candidate, validation and old-value-guard procedure; do not rewrite history, merge, rebase or push.
+~~~bash
+export TEMIAGENT_REPO_URL='https://github.com/YI-TING-EE13/TemiAgent.git'
+export CLONE_PARENT='<owner-approved-parent>'
+export REPO_ROOT="$CLONE_PARENT/TemiAgent"
+git clone --branch main "$TEMIAGENT_REPO_URL" "$REPO_ROOT"
+cd "$REPO_ROOT"
+git status --short
+~~~
 
-## Release handover
+Do not use a local checkout URL, Git alternates, an old release ref or the
+canonical dirty mount as a substitute.
 
-The historical Gate 4.1 repair candidate and Gate 5A/5A.1 candidates remain
-dated evidence. The current release procedure is to create an isolated
-candidate from the exact publication ref, validate only the allowed
-documentation/evidence delta, obtain maintainer review, and use an atomic
-old-value-guarded fast-forward for local <code>release/github-v1</code>.
-No merge, rebase, squash, rewrite or push is part of that local adoption.
+### 4. How is Hermes reconstructed?
 
-Gate 5 final evidence adoption completed that local procedure from
-<code>release/github-v1@59d568b079ce260e2144c410b0f9397d8b026913</code>.
-The subsequent L4 final evidence adoption applies the same procedure from the
-exact publication ref, adds documentation-only evidence, and sets
-<code>READY_FOR_GATE6=YES</code>. The exact evidence commit is reported in the
-task handoff; the candidate ended clean and the canonical <code>main</code>
-checkout remained unchanged. Gate 6A.2 records the public root URL and target;
-any history replacement remains a separately authorized maintainer action.
+Initialize the formal submodule from the team source
+<code>https://github.com/YI-TING-EE13/hermes-agent.git</code>, whose pinned base
+is <code>a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2</code> and base tree is
+<code>bda69c575e65725bf9264dd1288a63093cea3cc3</code>. Then run
+<code>./scripts/bootstrap --hermes</code> or
+<code>./scripts/bootstrap --sources</code>. The root overlay applies patches
+<code>0001</code> through <code>0010</code> and must produce final tree
+<code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>.
 
-## Gate 5A.1 review handover (historical candidate)
+The original <code>NousResearch/hermes-agent</code> repository is provenance
+for the upstream project only. It is not the active TemiAgent source and is
+never a fallback. Generated local Hermes commit IDs are not dependency
+identity.
 
-The Gate 5A.1 candidate is the branch
-<code>codex/github-v1-live-environment-audit</code> based on
-<code>release/github-v1@654110f621c6eff5e4defaa54f0722b2a916f50a</code>.
-Its intended result is
-<code>AI6_TEMIAGENT_GATE5A_1_RUNTIME_DELTA_RECONCILED</code> with
-<code>C_ACCEPTED_INTENDED_DELTA</code>. Review
-[CURRENT_STATUS](../CURRENT_STATUS.md) for the exact 82-path comparison, the
-21 executable/runtime/config/dependency/test paths, the object identities and
-the Gate 5B source-root/start/rollback contract.
+### 5. How are Python environments provisioned?
 
-The candidate-only lifecycle correction accepts the expected root status
-<code> M hermes-agent</code> after the formal nine-patch Hermes reconstruction
-only when <code>verify_hermes_submodule.py</code> succeeds with
-<code>state=RECONSTRUCTED</code>. It still rejects index changes, unverified or
-base-only checkouts, dirty nested Hermes state and every other unexpected
-path. The focused acceptance and full regression results belong to the
-candidate evidence; no result here authorizes service operation.
+Use the checked-in locks without changing them:
 
-For any later Gate 5B run, use the final reviewed candidate commit as the
-isolated <code>GATE5B_SOURCE_ROOT</code>, verify its exact HEAD, and supply a
-new owner-only runtime config and runtime root outside Git. Because the
-candidate branch is not <code>main</code>, the private config may use
-<code>DEMO_GIT_BRANCH_POLICY=disabled</code> only alongside exact-HEAD and
-dirty-path verification. Reuse the verified external MQTT listener without a
-restart; make LM Studio/API readiness, model/GPU policy, optional
-gateway/viewer resources and Android/Temi acceptance separate gates.
+~~~bash
+(cd hermes_temi_bridge && uv sync --frozen --extra mqtt)
+(cd temi_backend && uv sync --frozen)
+(cd anomaly_detection && uv sync --frozen)
+cd hermes-agent
+uv sync --frozen
+cd ..
+~~~
 
-The canonical checkout still has no configured root remote; Gate 6A.2 confirmed
-the public root authority without configuring or mutating that local remote.
-LAB606 Android artifact provenance and the exact canonical TTS
-physical acceptance are adopted as <code>CLOSED_PASS</code>; broader Android/
-Temi media behavior remains separate. Gate 6 is ready for release/handover
-work only.
+The root source bootstrap reconstructs sources but does not install the Hermes
+environment or build llama.cpp. Hermes source evidence declares Python
+<code>>=3.11</code> and a <code>hermes</code> console script.
+<code>hermes-agent/venv/bin/python3</code> and
+<code>hermes-agent/venv/bin/hermes</code> must exist and be executable before a
+production-oriented readiness check can pass. The required install/build
+authority is the owner-approved container and the checked-in lockfiles; do not
+invent a replacement environment.
+
+### 6. What is required for the viewer?
+
+The source dependency is llama.cpp commit
+<code>0b7154066e8544ed88d92ae2132cc1e055cf6304</code>, tree
+<code>1020a771795f406b8891d18ee607b4da3783fa7f</code>, reconstructed by
+<code>./scripts/bootstrap --llama-cpp</code>. A separately approved build
+creates the ignored <code>build/bin/llama-server</code>; source bootstrap alone
+does not build it.
+
+The observed AI6 build evidence is <code>Release</code>, <code>Ninja</code>,
+<code>GGML_CUDA=ON</code> and
+<code>CMAKE_CUDA_ARCHITECTURES=native</code>. Toolchain and build flags are
+observed environment inputs, not portable pins. The D2A operator artifact was:
+
+~~~text
+/opt/TemiAgent-operator/anomaly_detection/third_party/llama.cpp/build/bin/llama-server
+SHA-256: 6827638842194c9903da14662737b1e5c7d35effa6353506a329d31f85029585
+~~~
+
+The optional pose model was not provisioned. Do not claim pose availability.
+Viewer embedded UI absence is non-blocking when the health contract otherwise
+passes.
+
+### 7. Where does private configuration live?
+
+Use an absolute owner-only private config outside the source tree, or the
+ignored runtime path created by the initializer for that clone. The file mode
+must be <code>0600</code>; its parent/runtime directories must be owner-only,
+normally <code>0700</code>. The configuration must point to runtime data below
+its private runtime root and must not contain secrets in tracked templates.
+
+For the validated AI6 deployment, the private runtime root was
+<code>/opt/TemiAgent-operator/.runtime/demo</code>. The operator-specific
+viewer setting was:
+
+`DEMO_ACTION_VIEWER_LLAMA_SERVER=/opt/TemiAgent-operator/anomaly_detection/third_party/llama.cpp/build/bin/llama-server
+`
+
+Inspect path values and file modes without printing secret values. A private
+config is not permission to use an executable or runtime artifact from
+the protected canonical dirty worktree.
+
+### 8. What does bootstrap check?
+
+After submodule/source reconstruction and dependency provisioning, run:
+
+~~~bash
+./scripts/bootstrap --check
+./scripts/demo --config <private-production-config> --json doctor
+~~~
+
+<code>bootstrap --check</code> verifies source pins, licenses, required
+commands, the Hermes executables, the anomaly environment, the generated
+llama-server and tracked resource/config files. It is a readiness gate, not a
+deployment operation. If the Hermes venv, llama-server or another required
+artifact is missing, stop with
+<code>AI6_TEMIAGENT_D2A_DEPENDENCY_PROVISIONING_REQUIRED</code>. Report the
+missing artifact, the provision method named by the publication documents,
+expected location, source/lockfile impact, network/install/build need and
+maintainer-authorization need. Do not use canonical dependencies, unknown old
+environments, source edits or a mock profile to bypass the gate.
+
+### 9. What does doctor mean?
+
+<code>doctor</code> is read-only. A production pre-start result may return rc0
+with <code>BACKEND_NOT_READY</code> and zero required failures; rc0 alone does
+not mean <code>DEMO_READY</code>. Required failures must be zero, source and
+dependency checks must pass, private config/ownership must be valid, and
+external prerequisites must be ready before start is considered.
+
+After start, accepted status values are <code>DEMO_READY</code> or
+<code>BACKEND_READY_WAITING_ANDROID</code>. Do not operate Android or Temi to
+manufacture <code>DEMO_READY</code>. After stop,
+<code>BACKEND_NOT_READY / NO_OWNERSHIP</code> is expected when no managed
+service remains.
+
+### 10. What is the one current lifecycle?
+
+Only an authorized operator may run exactly one bounded sequence using the
+selected private config:
+
+~~~bash
+./scripts/demo --config <private-production-config> start
+./scripts/demo --config <private-production-config> --json status
+./scripts/demo --config <private-production-config> stop
+~~~
+
+Each command is a lifecycle operation, not a suggestion to retry.
+<code>restart</code> and <code>mqtt start|stop</code> are compatibility or
+service-specific selectors, not part of the current external-MQTT production
+sequence. The lifecycle records exact process identity and stops only its own
+verified records.
+
+### 11. Who owns each service?
+
+In the validated AI6 deployment, adapter, resident, Bridge, gateway, viewer and
+their generated children were operator-managed and isolated under the operator
+workspace. LM Studio and MQTT were external/reused dependencies. Android and
+Temi were external. Ownership is selected by private config and must be
+revalidated from process identity, cwd, executable and listener evidence; a
+free port is not proof of readiness.
+
+### 12. What is the LM Studio contract?
+
+LM Studio is external-only in production. Verify the API at
+<code>http://127.0.0.1:1234</code>, expected API identifier
+<code>google/gemma-4-31b</code>, accepted local model identity
+<code>temi/gemma-4-31b-it-qat</code>, and context <code>64000</code> from
+runtime metadata. The lifecycle never starts, stops, restarts, loads, unloads,
+reconfigures or invokes <code>lms</code>. Do not run <code>lms</code> commands
+as an audit or recovery shortcut. Preserve the existing provider and escalate
+ownership ambiguity.
+
+### 13. What is the MQTT contract?
+
+MQTT ownership is explicit. The validated AI6 deployment used a healthy
+external/reused broker on port <code>1883</code>, without lifecycle mutation. A
+managed broker may be started or stopped only under the exact managed lineage
+contract and an authorized private config. Never adopt, stop or restart an
+occupied external/unknown listener, and never use <code>pkill</code>,
+<code>killall</code> or name-wide termination. Bridge remains the command
+publication boundary.
+
+### 14. How is runtime source isolation checked?
+
+Every operator-managed process must have cwd, command line, executable and
+artifact identity rooted in the selected operator workspace. The viewer llama
+child must execute the configured operator binary and match the D2A observed
+SHA when that validated deployment is being reproduced. No managed process may
+fall back to <code>/TemiAgent/...</code> or the protected canonical dirty
+worktree. External LM model cache paths are
+allowed only as declared external inputs.
+
+The following D2A invariants are evidence fields, not new runtime commands:
+<code>ACTIVE_OPERATOR_CANONICAL_PATH_LEAK_COUNT=0</code>,
+<code>CANONICAL_LLAMA_BINARY_USED=NO</code>, and all managed runtime artifacts
+belonged to <code>/opt/TemiAgent-operator</code>.
+
+### 15. What is safe to do when a check fails?
+
+Preserve redacted JSON, exact PID/cwd/executable/parent/listener evidence and
+private logs. Follow [safe service operations](../operations/safe_service_operations.md).
+Use graceful termination only for the same verified identity under an explicit
+authorization. Do not broaden a PID target, substitute a new PID, delete
+runtime state, reset the Git tree, modify source, or retry past a stated
+bounded authorization.
+
+### 16. What Android/Temi claim is actually closed?
+
+L4 provenance and the exact canonical TTS transaction are
+<code>CLOSED_PASS</code>, based on the accepted external Android artifact and
+one bounded real transaction. That evidence does not prove general media
+playback, camera/microphone, continuous perception, Discord delivery,
+navigation, movement or other physical actions. Android source, APK
+installation and ADB are outside the normal software-only operator lifecycle.
+
+### 17. What may be published or changed?
+
+The root publication has <code>NO_LICENSE</code>; do not add a license claim.
+Do not publish secrets, private LAN addresses, user paths, runtime data, model
+caches, weights, recordings, checkpoints or real resident data. Cross-module
+contract changes must update runtime authority, producers, consumers, tests,
+module docs and reader-schema copies together. A documentation-only D2B change
+may be reviewed in its isolated branch, but it does not push public
+<code>main</code> or modify the canonical dirty worktree.
+
+## Known limitations and escalation
+
+- Hermes venv and llama-server are owner-provisioned generated artifacts; a
+  clean clone does not contain them.
+- LM Studio, model/cache/GPU, MQTT external ownership, Android and optional
+  pose assets are outside the portable source contract.
+- The canonical TTS route is accepted once; broader Android/media and viewer/GPU
+  behavior remain separately bounded.
+- <code>SECONDARY_TTS_DIAGNOSTIC_WARNING=NON_BLOCKING_KNOWN_ISSUE</code> is
+  retained as a known state-machine diagnostic; it is not the historical
+  timeout root cause.
+- If a required dependency is absent, stop and report
+  <code>AI6_TEMIAGENT_D2A_DEPENDENCY_PROVISIONING_REQUIRED</code>; do not
+  improvise.
+
+The current document inventory and retention rationale are in
+[DOCUMENT_AUTHORITY_MAP.md](../DOCUMENT_AUTHORITY_MAP.md). Historical and
+superseded runbooks remain available for evidence, but their top banner says
+not to use them as current operator procedures.

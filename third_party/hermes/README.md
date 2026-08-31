@@ -1,5 +1,9 @@
 # Hermes external dependency
 
+Status: CURRENT_AUTHORITY. The team fork and the pinned base-plus-ten-patch
+worktree are the active TemiAgent source contract; the original upstream link
+below is provenance only.
+
 Hermes is an external reasoning runtime. The original upstream project is
 [`NousResearch/hermes-agent`](https://github.com/NousResearch/hermes-agent),
 and the team-controlled source boundary is
@@ -56,7 +60,9 @@ python3 tools/run_bounded_process.py \
   --kill-grace-seconds 2 \
   -- git submodule update --init --recursive --depth=1
 ./scripts/bootstrap --hermes
-./scripts/bootstrap --hermes
+(cd hermes-agent && uv sync --frozen)
+test -x hermes-agent/venv/bin/python3
+test -x hermes-agent/venv/bin/hermes
 ```
 
 The submodule initialization is the only Hermes source-acquisition step. It
@@ -73,10 +79,14 @@ the independent optional llama.cpp reconstruction. `./scripts/bootstrap
 environments have been provisioned. None of these commands starts a service,
 publishes MQTT, installs an APK, or runs model inference.
 
-After patch reconstruction, `git status --short` may report ` m hermes-agent`.
-That is expected: the root index keeps the base gitlink while the submodule
-worktree contains the local patched integration branch. Do not commit the
-generated final submodule commit into the root gitlink.
+After patch reconstruction, the root index still records the base gitlink while
+the submodule worktree contains the local patched integration branch. The
+expected state is `PINNED_BASE_PLUS_PATCHED_WORKTREE`; a generated nested
+worktree change is not an arbitrary source-dirtiness waiver. Verify the final
+tree and keep the generated nested commit out of the root gitlink. The locked
+`uv sync --frozen` creates the ignored
+`hermes-agent/venv/bin/python3` and `hermes-agent/venv/bin/hermes`; their
+presence is required by `bootstrap --check` but is not a root source commit.
 
 ## Skills and ownership
 

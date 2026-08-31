@@ -1,6 +1,13 @@
 # Safe Service Operations and Incident Evidence
 
-最後審查日期：2026-07-26
+最後審查日期：2026-08-31；D2B consolidated。
+
+The current operator source is a clean clone of public `main` at
+`8fead49d66ab0a9d016a7dfe495b336146bbe957`. The protected dirty
+designated-container development mount is not a portable operator workspace.
+The [Demo operator guide](DEMO_OPERATOR_GUIDE.md) owns the current
+`doctor → start → status → stop` sequence; this policy owns exact identity,
+rollback and containment rules.
 
 This policy applies to TemiAgent startup, shutdown, restart, rollback, restore, retention and incident work. Module runbooks may add service-specific commands but MUST preserve these boundaries.
 
@@ -62,9 +69,15 @@ Use [contract_traceability.md](../architecture/contract_traceability.md) as the 
 
 Examples:
 
-- An action-viewer operation on `8010` MUST preserve MQTT `1883`, video `8080`, frame broadcast `8081`, resident Hermes `8765` and Bridge processes.
-- An LM Studio operation on `1234` MUST preserve MQTT, streaming, Bridge and viewer processes unless the task explicitly expands scope.
-- A Mosquitto operation on `1883` affects every event and command route; capture dependent-service health and queued/fallback behavior before and after the operation.
+- An action-viewer operation on `8010` MUST preserve MQTT `1883`, video
+  `8080`, frame broadcast `8081`, resident Hermes `8765` and Bridge processes.
+- An LM Studio check on `1234` MUST be read-only and preserve MQTT, streaming,
+  Bridge and viewer processes. Production LM Studio is external-only; do not
+  start, stop, unload, restart or reconfigure it from the lifecycle.
+- A Mosquitto operation on `1883` affects every event and command route. The
+  validated AI6 broker is external/reused, so only read-only health checks are
+  allowed there; managed broker transitions require explicit managed ownership
+  and authorization.
 
 ## Startup and Health
 

@@ -4,6 +4,24 @@ TemiAgent 是以 Temi robot 為實體載具、Hermes Agent 為認知核心的 em
 
 本專案不是醫療器材、診斷系統或正式緊急通報服務。照護分級、異常偵測與 caregiver notification 均屬研究或 Demo 範圍，不能取代專業判斷、人工確認或既有緊急流程。
 
+## Publication and operator disposition
+
+The current publication authority is
+`https://github.com/YI-TING-EE13/TemiAgent`, branch `main`, exact HEAD
+`8fead49d66ab0a9d016a7dfe495b336146bbe957`, tree
+`e5fa932b01cc1f885cd36023464a18f11bdf060a`. The root publication has no
+`LICENSE` file: `ROOT_LICENSE_POLICY=NO_LICENSE`. Gate 5, Android provenance,
+L4 and Gate 6 are `CLOSED_PASS` at their documented boundaries, and D2A is
+`CLOSED_PASS` for the observed AI6 deployment.
+
+The portable operator starting point is a clean clone of public `main`. The
+protected canonical development workspace is the intentionally dirty
+designated-container mount `/TemiAgent`; its host path is withheld from
+publication docs and it must not be used as an operator workspace or source
+fallback. The validated
+`/opt/TemiAgent-operator` path and its private runtime state are
+AI6-specific evidence, not portable defaults.
+
 ## Current Scope
 
 | Capability | State | Evidence and limits |
@@ -12,7 +30,7 @@ TemiAgent 是以 Temi robot 為實體載具、Hermes Agent 為認知核心的 em
 | Canonical ASR route | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | Overview adapter 產生 canonical ASR event，Bridge 驗證事件、路徑與 Hermes output 後發布 command；Temi Android live path 尚未驗證。 |
 | Canonical media v1.1 Bridge route | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | Bridge 與 fake Android 已驗證 play/control lifecycle；Android、Hermes video entry 與真機播放仍是外部驗收。 |
 | Resident Hermes HTTP mode | IMPLEMENTED; HARDWARE_FREE_VERIFIED; HOST_LIVE_VERIFIED; ANDROID_TEMI_NOT_VERIFIED | `tools/hermes_resident_server.py` 的 exact Gate 5 host contract 通過 L0–L3、L5；production LM remains external-only；broader Android/Temi behavior outside the exact L4 TTS route remains unverified。 |
-| Gate 5 host runtime | CLOSED_PASS; HOST_LIVE_VERIFIED | Publication `release/github-v1` 的 exact candidate 通過 bounded host acceptance：external LM、reused MQTT、resident、Bridge 與 one bounded model request；這不是 Android/Temi 或 portable environment proof。 |
+| Gate 5 host runtime | CLOSED_PASS; HOST_LIVE_VERIFIED | Public `main` at the exact publication identity above is paired with bounded host evidence: external LM, reused MQTT, resident, Bridge and one bounded model request; this is not Android/Temi or portable-environment proof. |
 | Structured care memory | DEMO_ONLY; HARDWARE_FREE_VERIFIED | `memory/` 只保存已去識別的合成 fixture；runtime memory、production data 與正式病歷不在 publication scope。 |
 | Continuous abnormal perception | EXPERIMENTAL; LIVE_NOT_VERIFIED | `anomaly_detection/` 可產生 abnormal event；模型結果未經醫療或安全認證，且 viewer 不得 dispatch hardware command。 |
 | Immediate abnormal-care flow | IMPLEMENTED; HARDWARE_FREE_VERIFIED; LIVE_NOT_VERIFIED | Bridge validates an abnormal event, records one notification-stage receipt, invokes Resident Hermes, validates the resulting speak command, and persists a bounded follow-up episode. Real recipient delivery and real-device execution remain unverified. |
@@ -146,56 +164,46 @@ Hardware, GPU, Discord and live-stream acceptance require their documented exter
 
 ## Operations
 
-The canonical Demo entry point is `./scripts/demo`. Its one default private
-configuration is Git-ignored at `/TemiAgent/.runtime/demo/demo.env` and its
-runtime root is `/TemiAgent/.runtime/demo`. The initializer creates both with
-owner-only permissions and never asks for a Discord credential.
+The canonical Demo entry point is `./scripts/demo`. Operation begins in a
+clean public-main clone inside the designated container. Provision the locked
+Hermes environment and approved generated llama.cpp artifact using the
+dependency documents before the readiness check; source bootstrap alone does
+not create every owner-provisioned runtime dependency.
 
 ```bash
-cd /TemiAgent
+docker exec -it yiting.TemiAgent_gpu_all bash
+export REPO_ROOT=<clean-public-main-clone>
+cd "$REPO_ROOT"
 python3 tools/run_bounded_process.py \
   --timeout-seconds 120 \
   --kill-grace-seconds 2 \
   -- git submodule update --init --recursive --depth=1
 ./scripts/bootstrap --sources
+(cd hermes-agent && uv sync --frozen)
 ./scripts/bootstrap --check
-./scripts/demo init-config
-./scripts/demo doctor
-./scripts/demo start
-./scripts/demo status
-./scripts/demo restart
-./scripts/demo stop
+./scripts/demo --config <PRIVATE_PRODUCTION_CONFIG> --json doctor
+./scripts/demo --config <PRIVATE_PRODUCTION_CONFIG> start
+./scripts/demo --config <PRIVATE_PRODUCTION_CONFIG> --json status
+./scripts/demo --config <PRIVATE_PRODUCTION_CONFIG> stop
 ```
 
-The default `init-config` selects the safe `newcomer_mock` profile. Use
-`./scripts/demo init-config --profile production --force` only for the reviewed
-production profile. An explicit absolute `--config` remains available for a
-separately owned custom deployment, but the lifecycle never searches or adopts
-legacy `/tmp` configs.
+The default `init-config` path is for the isolated `newcomer_mock` profile.
+Production requires an owner-only private config outside the worktree. The
+doctor may return rc0 with `BACKEND_NOT_READY` and zero required failures
+before managed services or Android are present; that is not `DEMO_READY`.
+After start, `DEMO_READY` or `BACKEND_READY_WAITING_ANDROID` is valid.
+`start` and `stop` manage only positively owned services; external LM Studio
+and an explicitly external MQTT broker are health-checked and preserved.
+Never invoke `lms`, use broad process termination, adopt an unknown listener,
+or operate Android/Temi to manufacture readiness.
 
-```bash
-cd /TemiAgent
-./scripts/demo --config <PRIVATE_CONFIG_PATH> doctor
-./scripts/demo --config <PRIVATE_CONFIG_PATH> start
-./scripts/demo --config <PRIVATE_CONFIG_PATH> status
-./scripts/demo --config <PRIVATE_CONFIG_PATH> stop
-```
-
-`start` and `stop` manage only services whose private config sets
-`<SERVICE>_OWNERSHIP=managed`; external ownership is health-checked but never
-stopped. The checked-in [resource manifest](config/demo_resources.json) lists
-the logical media and skill assets. From a clean clone, initialize the formal
-Hermes submodule with the bounded command above, then run
-`./scripts/bootstrap --sources` once. Hermes resolves only the team fork at the
-pinned base commit; the bootstrap validates the submodule and applies the ten
-root-owned patches. The command then reconstructs the independent optional
-llama.cpp source checkout from its public upstream pin. Run `./scripts/bootstrap
---check` only after the documented dependency environments have been
-provisioned. Neither command starts services or creates credentials. See
-[`third_party/hermes/README.md`](third_party/hermes/README.md) for the expected
-base/final trees, license check, idempotency behavior and failure boundary.
+The checked-in [resource manifest](config/demo_resources.json) lists logical
+media and skill assets. Neither bootstrap command starts services or creates
+credentials. See [third_party/hermes/README.md](third_party/hermes/README.md)
+and [third_party/llama_cpp/README.md](third_party/llama_cpp/README.md) for
+source pins, reconstruction, provisioning and no-fallback boundaries.
 `docker-compose.yml` is an optional secondary/development configuration; it is
-not a parallel production entrypoint and is not the canonical lifecycle.
+not a parallel production entrypoint or the canonical lifecycle.
 
 - Cross-module startup, health checks and debugging: [Temi integration runbook](docs/operations/temi_integration_runbook.md)
 - Canonical current Demo lifecycle and real-device Media checks: [Demo operator guide](docs/operations/DEMO_OPERATOR_GUIDE.md)
@@ -207,11 +215,11 @@ not a parallel production entrypoint and is not the canonical lifecycle.
 - Fresh-clone, software-only newcomer acceptance: [Verification and acceptance guide](docs/operations/verification_and_acceptance.md#software-only-newcomer-acceptance)
 - Deployment, configuration, ownership and handover: [Demo deployment handover](docs/operations/demo_deployment_handover.md)
 - New-student setup and environment contract: [Developer setup](docs/operations/developer_setup.md)
-- Forty-question student handover and release routing: [STUDENT_HANDOVER](docs/project/STUDENT_HANDOVER.md)
+- Seventeen-question student handover and release routing: [STUDENT_HANDOVER](docs/project/STUDENT_HANDOVER.md)
 - Complete document authority inventory: [DOCUMENT_AUTHORITY_MAP](docs/DOCUMENT_AUTHORITY_MAP.md)
 - LM Studio external-provider notes: [LM Studio runbook](docs/operations/lmstudio_headless_3gpu_hdd_manual.md); production ownership/readiness is defined by the [Demo operator guide](docs/operations/DEMO_OPERATOR_GUIDE.md)
 - Safe service targeting, rollback and incident evidence: [Safe service operations](docs/operations/safe_service_operations.md)
-- First-year Demo execution: [Demo runbook](docs/operations/first_year_demo_runbook.md)
+- Historical first-year Demo material: [Demo runbook](docs/operations/first_year_demo_runbook.md)
 - Documentation index: [docs/README.md](docs/README.md)
 
 Runbooks may contain environment-specific placeholders. Supply private IP addresses and secrets at runtime through environment variables or local ignored files; do not add them to reusable scripts or new committed documentation.

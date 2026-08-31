@@ -1,7 +1,6 @@
 # Developer Setup and Environment Contract
 
-Status: <code>CURRENT_AUTHORITY</code>; last reviewed for Gate 5 final evidence
-and Gate 6A.2 remote publication policy: 2026-08-29.
+Status: <code>CURRENT_AUTHORITY</code>; D2B consolidated: 2026-08-31.
 
 This is the one current clean-clone setup path for a new TemiAgent maintainer.
 It prepares source, locked Python environments, private configuration and
@@ -15,12 +14,10 @@ later, separately authorized service operation.
 The public root repository is
 <code>https://github.com/YI-TING-EE13/TemiAgent</code>; use
 <code>https://github.com/YI-TING-EE13/TemiAgent.git</code> as the clone URL and
-<code>main</code> as the public branch. The canonical local checkout intentionally
-has no configured root remote. Gate 6A.2 found two historical RFC1918
-deployment defaults in the old remote history, with no credential or private
-data exposure; the clean <code>release/github-v1</code> candidate is the
-controlled replacement target. Gate 6B requires explicit maintainer
-authorization and a fresh exact lease before any history-replacement push.
+<code>main</code> as the public branch. The current public HEAD is
+<code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> and its tree is
+<code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>. No public push or
+history replacement is part of this setup document.
 
 The root repository has no <code>LICENSE</code> file and grants no open-source
 license. Preserve <code>ROOT_LICENSE_POLICY=NO_LICENSE</code>; Hermes and
@@ -29,9 +26,12 @@ llama.cpp licensing remains independent.
 ## Execution boundary and state labels
 
 Run project commands inside the designated container. Generic fresh-clone steps
-use <code>REPO_ROOT</code> for the user-selected clone root. The canonical AI6
-deployment uses <code>REPO_ROOT=/TemiAgent</code>; that deployment-specific
-value is not required by the generic setup below.
+use <code>REPO_ROOT</code> for the user-selected clone root. The protected
+canonical <code>/TemiAgent</code> mount is a dirty development workspace and
+is never the generic operator default. <code>/opt/TemiAgent-operator</code> is
+the observed <code>VALIDATED_AI6_OPERATOR_WORKSPACE</code>; its private runtime
+root is <code>/opt/TemiAgent-operator/.runtime/demo</code>, and those paths are
+not portable requirements.
 
 ~~~bash
 docker exec -it yiting.TemiAgent_gpu_all bash
@@ -79,8 +79,9 @@ This is <code>HOST_LIVE_VERIFIED</code> for the exact host contract only. The
 accepted request budget is <code>L1=0; L2=0; L3=0; L5=1</code>. The exact
 canonical Android/Temi TTS physical boundary is separately
 <code>L4_FINAL=CLOSED_PASS</code> from adopted L4.7B evidence; broader
-Android/media acceptance remains separate, and Gate 6 is ready for
-release/handover work only.
+Android/media acceptance remains separate, and Gate 6 publication/handover
+documentation is <code>CLOSED_PASS</code>. This setup page does not authorize
+a new lifecycle.
 PIDs, run IDs, temporary worktrees and runtime roots from the acceptance are
 transient evidence, not clean-clone requirements. This documentation gate
 does not rerun live acceptance or operate any service.
@@ -160,6 +161,7 @@ It never starts a service and never downloads a model:
 (cd hermes_temi_bridge && uv sync --frozen --extra mqtt)
 (cd temi_backend && uv sync --frozen)
 (cd anomaly_detection && uv sync --frozen)
+(cd hermes-agent && uv sync --frozen)
 ~~~
 
 <code>--sources</code> verifies the formal Hermes submodule, applies patches
@@ -178,9 +180,12 @@ The Python dependency floors and lockfiles are:
 | <code>temi_backend/</code> | <code>>=3.12</code> | <code>temi_backend/uv.lock</code> | Legacy ASR/video/local-VLM compatibility route and tests. |
 | <code>anomaly_detection/</code> | <code>>=3.12</code> | <code>anomaly_detection/uv.lock</code> | Optional perception viewer and fake/test utilities. |
 
-The external Hermes runtime environment and LM Studio CLI are not created by
-the root <code>uv</code> commands. Their provisioning is described in the
-external dependency and deployment contracts below.
+The root source bootstrap reconstructs Hermes and llama.cpp source but does not
+install the Hermes environment or build <code>llama-server</code>. The
+source-native locked Hermes method above creates
+<code>hermes-agent/venv/bin/python3</code> and
+<code>hermes-agent/venv/bin/hermes</code>. LM Studio remains an external
+owner-provisioned service; its CLI is not used by this setup.
 
 ### 5. Create private/local configuration
 
@@ -228,9 +233,9 @@ Provision the following through the owner-approved external systems:
 
 | Artifact | Required for | Provisioning truth | Ready evidence |
 |---|---|---|---|
-| Hermes <code>venv/bin/python3</code> and <code>venv/bin/hermes</code> | Production resident/gateway | Team-owned Hermes runtime environment; no root installer or version pin exists. | Executables exist and <code>./scripts/bootstrap --check</code> passes the Hermes checks. |
+| Hermes <code>venv/bin/python3</code> and <code>venv/bin/hermes</code> | Production resident/gateway | Reconstruct the patched source, then run <code>(cd hermes-agent && uv sync --frozen)</code> using the checked-in <code>pyproject.toml</code>/<code>uv.lock</code>; Python floor is <code>>=3.11</code>. | Both executables are executable and <code>./scripts/bootstrap --check</code> passes the Hermes checks. |
 | LM Studio and <code>temi/gemma-4-31b-it-qat</code> | Production LM route | External LM Studio installation, model/cache and GPU owner; no portable download recipe or version pin is tracked. The lifecycle does not invoke <code>lms</code>. | Exactly one configured listener, <code>/v1/models</code>, identifier <code>google/gemma-4-31b</code>, and runtime metadata context <code>64000</code> with the external context/GPU policy pass. |
-| llama.cpp <code>llama-server</code> build | Production action viewer | Build the generated pinned checkout using the approved environment; build flags are not pinned by the root manifest. | Configured executable exists and viewer health reports <code>llama_server_ready</code>. |
+| llama.cpp <code>llama-server</code> build | Production action viewer | Reconstruct the pinned checkout, then use an owner-approved build. Observed AI6 cache evidence is <code>Release</code>, <code>Ninja</code>, <code>GGML_CUDA=ON</code> and <code>CMAKE_CUDA_ARCHITECTURES=native</code>; these are not portable pins. | Configured executable exists and viewer health reports <code>llama_server_ready</code>. In the validated AI6 deployment its SHA-256 was <code>6827638842194c9903da14662737b1e5c7d35effa6353506a329d31f85029585</code>. |
 | Viewer GGUF/mmproj | Production action viewer | External model/cache provision; source and redistribution authority are external. | Configured regular files exist and viewer health passes. |
 | <code>yolo26x-pose.pt</code> | Optional pose preprocessing | Optional external weight; the resource manifest records size/hash observations only. Source, version, license and redistribution restrictions remain maintainer inputs. | Maintainer-approved provenance plus configured file; otherwise keep the optional viewer path disabled. |
 | <code>elderly_hand_exercise</code> | Real Android media playback | Android owner deploys the allowlisted logical asset. AI6 has no APK asset mapping. | Fake Android media tests pass; real playback still needs Android evidence. |
@@ -340,10 +345,10 @@ invitation to invent one.
 | Mosquitto and client tools | Managed local MQTT broker | Required for MQTT/full runtime | 2.0.18 observed; package/image not pinned | Container package or approved image | <code>mosquitto -h</code> | Tracked <code>mqtt/mosquitto.conf</code> is local Demo configuration; listener exposure is deployment-controlled. |
 | Python lockfiles | Bridge/backend/anomaly dependencies | Required for corresponding suites | Lockfile pins are authoritative | <code>uv sync --frozen</code> in each project | Commands in step 8 | Project dependency floors are not substitutes for the lockfiles. |
 | Formal Hermes submodule | Resident/gateway source base | Required for production and Hermes tests | Base commit and final tree pinned in manifest | <code>git submodule update</code> then <code>./scripts/bootstrap --hermes</code> | <code>./scripts/bootstrap --check</code> | External team remote plus root-owned patches; no fallback. |
-| Hermes virtual environment | Resident/gateway execution | Required for production | Version not pinned: <code>ENVIRONMENT_PIN_GAP</code> | Maintainer-approved Hermes setup | <code>test -x hermes-agent/venv/bin/hermes</code> | Root bootstrap verifies presence but does not install it. |
+| Hermes virtual environment | Resident/gateway execution | Required for production | Python <code>>=3.11</code>; dependency versions are frozen by <code>hermes-agent/uv.lock</code> | <code>cd hermes-agent && uv sync --frozen</code> after source reconstruction | <code>test -x hermes-agent/venv/bin/python3 && test -x hermes-agent/venv/bin/hermes</code> | Generated environment is external/ignored; root bootstrap verifies presence but does not create it. |
 | LM Studio API | Production external model service | Required for production; not needed by fake E2E | Version not pinned: <code>ENVIRONMENT_PIN_GAP</code> | External owner provisions the installed application and model cache | External owner’s API readiness; AI6 checks one listener and <code>/v1/models</code> and never invokes the CLI | Model/cache/license are external; no model is published or lifecycle-owned. |
 | CUDA driver/GPU | Production LM Studio and optional viewer | Required for production model/viewer paths | GPU/driver/CUDA not pinned: <code>ENVIRONMENT_PIN_GAP</code> | Host/maintainer provisioning | Lifecycle GPU policy check | Production policy names visible devices <code>0,1</code>; viewer config names device <code>3</code>; Gate 5 accepted one bounded L5 request, not general viewer/GPU readiness. |
-| llama.cpp | Optional action viewer server | Optional feature, but current bootstrap check expects its binary | Commit <code>0b715406...</code>; tree <code>1020a771...</code> | <code>./scripts/bootstrap --llama-cpp</code>, then approved build | <code>test -x anomaly_detection/third_party/llama.cpp/build/bin/llama-server</code> | Generated ignored checkout; build toolchain/flags are not pinned. |
+| llama.cpp | Optional action viewer server | Optional feature, but current bootstrap check expects its binary | Commit <code>0b7154066e8544ed88d92ae2132cc1e055cf6304</code>; tree <code>1020a771795f406b8891d18ee607b4da3783fa7f</code> | <code>./scripts/bootstrap --llama-cpp</code>, then approved build | <code>test -x anomaly_detection/third_party/llama.cpp/build/bin/llama-server</code> | Generated ignored checkout; observed AI6 build flags and binary hash are not portable pins. |
 | Android/Temi dependencies | Device-side executor and asset mapping | External acceptance gate | AI6 does not own Android version pins | Android repository/device owner | Android owner’s tests and fresh runtime snapshot | AI6 defines only the cross-system MQTT/schema boundary. |
 | Node/npm | Other repository tooling | Not required by current lifecycle | Observed only | Not installed for this contract | None | Do not add it to a new-student prerequisite list without a source-backed feature. |
 

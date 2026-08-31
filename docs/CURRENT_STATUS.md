@@ -1,47 +1,52 @@
 # TemiAgent Current Status
 
-狀態：CURRENT；governance snapshot：2026-08-29；Gate 6A.2 remote policy
-adopted in the isolated publication candidate。
+狀態：CURRENT；D2B documentation consolidation：2026-08-31。
 
 This page is the maintained status snapshot for implementation, verification,
 runtime honesty and publication blockers. It is not a runtime health endpoint and
 does not replace the runtime schemas, module READMEs or the
 [canonical Demo operator guide](operations/DEMO_OPERATOR_GUIDE.md).
 
-## Gate 6A.2 remote publication policy (current authority)
+## Publication, operator and D2B disposition
 
-The public root publication authority is
-<code>https://github.com/YI-TING-EE13/TemiAgent</code>; the public clone URL is
-<code>https://github.com/YI-TING-EE13/TemiAgent.git</code>; and the public branch
-is <code>main</code>. The local reviewed publication candidate is
-<code>release/github-v1@b07c93daf8a56df1a1ec6911b2b614e18ead10f9</code>. The
-remote <code>main</code> currently remains at
-<code>f2d88ed4aecbd4f0e5163300929991f1af9cb004</code> with unrelated history.
+The public publication authority is
+<code>https://github.com/YI-TING-EE13/TemiAgent</code>, branch
+<code>main</code>, at exact HEAD
+<code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> and tree
+<code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>. The root publication has
+no <code>LICENSE</code> file:
+<code>ROOT_LICENSE_POLICY=NO_LICENSE</code>. No push, history rewrite or
+public-branch mutation is part of D2B.
 
-Gate 6A.2 classified the two old RFC1918 defaults as
-<code>NON_SECRET_PRIVATE_LAN_CONFIGURATION</code> and
-<code>HISTORICAL_CONFIGURATION_EXPOSURE</code>. The bounded remote-history scan
-found no credential, token, password, certificate/key, personally identifiable
-information or resident data. <code>GITHUB_PURGE_REQUIRED=MAINTAINER_OPTIONAL</code>:
-the publication policy excludes private LAN values from new trees, but an
-RFC1918 address alone is not a secret. The clean publication is a justified
-history-replacement candidate. Gate 6B must obtain explicit maintainer
-authorization and reread the exact remote lease before any force-with-exact-
-lease push; Gate 6A.2 performed no remote mutation. Existing branches, PR refs
-and external clones may retain old objects.
+The protected canonical development worktree is the intentionally dirty
+designated-container mount <code>/TemiAgent</code> at HEAD
+<code>12aff3bfdfe526c17a25a2681aea2afad7112b33</code>; its host path is
+withheld from publication docs and remains unchanged. The validated AI6 operator workspace is
+<code>/opt/TemiAgent-operator</code> with private runtime root
+<code>/opt/TemiAgent-operator/.runtime/demo</code>. That is
+<code>VALIDATED_AI6_OPERATOR_WORKSPACE</code> evidence, not a portable default.
 
-The root repository has no <code>LICENSE</code> file and makes no open-source
-license grant: <code>ROOT_LICENSE_POLICY=NO_LICENSE</code>. Hermes and llama.cpp
-licensing remains independent.
+Gate 5, Android provenance, L4 and Gate 6 are <code>CLOSED_PASS</code> at their
+documented boundaries. <code>D2A_STATUS=CLOSED_PASS</code>; D2A validated
+operator source isolation, external LM/MQTT preservation and one bounded
+<code>start → status → stop</code> lifecycle. D2B changes documentation only:
+its own lifecycle start/stop/model/Temi/Android/LM/MQTT operation counts are
+all zero.
+
+The current portable model is: clean public-main clone, source/dependency
+reconstruction, owner-only private config, <code>./scripts/bootstrap
+--check</code>, then a read-only <code>doctor</code> with zero required
+failures. A free port or rc0 alone does not establish deployment readiness.
 
 ## Gate 5 and L4 final evidence adoption (current authority)
 
 Review date: 2026-08-29. This section adopts the separately completed Gate 5B
 Retry #4 evidence; it is a documentation/evidence freeze and does not rerun
-the live acceptance. The publication baseline for the evidence candidate was
-<code>release/github-v1@8b4a7db5f4d4e6736ee3652c56447012cb6e0a3a</code>; the
-host acceptance evidence itself was recorded at
-<code>59d568b079ce260e2144c410b0f9397d8b026913</code>.
+the live acceptance. The current publication authority for this handover is
+the public <code>main</code> commit
+<code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> with tree
+<code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>; the bounded host
+runtime evidence is carried forward only for the contract stated here.
 
 ### L4 final physical acceptance adoption
 
@@ -148,9 +153,10 @@ earlier timeout and is not remediated in this gate.
 This closes the exact canonical TTS physical boundary only. Broader Android
 camera/microphone behavior, video/media playback, general viewer/GPU behavior,
 Discord delivery, live perception and other hardware actions remain separate
-or unverified. Gate 6 is now release/handover-only readiness:
-<code>READY_FOR_GATE6=YES</code>; it must not rerun Gate 5 or L4 functionality
-unless a new release-blocking contradiction is discovered.
+or unverified. Gate 6 documentation, publication-authority and handover work is
+<code>CLOSED_PASS</code>. This closure does not imply a push, release tag or
+new Gate 5/L4 runtime execution; broader Android/media and viewer/GPU claims
+remain separately bounded.
 
 ### Frozen gate disposition
 
@@ -165,7 +171,7 @@ unless a new release-blocking contradiction is discovered.
 | Gate 5 host runtime | <code>CLOSED_PASS</code> | The exact publication/runtime contract is host-live accepted, not a physical-device or portable-environment claim. |
 | L4 Android artifact provenance | <code>CLOSED_PASS</code> | LAB606 evidence identifies the installed Android APK as the accepted final 1.0.2 (3) artifact; the exact canonical TTS route is closed by the L4.7B evidence below. |
 | L4 Temi physical/E2E acceptance | <code>CLOSED_PASS</code> | One bounded canonical TTS transaction reached the real Android executor, completed its terminal callback and correlated a successful result; broader Android/media boundaries remain separate. |
-| Gate 6 | <code>READY_FOR_GATE6=YES / NOT_STARTED</code> | Only release, handover, final authority and publication-readiness work remains. |
+| Gate 6 | <code>CLOSED_PASS</code> | Publication authority, documentation consolidation, handover routing and release-readiness records are aligned; no push or runtime execution is implied. |
 
 ### Accepted host evidence
 
@@ -263,9 +269,10 @@ from historical records.
 The L4.7B record now closes the exact canonical TTS physical boundary as
 <code>L4_ANDROID_TEMI_E2E=CLOSED_PASS</code> and
 <code>L4_FINAL=CLOSED_PASS</code>; see the adopted criteria matrix above.
-Broader Android/media behavior remains separately bounded, and
-<code>READY_FOR_GATE6=YES</code>. The accepted Gate 5 host runtime remains
-bounded to L0–L3 and L5.
+Broader Android/media behavior remains separately bounded. Gate 6
+documentation, publication authority and handover consolidation is
+<code>CLOSED_PASS</code>; the accepted Gate 5 host runtime remains bounded to
+L0–L3 and L5.
 
 ## Gate 4.1 handover repair candidate (historical)
 
@@ -656,20 +663,24 @@ python3 tools/verify_hermes_license.py \
   --base-commit a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2
 ~~~
 
-The formal Hermes layout after reconstruction is: root gitlink at the
-manifest base commit, a clean nested checkout, the root-owned nine-patch
-overlay applied into that checkout, final tree
+The historical Gate 5A layout after reconstruction was: root gitlink at the
+manifest base commit, a clean nested checkout, an earlier nine-patch overlay
+applied into that checkout, final tree
 <code>968f1668a05fafd09461c17a835198421f14a48f</code>, and the required MIT
-license. The llama.cpp check records commit
+license. The current D2B Hermes contract is the pinned base plus ten patches
+with final tree
+<code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. The llama.cpp check records commit
 <code>0b7154066e8544ed88d92ae2132cc1e055cf6304</code> and tree
 <code>1020a771795f406b8891d18ee607b4da3783fa7f</code>. Generated build
 directories, venvs, model caches and runtime files remain external/ignored.
 
-The live-layout fields are explicit:
+The historical live-layout fields were explicit:
 <code>SUBMODULE_BASE=hermes-agent@a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2</code>;
 <code>PATCHED_WORKTREE=hermes-agent</code> at final tree
 <code>968f1668a05fafd09461c17a835198421f14a48f</code> with nine tracked root
-patches; <code>VENV=hermes-agent/venv</code> supplied by the environment;
+patches. The current contract has ten tracked root patches and final tree
+<code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>.
+<code>VENV=hermes-agent/venv</code> supplied by the environment;
 <code>SKILLS=hermes-agent/skills/temi-robot-control,
 temi-care-memory,temi-home-esi,temi-discord-care-assistant</code>;
 <code>CONFIG=config/demo_resources.json</code> plus the private
@@ -1021,7 +1032,7 @@ the repository evidence-reuse rule.
 | Backend/adapter | <code>cd temi_backend &amp;&amp; uv run --locked --offline pytest</code> | PASS: 25/25; adapter focused subset 7/7 |
 | Bridge/schema/validator | <code>cd hermes_temi_bridge &amp;&amp; uv run --locked --offline python -m unittest discover -s tests</code> | PASS: 166/166 |
 | External dependency/bootstrap/license | Fresh clone bounded submodule init, <code>bootstrap_hermes.sh --bootstrap</code>, <code>bootstrap_llama_cpp.sh --bootstrap</code>, <code>bootstrap --check</code>, both verifiers, and the dependency tests in the tools suite | PASS |
-| Documentation | <code>python3 tools/validate_documentation.py</code> and <code>python3 -m unittest tools.tests.test_validate_documentation</code> | PASS: 74 Markdown files, 8 schema mappings |
+| Documentation | <code>python3 tools/validate_documentation.py</code> and <code>python3 -m unittest tools.tests.test_validate_documentation</code> | PASS: 73 retained Markdown files, 8 schema mappings |
 | Syntax | <code>bash -n $(git ls-files "*.sh")</code>; <code>python3 -m py_compile</code> on changed/verifier Python files | PASS |
 | Diff hygiene | <code>git diff --check</code> | PASS |
 | Security/publication scan | No tracked private LAN default, secret/key/token/webhook value, dependency <code>file://</code>, Git alternate, pose path/blob or blob at least 50/100 MiB | PASS: 0 for every required count |
@@ -1120,7 +1131,7 @@ Temi.
 | External dependency tests/verifiers | PASS: 23 tests; reconstructed Hermes state, MIT license, and llama.cpp manifest checks |
 | Source bootstrap | PASS: <code>./scripts/bootstrap --hermes</code> and <code>./scripts/bootstrap --llama-cpp</code> reconstructed the reviewed trees |
 | Full <code>./scripts/bootstrap --check</code> | FAIL/ENVIRONMENT_GAP: source checks pass, but the fresh candidate lacks the externally provisioned Hermes virtual environment and generated llama-server binary; the LM Studio CLI is no longer a prerequisite |
-| Documentation, shell and Python checks | PASS: 74 Markdown files/8 schema mappings; changed shell syntax; changed Python compilation; <code>git diff --check</code> |
+| Documentation, shell and Python checks | PASS in the historical snapshot: 74 Markdown files/8 schema mappings; the current D2B retained inventory is 73 files; changed shell syntax; changed Python compilation; <code>git diff --check</code> |
 | Publication/security scans | PASS for changed active source/config: no new private-LAN default, secret value, private user path, file URL, generated checkout, alternate or pose path/blob; the historical deleted pose object remains known history evidence |
 | Live LM/MQTT/service/device acceptance | SKIPPED by Gate 5B.1 scope; no live readiness or inference claim follows |
 
@@ -1378,10 +1389,12 @@ levels.
 
 ## Publication and release blockers
 
-1. The canonical local root has no configured remote by design. Gate 6A.2
-   confirmed the team-accessible public publication target
-   <code>https://github.com/YI-TING-EE13/TemiAgent.git</code> on branch
-   <code>main</code>; a future push remains separately authorized.
+1. The public publication authority is
+   <code>https://github.com/YI-TING-EE13/TemiAgent</code>, branch
+   <code>main</code>, exact HEAD
+   <code>8fead49d66ab0a9d016a7dfe495b336146bbe957</code> and tree
+   <code>e5fa932b01cc1f885cd36023464a18f11bdf060a</code>. The root publication
+   has no <code>LICENSE</code> file; no push or history rewrite is part of D2B.
 2. The historical HEAD contains the large pose checkpoint. Gate 1A removes it from
    the current index while preserving history; Gate 1B performs no history rewrite.
 3. Pose model provenance, version, license and redistribution restrictions remain
@@ -1389,12 +1402,10 @@ levels.
 4. Local credential-bearing environment files are owner-only and excluded from Git;
    owner handling/rotation remains outside this documentation gate.
 5. The Hermes team remote and formal submodule contract are verified from Gate
-   3.4. Gate 5 final evidence adoption advances the local
-   <code>release/github-v1</code> ref from the documented publication baseline
-   to the bounded documentation/evidence commit under an old-value guard. Gate
-   6A.2 classifies the old remote private-LAN defaults as non-secret historical
-   configuration and justifies controlled history replacement; no root
-   publication push is performed here.
+   3.4 and the current dependency contract is restated in the operator and
+   third-party READMEs. Historical release refs and private-LAN observations
+   are retained only as dated evidence; they are not current operator
+   defaults and no root publication push is performed here.
 
 ## Documentation authority
 
@@ -1467,7 +1478,7 @@ and independently verified before adoption:
 | Pinned base tree | PASS; `bda69c575e65725bf9264dd1288a63093cea3cc3` |
 | Pinned license | PASS; `LICENSE`, MIT, `Copyright (c) 2025 Nous Research`, verified Git blob and SHA-256. |
 | Formal root submodule | PASS; `.gitmodules` and the `hermes-agent` gitlink use the team URL and pinned base commit; no floating branch. |
-| Root-owned overlay | PASS; manifest order and SHA-256 values for patches `0001`–`0009` produce final tree `968f1668a05fafd09461c17a835198421f14a48f`. |
+| Root-owned overlay | Historical Gate 3.4 record: manifest order and SHA-256 values for the earlier nine-patch candidate produced tree `968f1668a05fafd09461c17a835198421f14a48f`. The current contract uses ten patches and final tree `47e9f1411e585769c055d0c6ee4417bebcdc6f70`. |
 
 The canonical setup is one bounded submodule initialization followed by
 `./scripts/bootstrap --hermes` (or `./scripts/bootstrap --sources` for the
@@ -1479,9 +1490,11 @@ Git alternates. A second invocation is a final-tree verification no-op.
 Two independent Fresh A/B root clones were created with `git clone --no-local`
 from Gate 3.4 commit `551790e0553ce58490f2883b857cd246db20058c`. Each initialized
 the submodule from the team remote with the documented bounded depth-1 command,
-verified the same base commit/tree, reconstructed the nine patches, verified the
-same final tree and license, ran the setup a second time, and found all required
-Temi skills. A/B patch aggregate hash was
+verified the same base commit/tree, reconstructed the earlier nine-patch
+candidate, verified the same historical final tree and license, ran the setup a
+second time, and found all required Temi skills. The current D2B contract is the
+ten-patch tree recorded in the current sections above. A/B patch aggregate hash
+was
 `d793be62374675de58c51d3a4d9d62753026ddb56a8410de57d92352b5462698`; both
 submodules were clean and had no alternates. The generated local final commit
 IDs differed, as expected; content identity did not drift.
@@ -1503,7 +1516,7 @@ candidate evidence; historical snapshots above are not current baselines.
 
 | Check | Result |
 |---|---|
-| <code>python3 tools/validate_documentation.py</code> | PASS; 74 active first-party Markdown documents and 8 schema mappings |
+| <code>python3 tools/validate_documentation.py</code> | PASS; 73 retained first-party Markdown documents and 8 schema mappings |
 | <code>python3 -m unittest discover -s tools/tests</code> | PASS; 133/133 |
 | <code>cd hermes_temi_bridge && uv run --locked --offline python -m unittest discover -s tests</code> | PASS; 166/166 |
 | <code>cd temi_backend && uv run --locked --offline pytest</code> | PASS; 25/25 |

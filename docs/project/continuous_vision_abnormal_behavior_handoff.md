@@ -1,9 +1,12 @@
 # 持續影像串流與異常行為辨識交接文件
 
-> Status: SUPPLEMENTAL EXPERIMENTAL handoff. It describes a research path, not
-> a current medical, emergency or hardware-dispatch capability.
+> Status: CURRENT_REFERENCE / SUPPLEMENTAL EXPERIMENTAL handoff. It describes a
+> research path, not a current medical, emergency or hardware-dispatch
+> capability. It is not the current operator, deployment or dependency
+> authority; use [DEMO_OPERATOR_GUIDE.md](../operations/DEMO_OPERATOR_GUIDE.md)
+> for lifecycle decisions.
 
-最後更新日期：2026-06-01
+最後更新日期：2026-08-31（D2B authority alignment; research content retained）
 
 ## 1. 文件目的
 
@@ -12,7 +15,7 @@
 本文件不取代既有文件，而是補上 continuous vision / abnormal behavior 這條新需求的設計與交接。接手者應同時閱讀：
 
 - `README.md`
-- `Agent.md`
+- `AGENTS.md`
 - `docs/architecture/project_overview.md`
 - `docs/project/hermes_care_assistant_task_readme.md`
 - `docs/operations/temi_streaming_local_runbook.md`

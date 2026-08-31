@@ -1,5 +1,8 @@
 # llama.cpp bootstrap pin
 
+Status: CURRENT_AUTHORITY. Source identity is portable; generated build output
+and the AI6 binary identity below are observed deployment evidence.
+
 `anomaly_detection/third_party/llama.cpp/` is a generated, external upstream
 checkout. It is deliberately ignored by TemiAgent and is not a Git submodule.
 The reviewed upstream URL, exact commit, checkout path, and expected tree are
@@ -38,3 +41,33 @@ This records the license of the pinned llama.cpp source only. It does not
 license or publish model weights, build outputs, or a running inference
 service. The generated checkout remains ignored and must be reconstructed from
 the public URL, commit, tree, and license fields in `manifest.json`.
+
+## Build and operator artifact boundary
+
+Source reconstruction is not a build:
+
+~~~bash
+./scripts/bootstrap --llama-cpp
+~~~
+
+The generated `build/bin/llama-server` is required only when the selected
+viewer deployment enables it. The current source contract does not pin a
+compiler, CUDA toolkit, generator, GPU architecture or binary hash. The
+validated AI6 cache recorded `CMAKE_BUILD_TYPE=Release`,
+`CMAKE_GENERATOR=Ninja`, `GGML_CUDA=ON` and
+`CMAKE_CUDA_ARCHITECTURES=native`; reproduce those settings only through an
+owner-approved build procedure.
+
+For D2A, the private operator config selected:
+
+~~~text
+DEMO_ACTION_VIEWER_LLAMA_SERVER=/opt/TemiAgent-operator/anomaly_detection/third_party/llama.cpp/build/bin/llama-server
+SHA-256=6827638842194c9903da14662737b1e5c7d35effa6353506a329d31f85029585
+~~~
+
+That absolute path and SHA-256 are `OBSERVED_AI6` evidence, not a portable
+requirement. A clean clone must never fall back to a binary under
+`/TemiAgent` worktree; the private config must name the selected deployment
+artifact and viewer health must verify the actual child.
+The embedded UI is optional and its absence is non-blocking when the service
+health contract passes.

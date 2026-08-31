@@ -1,11 +1,24 @@
 # TemiAgent Repository Map
 
-狀態：CURRENT；high-density source and publication map：2026-08-27。
+狀態：CURRENT；D2B source, publication and operator map：2026-08-31。
 
 Use this map with [CURRENT_STATUS.md](CURRENT_STATUS.md) and the
 [documentation index](README.md). A directory can be physically present in a
 development mount without being canonical V1 source, a current contract owner or
 publication material.
+
+The public publication baseline is repository
+`https://github.com/YI-TING-EE13/TemiAgent`, branch `main`, HEAD
+`8fead49d66ab0a9d016a7dfe495b336146bbe957`, tree
+`e5fa932b01cc1f885cd36023464a18f11bdf060a`; the root license policy is
+`NO_LICENSE`. A clean clone of that public branch is the portable operator
+source. The mounted `/TemiAgent` checkout is a protected development
+workspace and may be dirty; it is not a portable operator default.
+
+`/opt/TemiAgent-operator` is the `VALIDATED_AI6_OPERATOR_WORKSPACE` observed
+for D2A. Its private runtime root is
+`/opt/TemiAgent-operator/.runtime/demo`. These absolute paths and all runtime
+artifact hashes are AI6 deployment evidence, not universal requirements.
 
 For handover navigation, use [developer setup](operations/developer_setup.md),
 [STUDENT_HANDOVER](project/STUDENT_HANDOVER.md) and the complete
@@ -17,7 +30,7 @@ source.
 
 | Area | Role | Boundary and authority |
 |---|---|---|
-| `scripts/` | Entry scripts | `scripts/demo` exposes the five-command lifecycle; `scripts/bootstrap` handles source reconstruction and readiness checks. |
+| `scripts/` | Entry scripts | `scripts/demo` exposes the five primary lifecycle operations `doctor`, `start`, `status`, `stop` and the compatibility `restart`; `scripts/bootstrap` handles source reconstruction and readiness checks. |
 | `tools/` | Cross-module adapters, lifecycle, health and test helpers | `tools/demo_lifecycle.py` owns lifecycle behavior; adapters do not own command dispatch. |
 | `hermes_temi_bridge/` | Canonical safety boundary | Owns event/path/Hermes/action validation, dispatch, schemas and Bridge tests. Runtime schemas are authoritative. |
 | `temi_backend/` | Legacy ASR, video, local VLM and MQTT route | Compatibility/legacy surface; not the canonical Hermes V1 ownership path. |
@@ -46,6 +59,27 @@ the expected final tree
 `47e9f1411e585769c055d0c6ee4417bebcdc6f70`. A clean clone must use the team
 remote and verify both identities before handover. No original-upstream,
 local-checkout, file-URL or alternate-object fallback is allowed.
+
+## Operator source isolation
+
+The current operator sequence is owned by
+[DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md). It requires a
+clean public-main clone, a separately provisioned dependency set, an owner-only
+private config and a runtime root outside the source tree. The validated AI6
+deployment used the following observed artifact contract:
+
+| Artifact | Observed AI6 evidence | Portable interpretation |
+|---|---|---|
+| Hermes | Team fork base `a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2` plus patches `0001`–`0010`, final tree `47e9f1411e585769c055d0c6ee4417bebcdc6f70` | Reconstruct from the team submodule and root patch manifest; do not use the original upstream or a local fallback. |
+| llama.cpp | Generated operator executable under `/opt/TemiAgent-operator/anomaly_detection/third_party/llama.cpp/build/bin/llama-server`; observed SHA-256 `6827638842194c9903da14662737b1e5c7d35effa6353506a329d31f85029585` | Source commit/tree are pinned; build output, toolchain and binary hash are observed deployment evidence. |
+| LM Studio | External API on `127.0.0.1:1234`, expected API identifier `google/gemma-4-31b`, context `64000` | External owner provisions and keeps it running; the lifecycle never starts, stops, unloads or reconfigures it. |
+| MQTT | External/reused broker in the validated AI6 deployment | Ownership must be declared by the private config; never stop or adopt an occupied external listener. |
+| Pose model | Not provisioned | Optional and not a readiness prerequisite; do not claim pose availability. |
+
+Do not infer deployment readiness from a free port, a generated binary, a
+historical PID or a dirty nested checkout. `bootstrap --check` and the
+selected private-config `doctor` must both pass before an authorized lifecycle
+operation.
 
 ## Experimental and local-only areas
 

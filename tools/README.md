@@ -1,6 +1,13 @@
 # Tools 模組 README
 
-最後更新日期：2026-08-29
+最後更新日期：2026-08-31；D2B documentation consolidation。
+
+The current publication authority is public `main` at
+`8fead49d66ab0a9d016a7dfe495b336146bbe957` with tree
+`e5fa932b01cc1f885cd36023464a18f11bdf060a`. Commands below that use
+`/TemiAgent` are designated-container module examples; portable operator
+instructions use a clean clone and `REPO_ROOT` in the
+[Demo operator guide](../docs/operations/DEMO_OPERATOR_GUIDE.md).
 
 ## 本文件維護規則
 
@@ -111,8 +118,8 @@ run IDs, temporary worktrees and runtime directories are acceptance evidence,
 not portable tool or configuration requirements. The exact canonical
 Android/Temi TTS physical acceptance is separately
 <code>L4_FINAL=CLOSED_PASS</code> from adopted L4.7B evidence; broader
-Android/media acceptance remains separate and Gate 6 is ready for
-release/handover work only.
+Android/media acceptance remains separate and Gate 6 documentation, publication
+authority and handover consolidation is `CLOSED_PASS`.
 
 ### Canonical Demo lifecycle
 
@@ -121,15 +128,20 @@ production lifecycle only checks its configured HTTP API readiness and never
 starts, stops, unloads, or reconfigures the provider. The `newcomer_mock`
 profile alone owns a local LM test double.
 
-`scripts/demo` 是 current branch 的唯一 lifecycle。預設 private env 是 Git-ignore、mode
-`0600` 的 `/TemiAgent/.runtime/demo/demo.env`，由 `init-config` 建立；只有這個 exact
-worktree-local path 可作為預設。`TEMIAGENT_RUNTIME_ROOT`、Bridge `LOG_DIR`、memory、shared
-ASR artifact、PID、socket、logs 和 trace 都必須在該 owner-only root。每項服務使用 `managed`、`external` 或
-`disabled` ownership。Production LM Studio is always `external`; only the
-`newcomer_mock` profile manages a local LM test double. The lifecycle manages
-the remaining explicitly managed services, while an external service is only
-health-checked. Stop accepts recorded exact PID identity and never includes
-the externally managed production LM Studio in its stop order.
+`scripts/demo` 是 current branch 的唯一 lifecycle。In the designated
+container's development checkout, the ignored default private env is
+owner-only `/TemiAgent/.runtime/demo/demo.env` and is created by
+`init-config`. A portable operator must instead use an owner-only private
+config in the selected clean clone or an explicitly supplied external path;
+this module-local default is not a generic deployment path.
+`TEMIAGENT_RUNTIME_ROOT`, Bridge `LOG_DIR`, memory, shared ASR artifacts, PID,
+socket, logs and trace must remain below the owner-only root. Each service uses
+`managed`, `external` or `disabled` ownership. Production LM Studio is always
+`external`; only the `newcomer_mock` profile manages a local LM test double.
+The lifecycle manages the remaining explicitly managed services, while an
+external service is only health-checked. Stop accepts recorded exact PID
+identity and never includes externally managed production LM Studio in its
+stop order.
 
 After each verified managed spawn, the lifecycle immediately persists an
 owner-only `STARTING` record with exact process identity, command fingerprint,
@@ -143,17 +155,24 @@ non-zero without signalling any PID. Preserve the state and inspect the exact
 PID evidence; do not delete the state file or use a broad kill.
 
 ```bash
-cd /TemiAgent
-./scripts/demo init-config
-./scripts/demo doctor
-./scripts/demo start
-./scripts/demo restart
-./scripts/demo status
-./scripts/demo trace-export
-./scripts/demo stop
+export REPO_ROOT=<clean-public-main-clone>
+export PRIVATE_CONFIG=<private-production-config>
+cd "$REPO_ROOT"
+./scripts/bootstrap --check
+./scripts/demo --config "$PRIVATE_CONFIG" --json doctor
+./scripts/demo --config "$PRIVATE_CONFIG" start
+./scripts/demo --config "$PRIVATE_CONFIG" --json status
+./scripts/demo --config "$PRIVATE_CONFIG" stop
 ```
 
-For a broker-only lifecycle transition, use the dedicated MQTT command group:
+Run the primary sequence once under explicit authorization:
+`doctor → start → status → stop`. The compatibility `restart` and
+`trace-export` selectors are documented in the operator guide but are not
+part of this bounded sequence.
+
+For a broker-only lifecycle transition, use the dedicated MQTT command group
+only when the private config declares `MQTT_OWNERSHIP=managed` and a separate
+authorization covers the transition:
 
 ```bash
 cd /TemiAgent
@@ -162,13 +181,13 @@ cd /TemiAgent
 ./scripts/demo mqtt stop
 ```
 
-These commands resolve the canonical private configuration from the primary
-`/TemiAgent` worktree and use its owner-only runtime root at
-`/TemiAgent/.runtime/demo`. They manage or inspect only the configured MQTT
-broker on port `1883`; they do not start, stop or restart LM Studio, Hermes,
-Bridge, resident, viewer, gateway, adapter or Android. `mqtt status` is
-read-only. `mqtt start` refuses any existing listener unless it is the exact
-managed broker startup, and `mqtt stop` signals only the recorded exact owner.
+These commands manage or inspect only the configured MQTT broker on port
+`1883`; they do not start, stop or restart LM Studio, Hermes, Bridge, resident,
+viewer, gateway, adapter or Android. `mqtt status` is read-only.
+`mqtt start` refuses any existing listener unless it is the exact managed broker
+startup, and `mqtt stop` signals only the recorded exact owner. The accepted
+AI6 deployment used `MQTT_OWNERSHIP=external` and reused its healthy broker;
+never use these transition commands against that external listener.
 
 Managed Mosquitto runs under a lifecycle supervisor. The supervisor launches
 the resolved absolute broker executable with the canonical config, then
@@ -351,7 +370,9 @@ uv run python /TemiAgent/tools/temi_overview_adapter.py \
 ## 維護注意
 
 - `temi_overview_adapter.py` 只負責 ASR 與 camera；不要在 adapter 重新加入 `cmd/request` -> `temi/action/speak` 轉發，否則新版 Temi app 會重複說話。
-- 腳本應保持可從 `/TemiAgent` 絕對路徑執行，方便 runbook 複製。
+- 腳本可從 `/TemiAgent` 執行，這是 designated-container module path only；
+  reusable runbooks must use `REPO_ROOT` or another explicit clone path rather
+  than assuming it is the portable operator workspace.
 - 修改 topic、schema 或 path mapping 時，必須同步更新 `hermes_temi_bridge/README.md` 與 `docs/operations/` runbooks。
 - Demo 用 IP、機器人狀態與臨時結果應放 runbook，不要硬編到 reusable scripts。Legacy
   service starters must receive `PC_IP`, and the adapter must receive

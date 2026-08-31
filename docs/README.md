@@ -1,6 +1,26 @@
 # TemiAgent Documentation Index
 
-最後審查日期：2026-08-29
+最後審查日期：2026-08-31；D2B documentation consolidation。
+
+## Final publication and operator disposition
+
+The current publication authority is the public repository
+`https://github.com/YI-TING-EE13/TemiAgent`, branch `main`, at exact HEAD
+`8fead49d66ab0a9d016a7dfe495b336146bbe957` and tree
+`e5fa932b01cc1f885cd36023464a18f11bdf060a`. The root publication has no
+`LICENSE` file: `ROOT_LICENSE_POLICY=NO_LICENSE`.
+
+Gate 5, Android provenance, L4 and Gate 6 are `CLOSED_PASS`. D2A is
+`CLOSED_PASS`; its validated operator lifecycle evidence belongs to the
+observed AI6 deployment and is not a portable path claim. The one current
+operator procedure is [DEMO_OPERATOR_GUIDE.md](operations/DEMO_OPERATOR_GUIDE.md).
+
+For a portable setup, start from a clean clone of public `main`. The dirty
+canonical development mount `/TemiAgent` is never a student operator
+workspace. `/opt/TemiAgent-operator` is the
+`VALIDATED_AI6_OPERATOR_WORKSPACE` observed during D2A, with private runtime
+state under `/opt/TemiAgent-operator/.runtime/demo`; do not copy that absolute
+path into a generic setup instruction.
 
 ## Gate 5 and L4 final evidence handover entry points
 
@@ -8,8 +28,9 @@ Gate 5 host runtime acceptance is closed with the adopted Retry #4 evidence.
 The current claim is bounded to the exact publication/runtime contract recorded
 in [CURRENT_STATUS](CURRENT_STATUS.md); LAB606 has closed Android artifact
 provenance and the adopted L4.7B record closes the exact canonical TTS
-physical boundary. Broader Android/media behavior and Gate 6 functionality
-remain outside that acceptance; Gate 6 is ready for release/handover work.
+physical boundary. Broader Android/media behavior remains outside that
+acceptance. Gate 6 publication and handover consolidation is `CLOSED_PASS`;
+it does not imply a push, release tag or broader physical acceptance.
 
 For a new student, use this short path rather than browsing the full document
 inventory:
@@ -82,7 +103,7 @@ authoritative when any prose conflicts with them.
 | Surface | Current document | Owner / verification boundary |
 |---|---|---|
 | Repository entry, scope, module map | [`README.md`](../README.md) | Root maintainers; hardware-free checks only unless recorded otherwise. |
-| Current implementation, verification and release blockers | [CURRENT_STATUS.md](CURRENT_STATUS.md) | Maintainer snapshot; includes adopted Gate 5 host evidence, closed L4 artifact provenance and exact canonical TTS E2E, plus remaining Android/media/Gate 6 boundaries. |
+| Current implementation, verification and release blockers | [CURRENT_STATUS.md](CURRENT_STATUS.md) | Maintainer snapshot; Gate 5, Android provenance, L4, Gate 6 and D2A are closed at their stated boundaries, with remaining Android/media and dependency limitations explicit. |
 | Repository layout and publication boundary | [REPOSITORY_MAP.md](REPOSITORY_MAP.md) | Maintainer map; physical presence is not canonical ownership. |
 | Data flow, module boundary and capability classification | [project overview](architecture/project_overview.md) | Architecture; sections 6–13 are historical planning material. |
 | Cross-module topic, schema and update-together rule | [contract traceability](architecture/contract_traceability.md) | Bridge and contract owners; runtime schemas are authoritative. |
@@ -140,13 +161,13 @@ Machine-specific documents may record historical observations. New reusable comm
 
 | Document | Status | Owner | Purpose |
 |---|---|---|---|
-| [STUDENT_HANDOVER.md](project/STUDENT_HANDOVER.md) | CURRENT authority | Maintainers | New-student reading order, 40-question handover matrix and release handover. |
+| [STUDENT_HANDOVER.md](project/STUDENT_HANDOVER.md) | CURRENT authority | Maintainers | New-student reading order, 17-question handover matrix and release handover. |
 | [hermes_care_assistant_task_readme.md](project/hermes_care_assistant_task_readme.md) | Maintained Demo scope | Care assistant | Task scope and acceptance boundaries. |
 | [hermes_care_assistant_handoff.md](project/hermes_care_assistant_handoff.md) | Handoff reference | Care assistant | Full cognitive-assistant context and limitations. |
-| [continuous_vision_abnormal_behavior_handoff.md](project/continuous_vision_abnormal_behavior_handoff.md) | Experimental handoff | Anomaly detection | Streaming perception design and known gaps. |
+| [continuous_vision_abnormal_behavior_handoff.md](project/continuous_vision_abnormal_behavior_handoff.md) | CURRENT reference; experimental | Anomaly detection | Streaming perception design and known gaps; not the operator or deployment authority. |
 | [first_year_demo_phase_tasks.md](project/first_year_demo_phase_tasks.md) | Planning record | Demo owner | P0–P5 task and artifact plan. |
 | [first_year_demo_system_design_20260601.md](project/first_year_demo_system_design_20260601.md) | Dated design snapshot | Demo owner | Implemented state and decisions at the stated date. |
-| [first_year_demo_scenario_script.md](project/first_year_demo_scenario_script.md) | Demo-only | Demo operator | Scenario narration and evidence mapping. |
+| [first_year_demo_scenario_script.md](project/first_year_demo_scenario_script.md) | HISTORICAL Demo reference | Demo operator | Dated scenario narration and evidence mapping; not current lifecycle guidance. |
 | [first_year_demo_acceptance_checklist.md](project/first_year_demo_acceptance_checklist.md) | Demo-only checklist | Demo operator | Pre-Demo acceptance evidence. |
 | [system_handover.md](project/system_handover.md) | LEGACY handoff; verify against current module docs | Project | Broad historical handoff; current handover starts from `CURRENT_STATUS.md` and the current operator guide. |
 | [p2_structured_memory_phase1_report_materials.md](project/p2_structured_memory_phase1_report_materials.md) | Dated report material | Care memory | Phase evidence. |
@@ -170,11 +191,14 @@ worktree rather than TemiAgent root source; `third_party/llama_cpp/` still
 describes an ignored generated checkout. `計劃書/` is research/reference
 material, not runtime source.
 
-For Hermes, initialize the root submodule from the team remote and run the
-documented bootstrap to apply patches `0001`–`0010`. The final patched tree is
-verified by content identity; generated local submodule commit IDs are not
-dependency authority. If the team remote is unavailable, stop without falling
-back to the original upstream, a local checkout, a file URL or Git alternates.
+For Hermes, initialize the root submodule from the team remote, run the
+documented bootstrap to apply patches `0001`–`0010`, then run
+`(cd hermes-agent && uv sync --frozen)` to provision the locked environment.
+The llama.cpp source checkout and approved build are separate generated
+artifacts. The final Hermes patched tree is verified by content identity;
+generated local submodule commit IDs are not dependency authority. If the team
+remote or another required dependency is unavailable, stop without falling back
+to the original upstream, a local checkout, a file URL or Git alternates.
 
 ## Schemas
 
