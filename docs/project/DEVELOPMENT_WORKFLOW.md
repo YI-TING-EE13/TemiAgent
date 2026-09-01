@@ -33,7 +33,8 @@ Research direction
   -> Maintainer-owned implementation
   -> Verification / experiment evidence
   -> Pull Request
-  -> CI / review
+  -> CI / required repository validation
+  -> Review
   -> PROJECT-01 lightweight final review
   -> Merge
   -> Runtime/integration acceptance when required
@@ -233,6 +234,19 @@ upgrading a mock or unit result to a live claim. Use the current
 [verification and acceptance guide](../operations/verification_and_acceptance.md)
 for repository commands and acceptance vocabulary.
 
+For this workflow, `CI / required repository validation` means configured
+GitHub Actions CI when the repository provides it. If the repository has no
+configured CI, the maintainer MUST run the authoritative repository-local
+validation suite instead. The PR MUST report `CI = NOT_CONFIGURED` in that
+case and record the exact local commands and results. `NOT_CONFIGURED` is not
+the same as `PASS`. `NO_CHECKS_REPORTED` is an observation about a PR status
+rollup, not a failure classification; determine the CI result from the
+repository's actual configuration and required checks. If configured required
+CI checks pass, report `CI = PASS`; if they fail, report `CI = FAIL` and do not
+merge. The allowed PR values are therefore `CI = PASS`, `CI = FAIL`, and
+`CI = NOT_CONFIGURED`; the maintainer MUST NOT report `CI = PASS` when CI is
+absent.
+
 ## Pull Request review packet
 
 Every non-trivial PR SHOULD give reviewers a compact, answer-first packet:
@@ -245,6 +259,8 @@ Every non-trivial PR SHOULD give reviewers a compact, answer-first packet:
 | Known limitations | Claims that remain unproven, failed cases and deferred work. |
 | Cross-repo impact | `NONE` or the exact repository, Change ID and contract affected. |
 | Decision needed | `NONE` or the precise `PROJECT-01` decision required. |
+| CI | `PASS`, `FAIL`, or `NOT_CONFIGURED`, based on the repository's actual CI configuration and required checks. `PASS` requires configured required CI checks to pass; `NOT_CONFIGURED` requires confirming that repository CI is absent. |
+| Local validation | Exact repository-local validator/test commands and results. This field is required when `CI = NOT_CONFIGURED` and may supplement configured CI. |
 
 The PR also includes the linked Issue, changed modules, complete test commands
 and results, documentation impact, and a rollback or containment note when the
@@ -273,7 +289,8 @@ normal repository review once its direction and evidence are sound.
 Before merge, the maintainer confirms:
 
 - the PR scope is coherent;
-- required CI and tests pass;
+- required repository validation passes, including required CI when configured;
+- when CI is not configured, the PR records `CI = NOT_CONFIGURED` and passing authoritative repository-local validators/tests;
 - review findings are resolved;
 - current documentation is updated when current truth changes;
 - no prohibited or private artifact entered the change;
@@ -319,7 +336,7 @@ maintainer modifies only the repository they own. The recommended order is:
 2. identify a backwards-compatible transition when feasible;
 3. update producer and consumer tests;
 4. implement each repository independently;
-5. pass each repository's CI;
+5. pass each repository's required validation, including CI when configured;
 6. merge in an explicitly documented safe order;
 7. perform bounded integration/device acceptance only when required; and
 8. record final evidence in each repository at the correct evidence level.
