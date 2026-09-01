@@ -221,6 +221,8 @@ Before editing, record branch, HEAD and `git status --short`. After editing, ins
 
 Do not commit, push, merge, rebase, reset, clean or tag unless the user explicitly requests that Git action. A dirty tree belongs to the user; preserve unrelated changes and identify pre-existing changes separately from task changes.
 
+The normal academic-lab development path is [DEVELOPMENT_WORKFLOW.md](docs/project/DEVELOPMENT_WORKFLOW.md). It defines Issue and change-class routing, clean feature branches, maintainer-owned implementation, evidence and Pull Request review; it does not replace the safety, contract or release rules in this guide.
+
 `hermes-agent/` is an external Git repository recorded by the root repository as
 a formal submodule. The root gitlink pins the verified team-controlled base
 commit; Temi-specific integration remains in the root repository's ordered

@@ -1,6 +1,6 @@
 # AI6 TemiAgent Student Handover
 
-Status: CURRENT_AUTHORITY; D2B consolidated on 2026-08-31.
+Status: CURRENT_AUTHORITY; D2B consolidated on 2026-08-31; development workflow added on 2026-09-01.
 
 This is the newcomer handover for the public TemiAgent publication. Runtime
 schemas, executable validators, module READMEs and [AGENTS.md](../../AGENTS.md)
@@ -78,6 +78,15 @@ git status --short
 The container path is a command boundary, not a license to use the protected
 <code>/TemiAgent</code> mount. A clean clone may use any owner-approved
 <code>REPO_ROOT</code>.
+
+## Normal future development workflow
+
+After setup, use the [academic-lab development workflow](DEVELOPMENT_WORKFLOW.md)
+for normal successor-student work. The workflow defines the Issue unit, stable
+role IDs, change classes, clean feature branches, maintainer-owned technical
+decisions, research evidence states, PR review packet and lightweight
+<code>PROJECT-01</code> review. It does not authorize runtime, MQTT,
+Android/Temi, credential or destructive operations.
 
 ## Seventeen newcomer questions
 
