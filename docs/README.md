@@ -1,6 +1,6 @@
 # TemiAgent Documentation Index
 
-最後審查日期：2026-08-31；D2B documentation consolidation。
+最後審查日期：2026-09-01；academic-lab development workflow addition。
 
 ## Final publication and operator disposition
 
@@ -46,6 +46,7 @@ inventory:
 7. [Verification and acceptance](operations/verification_and_acceptance.md)
 8. [Troubleshooting](operations/demo_troubleshooting.md)
 9. [Student handover](project/STUDENT_HANDOVER.md)
+10. [Academic-lab development workflow](project/DEVELOPMENT_WORKFLOW.md)
 
 [DOCUMENT_AUTHORITY_MAP.md](DOCUMENT_AUTHORITY_MAP.md) is the complete
 classification inventory. It records one current prose authority per major
@@ -113,6 +114,7 @@ authoritative when any prose conflicts with them.
 | Private Demo configuration and ownership | [Demo configuration reference](operations/demo_configuration_reference.md) | Canonical ignored owner-only `.runtime/demo/demo.env`, initializer, production and isolated `newcomer_mock` profiles; never commit values or credentials. |
 | Incident diagnosis and recovery boundary | [Demo troubleshooting](operations/demo_troubleshooting.md) | Exact-PID investigation; no broad process control. |
 | Test selection and acceptance claims | [Verification and acceptance](operations/verification_and_acceptance.md) | Maintainer; includes adopted Gate 5 host evidence, Android provenance and one closed canonical TTS E2E. Media/camera, viewer/GPU general and Discord remain separate external gates. |
+| Academic-lab development workflow | [Development workflow](project/DEVELOPMENT_WORKFLOW.md) | `AI6-01` with role-specific maintainers; Issue, change-class, branch, evidence and PR routing with lightweight `PROJECT-01` review. |
 | Bridge-owned abnormal alert, follow-up, and Demo injection | [Immediate abnormal-care flow](operations/immediate_abnormal_care_flow.md) | Bridge owner; formal injector is synthetic-only and real Discord remains an authorization-gated external path. |
 | Module commands and artifacts | Each module README in the root module index | Owning module; do not infer contracts from a README alone. |
 | External source bootstrap | [`third_party/hermes/`](../third_party/hermes/README.md) and [`third_party/llama_cpp/`](../third_party/llama_cpp/README.md) | Hermes is a formal team-remote submodule plus root-owned patches; llama.cpp remains an ignored generated checkout reconstructed from its manifest. |
@@ -164,6 +166,7 @@ Machine-specific documents may record historical observations. New reusable comm
 | Document | Status | Owner | Purpose |
 |---|---|---|---|
 | [STUDENT_HANDOVER.md](project/STUDENT_HANDOVER.md) | CURRENT authority | Maintainers | New-student reading order, 17-question handover matrix and release handover. |
+| [DEVELOPMENT_WORKFLOW.md](project/DEVELOPMENT_WORKFLOW.md) | CURRENT authority | `AI6-01` and successor maintainers | Academic-lab development flow, stable role IDs, Issue/change classes, experiment evidence and PR review. |
 | [hermes_care_assistant_task_readme.md](project/hermes_care_assistant_task_readme.md) | Maintained Demo scope | Care assistant | Task scope and acceptance boundaries. |
 | [hermes_care_assistant_handoff.md](project/hermes_care_assistant_handoff.md) | Handoff reference | Care assistant | Full cognitive-assistant context and limitations. |
 | [continuous_vision_abnormal_behavior_handoff.md](project/continuous_vision_abnormal_behavior_handoff.md) | CURRENT reference; experimental | Anomaly detection | Streaming perception design and known gaps; not the operator or deployment authority. |

@@ -74,6 +74,7 @@ canonical dirty-worktree fallback or unknown listener adoption.
 | Exact-PID service policy | `docs/operations/safe_service_operations.md` | Operator guide and troubleshooting |
 | Verification claims | `docs/operations/verification_and_acceptance.md` | Current status and test owners |
 | Student handover | `docs/project/STUDENT_HANDOVER.md` | Developer setup and operator guide |
+| Academic-lab development workflow | `docs/project/DEVELOPMENT_WORKFLOW.md` | `AI6-01`, role-specific maintainers and lightweight `PROJECT-01` review |
 | Hermes source and patched environment | `third_party/hermes/README.md` plus manifest and verifier | Developer setup and bootstrap scripts |
 | llama.cpp source and generated build | `third_party/llama_cpp/README.md` plus manifest | Developer setup and operator guide |
 | Module-local behavior | The owning module README and executable code | Root/docs references must not create a duplicate runtime contract |
@@ -121,6 +122,7 @@ means the file is supplemental or historical rather than an authority.
 | `docs/operations/temi_streaming_manual.md` | `SUPERSEDED` | Legacy streaming manual | Historical integration maintainers | — | `docs/operations/DEMO_OPERATOR_GUIDE.md` | Dated streaming manual | Retains the earlier Android streaming procedure for provenance. | Superseded reference |
 | `docs/operations/verification_and_acceptance.md` | `CURRENT_AUTHORITY` | Verification guide | Maintainers and reviewers | Test matrix, evidence vocabulary and acceptance boundaries | — | 2026-08-31 | Separates executable software checks from external and physical acceptance. | Current authority |
 | `docs/project/STUDENT_HANDOVER.md` | `CURRENT_AUTHORITY` | Student handover | New students and maintainers | Newcomer questions, reading order and safe lifecycle summary | — | 2026-08-31 | Gives a compact answer-first handoff aligned to the current publication. | Current authority |
+| `docs/project/DEVELOPMENT_WORKFLOW.md` | `CURRENT_AUTHORITY` | Academic-lab development workflow | Successor students and maintainers | Issue/change routing, role responsibilities, experiment evidence and PR review | — | 2026-09-01 | Defines the normal student-owned research and engineering workflow without duplicating operator procedures. | Current authority |
 | `docs/project/continuous_vision_abnormal_behavior_handoff.md` | `CURRENT_REFERENCE` | Experimental research handoff | Perception researchers | — | `anomaly_detection/README.md` | 2026-08-31 alignment; research content dated 2026-06-01 | Preserves continuous-vision design and known gaps without operator authority. | Current supplemental |
 | `docs/project/final_demo_release_consolidation_20260731.md` | `HISTORICAL` | Release reconciliation record | Maintainers and reviewers | — | `docs/CURRENT_STATUS.md` | 2026-07-31 | Preserves release-candidate decisions and source-boundary evidence. | Historical evidence |
 | `docs/project/first_year_demo_acceptance_checklist.md` | `HISTORICAL` | Dated acceptance checklist | Demo maintainers | — | `docs/operations/verification_and_acceptance.md` | First-year Demo | Preserves the earlier acceptance checklist and its scope. | Historical evidence |
@@ -160,9 +162,9 @@ means the file is supplemental or historical rather than an authority.
 | `third_party/llama_cpp/README.md` | `CURRENT_AUTHORITY` | External build contract | Viewer maintainers and operators | llama.cpp source pin, approved build and artifact identity | — | 2026-08-31 | Separates generated build output from portable source and records AI6 evidence. | Current authority |
 | `tools/README.md` | `CURRENT_AUTHORITY` | Tools module README | Maintainers and operators | Cross-module scripts, lifecycle helper boundaries and verification commands | — | 2026-08-31 | Routes helper usage to the current lifecycle and preserves safety limits. | Current authority |
 
-The ledger contains 29 `CURRENT_AUTHORITY` documents, 25
+The ledger contains 30 `CURRENT_AUTHORITY` documents, 25
 `CURRENT_REFERENCE` documents, 12 `HISTORICAL` documents and 7
-`SUPERSEDED` documents, for 73 retained documents total. Every retained row
+`SUPERSEDED` documents, for 74 retained documents total. Every retained row
 has a purpose and retention classification; therefore
 `UNJUSTIFIED_RETAINED_DOCUMENT_COUNT=0`. Historical and superseded documents
 are retained for provenance only and must not be used to infer current
