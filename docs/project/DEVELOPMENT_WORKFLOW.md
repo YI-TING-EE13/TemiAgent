@@ -42,9 +42,11 @@ Research direction
   -> Issue closure
 ```
 
-The maintainer may move through the flow independently for routine repository
-work. The consultation rules below add review or authorization only when the
-change class requires it.
+The implementation owner may move through the technical steps independently
+for routine repository work. Under the current lab model, `AI6-01` owns the
+engineering and review-packet steps; `PROJECT-01` owns Pull Request creation,
+PR management, project-level review, and the merge decision. The consultation
+rules below add review or authorization only when the change class requires it.
 
 ## Roles
 
@@ -55,7 +57,7 @@ workflow.
 | Role ID | Responsibility | Consult when |
 |---|---|---|
 | `PROJECT-01` | Research direction, priorities, constraints, high-level outcome, feedback, and final lightweight research/governance decision. | The objective, research direction, major architecture, or final acceptance decision needs confirmation. |
-| `AI6-01` | Primary TemiAgent / AI6 repository maintainer; decomposes Issues, designs within contracts, implements, tests, records evidence, updates docs, and prepares PRs. | Any change owned by the root repository or any cross-module change without a more specific owner. |
+| `AI6-01` | Primary TemiAgent / AI6 repository maintainer; decomposes Issues, designs within contracts, implements, tests, records evidence, updates docs, prepares the PR review packet, and pushes review-fix commits. | Any change owned by the root repository or any cross-module change without a more specific owner. |
 | `MQTT-01` | MQTT boundary, broker-ownership, topic and transport maintenance. | A change affects MQTT topics, payloads, broker ownership, listener behavior, or compatibility. |
 | `HERMES-01` | Hermes source integration, patch overlay, skills, prompts, and Hermes environment contract. | A change affects Hermes source, patches, skills, model I/O, or source bootstrap. |
 | `BRIDGE-01` | HermesTemiBridge schemas, validators, action boundary, dispatch and trace behavior. | A change affects Bridge validation, command contracts, event paths, or dispatch. |
@@ -161,9 +163,11 @@ change as one coherent patch boundary.
 
 `AI6-01` owns source inspection, impact analysis, design within accepted
 contracts, implementation, tests, regression selection, reproducibility
-evidence, documentation updates, PR preparation and responses to review
-findings. The responsible specialist role participates when a module,
-dependency or external contract is affected.
+evidence, documentation updates, PR review-packet preparation, review-fix
+commits, and responses to review findings. `PROJECT-01` owns Pull Request
+creation and management, project-level review, and the merge decision. The
+responsible specialist role participates when a module, dependency or
+external contract is affected.
 
 The maintainer MUST preserve existing ownership and safety boundaries. In
 particular:
@@ -268,6 +272,10 @@ change can affect runtime, data or an external boundary. The packet should let
 `PROJECT-01` review the direction and evidence without reconstructing the
 implementation.
 
+`AI6-01` may push review-fix commits to the same branch. Pushing a review fix
+does not transfer PR ownership: `PROJECT-01` remains responsible for PR
+creation, PR management, project-level review, and the merge decision.
+
 ## PROJECT-01 final review
 
 `PROJECT-01` performs a lightweight final review when the change class or Issue
@@ -298,9 +306,10 @@ Before merge, the maintainer confirms:
 - the required `PROJECT-01` review is complete for the change class.
 
 Prefer a squash merge for a normal feature PR unless repository history
-requires another documented method. Merging, release and deployment remain
-maintainer decisions. A merged PR does not automatically authorize runtime or
-device acceptance.
+requires another documented method. `PROJECT-01` owns the project-level merge
+decision for the PR. Release and deployment remain governed by their existing
+runtime owners and explicit authorization. A merged PR does not automatically
+authorize runtime or device acceptance.
 
 ## Post-merge and Issue closure
 

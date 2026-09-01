@@ -1,5 +1,9 @@
 # TemiAgent
 
+[![Python >=3.12](https://img.shields.io/badge/Python-%3E%3D3.12-3776AB?logo=python&logoColor=white)](docs/operations/developer_setup.md)
+[![uv managed environments](https://img.shields.io/badge/environments-uv-6C47B4)](docs/operations/developer_setup.md)
+[![Temi integration](https://img.shields.io/badge/Temi-integration-2ea44f)](docs/architecture/project_overview.md)
+
 TemiAgent is a modular, research-oriented integration project for connecting
 Temi voice and camera events with local reasoning, validated robot commands,
 and optional perception experiments. It is organized for academic-lab
@@ -93,51 +97,35 @@ published source and follow the retention and access rules in `AGENTS.md`.
 
 ## Installation
 
-### Prerequisites
+### Public source reconstruction
 
-- Git and access to the repository's formal Hermes submodule source.
-- Python 3.12 or newer for the root-supported module environments, plus
-  [`uv`](https://docs.astral.sh/uv/).
-- The designated development container described in [`AGENTS.md`](AGENTS.md)
-  for repository reads, edits, tests, builds, and runtime inspection.
-
-  ```text
-  DESIGNATED_CONTAINER=yiting.TemiAgent_gpu_all
-  PROJECT_ROOT_IN_CONTAINER=/TemiAgent
-  DEFAULT_SHELL_COMMAND=docker exec -it yiting.TemiAgent_gpu_all bash
-  ```
-
-- Mosquitto only when running the corresponding broker-backed checks. A live
-  LM Studio provider, Android application, or Temi robot is not required for
-  source setup or hardware-free validation.
-
-Observed tool versions and environment assumptions are maintained in the
-[developer setup guide](docs/operations/developer_setup.md); they are not all
-locked by this repository.
-
-### Clone and reconstruct published sources
-
-From an empty clone parent inside the designated container:
+Public source reconstruction can begin from a normal clone:
 
 ```bash
-docker exec -it yiting.TemiAgent_gpu_all bash
-export TEMIAGENT_REPO_URL=https://github.com/YI-TING-EE13/TemiAgent.git
-export REPO_ROOT="$PWD/TemiAgent"
-git clone --branch main --single-branch "$TEMIAGENT_REPO_URL" "$REPO_ROOT"
-cd "$REPO_ROOT"
-python3 tools/run_bounded_process.py --timeout-seconds 120 --kill-grace-seconds 2 -- git submodule update --init --recursive --depth=1
-git submodule status --recursive
+git clone https://github.com/YI-TING-EE13/TemiAgent.git
+cd TemiAgent
+git submodule update --init --recursive
 ./scripts/bootstrap --sources
 ```
 
-`bootstrap --sources` reconstructs the reviewed external source pins and the
-generated llama.cpp source checkout when its prerequisites are available. It
-does not install every runtime environment, build every executable, download
-model weights, configure a private deployment, or contact Android.
+The clone and source bootstrap obtain tracked source and reconstruct reviewed
+external source pins when the required repository access is available. They do
+not imply that an arbitrary external host is supported for the full runtime,
+or that private configuration, model weights, generated binaries, or a device
+are available.
 
-### Provision module environments
+### Lab-managed AI6 development environment
 
-Use the source-defined and locked setup commands:
+Lab contributors MUST follow [`AGENTS.md`](AGENTS.md) and the
+[developer setup guide](docs/operations/developer_setup.md) for the designated
+container, working-directory, clean-worktree, and official-verification policy.
+Those documents define the managed AI6 environment; the public clone sequence
+above is not a substitute for that policy.
+
+### Runtime and dependency provisioning
+
+After source reconstruction and the required tool/dependency access, use the
+source-defined environment setup:
 
 ```bash
 (cd hermes_temi_bridge && uv sync --frozen --extra mqtt)
@@ -147,12 +135,17 @@ Use the source-defined and locked setup commands:
 ./scripts/bootstrap --check
 ```
 
-The Hermes setup entry point owns the required `hermes-agent/venv` layout.
-Do not replace it with a bare `uv sync`, copy an environment from another
-checkout, or use a canonical dirty worktree as a dependency source. If
-required artifacts are absent, follow the [developer setup and provisioning
-procedure](docs/operations/developer_setup.md) and stop at its documented
-readiness boundary.
+The module environments require Python 3.12 or newer and `uv`. The Hermes
+setup entry point owns the required `hermes-agent/venv` layout; do not replace
+it with a bare `uv sync`, copy an environment from another checkout, or use a
+canonical dirty worktree as a dependency source. `bootstrap --check` is a
+readiness check, not proof that a production or Demo deployment is ready.
+
+Production and Demo runtime additionally require owner-provisioned private
+configuration, generated model/runtime artifacts, and external service
+readiness. Follow the [developer setup and provisioning
+procedure](docs/operations/developer_setup.md) and the [Demo operator
+guide](docs/operations/DEMO_OPERATOR_GUIDE.md) for those boundaries.
 
 ## Configuration
 
@@ -179,13 +172,13 @@ model-backed deployment are ready.
 ### Development validation
 
 After source and dependency provisioning, use read-only readiness checks and
-the repository's validators:
+the repository's validators from the repository root:
 
 ```bash
-cd "$REPO_ROOT"
 ./scripts/bootstrap --check
 ./scripts/demo init-config --profile newcomer_mock
-./scripts/demo --config "$REPO_ROOT/.runtime/demo/demo.env" --json doctor
+export PRIVATE_CONFIG="$PWD/.runtime/demo/demo.env"
+./scripts/demo --config "$PRIVATE_CONFIG" --json doctor
 python3 tools/validate_documentation.py
 python3 -m unittest tools.tests.test_validate_documentation
 git diff --check
