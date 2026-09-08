@@ -73,8 +73,8 @@ deployment uses external-only production LM Studio with API identifier
 <code>google/gemma-4-31b</code>, provisioned model
 <code>temi/gemma-4-31b-it-qat</code>, and runtime context
 <code>64000</code> verified from provider metadata. It reuses MQTT without
-restart and reconstructs Hermes base plus patches <code>0001</code>–<code>0010</code>
-to tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>.
+restart and reconstructs Hermes base plus patches <code>0001</code>–<code>0011</code>
+to tree <code>d7d5d68170db2d0180513d089790c502015a5909</code>.
 
 This is <code>HOST_LIVE_VERIFIED</code> for the exact host contract only. The
 accepted request budget is <code>L1=0; L2=0; L3=0; L5=1</code>. The exact
@@ -167,7 +167,7 @@ It never starts a service and never downloads a model:
 ~~~
 
 <code>--sources</code> verifies the formal Hermes submodule, applies patches
-<code>0001</code>–<code>0010</code> in the submodule worktree, and reconstructs
+<code>0001</code>–<code>0011</code> in the submodule worktree, and reconstructs
 the ignored llama.cpp checkout from its manifest. The expected llama.cpp commit
 is <code>0b7154066e8544ed88d92ae2132cc1e055cf6304</code> and the expected tree
 is <code>1020a771795f406b8891d18ee607b4da3783fa7f</code>. The
@@ -363,7 +363,7 @@ invitation to invent one.
 
 | Artifact or state | Tracked? | External/provision method | Expected location | Required? | Hash/version authority | License/provenance status |
 |---|---|---|---|---|---|---|
-| Hermes base plus overlay | Gitlink, manifest, patches and README | Formal team submodule, then root patch bootstrap | <code>hermes-agent/</code> | Production resident/gateway | Pinned base <code>a0fedfbb...</code>; final tree <code>47e9f141...</code>; ten patch SHA-256 values | MIT license is verified by the manifest/verifier. |
+| Hermes base plus overlay | Gitlink, manifest, patches and README | Formal team submodule, then root patch bootstrap | <code>hermes-agent/</code> | Production resident/gateway | Pinned base <code>a0fedfbb...</code>; final tree <code>d7d5d681...</code>; eleven patch SHA-256 values | MIT license is verified by the manifest/verifier. |
 | llama.cpp source | Manifest and README only | Public pinned source bootstrap | <code>anomaly_detection/third_party/llama.cpp/</code> | Viewer path only | Commit <code>0b715406...</code>; tree <code>1020a771...</code>; MIT license hash in manifest | Generated checkout is ignored; no model binary is implied. |
 | LM Studio model/cache | No | External LM Studio provisioning | <code>.lmstudio-data/</code> | Production LM route | Model ID <code>temi/gemma-4-31b-it-qat</code>, API identifier <code>google/gemma-4-31b</code>; no weight hash | Provider/cache license and model redistribution are external. |
 | Viewer GGUF and mmproj | No | External approved model/cache provisioning | Path values in private Demo env | Viewer only | No root hash/version authority | Provenance and redistribution terms require maintainer confirmation. |

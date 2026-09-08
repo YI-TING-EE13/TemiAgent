@@ -183,8 +183,8 @@ external LM Studio. Production LM is <code>EXTERNAL_ONLY</code>; the accepted
 API identifier is <code>google/gemma-4-31b</code>, the provisioned model is
 <code>temi/gemma-4-31b-it-qat</code>, and runtime context <code>64000</code>
 was verified from runtime metadata. Hermes reconstruction is the pinned base
-plus patches <code>0001</code>–<code>0010</code>, producing tree
-<code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>.
+plus patches <code>0001</code>–<code>0011</code>, producing tree
+<code>d7d5d68170db2d0180513d089790c502015a5909</code>.
 
 The accepted request budget is <code>L1=0; L2=0; L3=0; L5=1</code>. L2 is
 an inference-impossible malformed resident request returning HTTP 400 before

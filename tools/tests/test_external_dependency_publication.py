@@ -76,10 +76,10 @@ class ExternalDependencyPublicationTests(unittest.TestCase):
         self.assertEqual(
             manifest["copyright"], "Copyright (c) 2025 Nous Research"
         )
-        self.assertEqual(manifest["patch_count"], 10)
+        self.assertEqual(manifest["patch_count"], 11)
         self.assertEqual(
             manifest["target_tree_sha"],
-            "47e9f1411e585769c055d0c6ee4417bebcdc6f70",
+            "d7d5d68170db2d0180513d089790c502015a5909",
         )
 
 

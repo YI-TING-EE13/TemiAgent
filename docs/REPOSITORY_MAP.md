@@ -58,7 +58,7 @@ The Hermes manifest, formal submodule and patch series describe one
 `https://github.com/YI-TING-EE13/hermes-agent.git` at
 `a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2`; the root-owned patches then produce
 the expected final tree
-`47e9f1411e585769c055d0c6ee4417bebcdc6f70`. A clean clone must use the team
+`d7d5d68170db2d0180513d089790c502015a5909`. A clean clone must use the team
 remote and verify both identities before handover. No original-upstream,
 local-checkout, file-URL or alternate-object fallback is allowed.
 
@@ -72,7 +72,7 @@ deployment used the following observed artifact contract:
 
 | Artifact | Observed AI6 evidence | Portable interpretation |
 |---|---|---|
-| Hermes | Team fork base `a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2` plus patches `0001`–`0010`, final tree `47e9f1411e585769c055d0c6ee4417bebcdc6f70` | Reconstruct from the team submodule and root patch manifest; do not use the original upstream or a local fallback. |
+| Hermes | Team fork base `a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2` plus patches `0001`–`0011`, final tree `d7d5d68170db2d0180513d089790c502015a5909` | Reconstruct from the team submodule and root patch manifest; do not use the original upstream or a local fallback. |
 | llama.cpp | Generated operator executable under `/opt/TemiAgent-operator/anomaly_detection/third_party/llama.cpp/build/bin/llama-server`; observed SHA-256 `6827638842194c9903da14662737b1e5c7d35effa6353506a329d31f85029585` | Source commit/tree are pinned; build output, toolchain and binary hash are observed deployment evidence. |
 | LM Studio | External API on `127.0.0.1:1234`, expected API identifier `google/gemma-4-31b`, context `64000` | External owner provisions and keeps it running; the lifecycle never starts, stops, unloads or reconfigures it. |
 | MQTT | External/reused broker in the validated AI6 deployment | Ownership must be declared by the private config; never stop or adopt an occupied external listener. |
