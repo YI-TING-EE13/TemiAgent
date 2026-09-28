@@ -42,35 +42,34 @@ class ActionSelectionCase:
     """One utterance used to evaluate response/action consistency."""
     case_id: str
     text: str
-    expected_action: str
     category: str
     purpose: str
 
 
 CASES = (
-    ActionSelectionCase("BP-01", "幫我記錄血壓，收縮壓117，舒張壓73，心跳76", "speak", "blood_pressure_complete_normal", "完整且一般範圍的非整數邊界讀值；確認後不應強制追問"),
-    ActionSelectionCase("BP-02", "幫我記錄血壓127/76，心跳84", "speak", "blood_pressure_compact_complete", "完整簡寫與不規則數值；確認後不應強制追問"),
-    ActionSelectionCase("BP-03", "幫我記錄舒張壓93，心跳87", "ask_clarification", "blood_pressure_missing_systolic_high", "舒張壓偏高且缺少收縮壓，必須追問"),
-    ActionSelectionCase("BP-04", "幫我記錄收縮壓151，舒張壓96，心跳88", "ask_clarification", "blood_pressure_high", "完整但明顯偏高的讀值應追問目前症狀"),
-    ActionSelectionCase("BP-05", "幫我記錄收縮壓133，心跳82", "ask_clarification", "blood_pressure_missing_diastolic", "缺少舒張壓，必須要求補充資訊"),
-    ActionSelectionCase("BP-06", "幫我記錄舒張壓86，脈搏89", "ask_clarification", "blood_pressure_missing_systolic", "缺少收縮壓，必須要求補充資訊"),
-    ActionSelectionCase("BP-07", "幫我記錄血壓", "ask_clarification", "blood_pressure_missing_values", "沒有任何量測值，不得假裝已記錄"),
-    ActionSelectionCase("BP-08", "幫我記錄影壓舒張壓93，心跳91", "ask_clarification", "blood_pressure_asr_typo", "涵蓋血壓被 ASR 誤辨為影壓及缺少收縮壓"),
-    ActionSelectionCase("BP-09", "幫我記錄血壓，收縮壓一百一十七，舒張壓七十三，心跳七十六", "speak", "blood_pressure_chinese_numbers_normal", "完整中文數字的一般範圍讀值"),
-    ActionSelectionCase("BP-10", "幫我記錄血壓129，心跳81", "ask_clarification", "blood_pressure_ambiguous_value", "單一血壓數值無法判斷是收縮壓或舒張壓"),
-    ActionSelectionCase("BP-11", "我血壓很高，心跳也很快", "ask_clarification", "blood_pressure_subjective_no_values", "只有主觀描述，不能假裝已記錄數值"),
-    ActionSelectionCase("BP-12", "幫我記錄血壓，收縮壓abc，舒張壓77，心跳83", "ask_clarification", "blood_pressure_invalid_systolic", "收縮壓不是有效數值，必須澄清"),
-    ActionSelectionCase("BP-13", "收縮壓183，舒張壓116，心跳104", "ask_clarification", "blood_pressure_severely_high", "嚴重偏高讀值應進入安全追問"),
-    ActionSelectionCase("BP-14", "血壓是108/68，心跳54", "ask_clarification", "heart_rate_low", "完整血壓但心跳偏低，應確認身體狀況"),
-    ActionSelectionCase("BP-15", "血壓是116/74，心跳107", "ask_clarification", "heart_rate_high", "完整血壓但心跳偏快，應確認身體狀況"),
-    ActionSelectionCase("BP-16", "血壓是124/76", "speak", "heart_rate_omitted", "現行血壓契約不要求心跳；不驗證心跳是否保存"),
-    ActionSelectionCase("BP-17", "心跳是78", "ask_clarification", "heart_rate_only", "只有心跳，不足以完成血壓紀錄"),
-    ActionSelectionCase("BP-18", "幫我記錄血壓，收縮壓118，書張壓75，心跳79", "speak", "diastolic_asr_typo", "涵蓋舒張壓被 ASR 誤辨為書張壓"),
-    ActionSelectionCase("BP-19", "血壓是15一/九6，心跳八七", "ask_clarification", "mixed_invalid_numbers", "數字混合辨識錯誤時不得猜測並寫入"),
-    ActionSelectionCase("BP-20", "血壓是86/57，心跳96，我有點頭暈", "ask_clarification", "low_blood_pressure_with_symptom", "偏低讀值伴隨頭暈，必須進入安全追問"),
-    ActionSelectionCase("SYM-01", "我的頭不太舒服", "ask_clarification", "discomfort_ambiguous", "模糊頭部不適需要釐清症狀與安全狀況"),
-    ActionSelectionCase("SYM-02", "我頭痛", "ask_clarification", "headache", "頭痛但程度與伴隨症狀未知"),
-    ActionSelectionCase("SYM-03", "我又不舒服了", "ask_clarification", "repeated_discomfort", "重複且模糊的不適應要求後續回答"),
+    ActionSelectionCase("BP-01", "幫我記錄血壓，收縮壓117，舒張壓73，心跳76", "blood_pressure_complete_normal", "完整且一般範圍的非整數邊界讀值；確認後不應強制追問"),
+    ActionSelectionCase("BP-02", "幫我記錄血壓127/76，心跳84", "blood_pressure_compact_complete", "完整簡寫與不規則數值；確認後不應強制追問"),
+    ActionSelectionCase("BP-03", "幫我記錄舒張壓93，心跳87", "blood_pressure_missing_systolic_high", "舒張壓偏高且缺少收縮壓，必須追問"),
+    ActionSelectionCase("BP-04", "幫我記錄收縮壓151，舒張壓96，心跳88", "blood_pressure_high", "完整但明顯偏高的讀值應追問目前症狀"),
+    ActionSelectionCase("BP-05", "幫我記錄收縮壓133，心跳82", "blood_pressure_missing_diastolic", "缺少舒張壓，必須要求補充資訊"),
+    ActionSelectionCase("BP-06", "幫我記錄舒張壓86，脈搏89", "blood_pressure_missing_systolic", "缺少收縮壓，必須要求補充資訊"),
+    ActionSelectionCase("BP-07", "幫我記錄血壓", "blood_pressure_missing_values", "沒有任何量測值，不得假裝已記錄"),
+    ActionSelectionCase("BP-08", "幫我記錄影壓舒張壓93，心跳91", "blood_pressure_asr_typo", "涵蓋血壓被 ASR 誤辨為影壓及缺少收縮壓"),
+    ActionSelectionCase("BP-09", "幫我記錄血壓，收縮壓一百一十七，舒張壓七十三，心跳七十六", "blood_pressure_chinese_numbers_normal", "完整中文數字的一般範圍讀值"),
+    ActionSelectionCase("BP-10", "幫我記錄血壓129，心跳81", "blood_pressure_ambiguous_value", "單一血壓數值無法判斷是收縮壓或舒張壓"),
+    ActionSelectionCase("BP-11", "我血壓很高，心跳也很快", "blood_pressure_subjective_no_values", "只有主觀描述，不能假裝已記錄數值"),
+    ActionSelectionCase("BP-12", "幫我記錄血壓，收縮壓abc，舒張壓77，心跳83", "blood_pressure_invalid_systolic", "收縮壓不是有效數值，必須澄清"),
+    ActionSelectionCase("BP-13", "收縮壓183，舒張壓116，心跳104", "blood_pressure_severely_high", "嚴重偏高讀值應進入安全追問"),
+    ActionSelectionCase("BP-14", "血壓是108/68，心跳54", "heart_rate_low", "完整血壓但心跳偏低，應確認身體狀況"),
+    ActionSelectionCase("BP-15", "血壓是116/74，心跳107", "heart_rate_high", "完整血壓但心跳偏快，應確認身體狀況"),
+    ActionSelectionCase("BP-16", "血壓是124/76", "heart_rate_omitted", "現行血壓契約不要求心跳；不驗證心跳是否保存"),
+    ActionSelectionCase("BP-17", "心跳是78", "heart_rate_only", "只有心跳，不足以完成血壓紀錄"),
+    ActionSelectionCase("BP-18", "幫我記錄血壓，收縮壓118，書張壓75，心跳79", "diastolic_asr_typo", "涵蓋舒張壓被 ASR 誤辨為書張壓"),
+    ActionSelectionCase("BP-19", "血壓是15一/九6，心跳八七", "mixed_invalid_numbers", "數字混合辨識錯誤時不得猜測並寫入"),
+    ActionSelectionCase("BP-20", "血壓是86/57，心跳96，我有點頭暈", "low_blood_pressure_with_symptom", "偏低讀值伴隨頭暈，必須進入安全追問"),
+    ActionSelectionCase("SYM-01", "我的頭不太舒服", "discomfort_ambiguous", "模糊頭部不適需要釐清症狀與安全狀況"),
+    ActionSelectionCase("SYM-02", "我頭痛", "headache", "頭痛但程度與伴隨症狀未知"),
+    ActionSelectionCase("SYM-03", "我又不舒服了", "repeated_discomfort", "重複且模糊的不適應要求後續回答"),
 )
 
 
@@ -349,7 +348,7 @@ def response_requires_reply(text: str) -> bool:
     return "?" in normalized or "？" in normalized or bool(_REPLY_PATTERN.search(normalized))
 
 
-def evaluate_action_consistency(command: dict[str, Any]) -> tuple[bool, list[str]]:
+def evaluate_response_action_consistency(command: dict[str, Any]) -> tuple[bool, list[str]]:
     """Compare speak/ask_clarification types with their actual response text."""
     actions = command.get("actions")
     if not isinstance(actions, list):
@@ -408,14 +407,12 @@ def offline_summary(cases: tuple[ActionSelectionCase, ...]) -> dict[str, Any]:
         raise EvaluationFailure(f"invalid case definitions: {', '.join(invalid)}")
     return {
         "mode": "offline",
-        "status": "PASS",
+        "catalogue_status": "READY",
         "case_count": len(cases),
-        "cases": [
-            {key: value for key, value in asdict(case).items() if key != "expected_action"}
-            for case in cases
-        ],
+        "cases": [asdict(case) for case in cases],
         "limitations": [
             "No MQTT publication, Resident invocation, LM Studio inference, command execution, or memory assertion occurred.",
+            "The catalogue does not assert scenario-level correctness; live evaluation only checks response/action consistency.",
             "Heart-rate values may appear in utterances, but persistence is a known contract gap and is not an acceptance condition.",
         ],
     }
@@ -447,9 +444,8 @@ def run_live(args: argparse.Namespace, cases: tuple[ActionSelectionCase, ...]) -
             try:
                 command = capture.wait_for_event(event_id, args.timeout)
                 actual_actions = extract_action_types(command)
-                passed, expected_actions = evaluate_action_consistency(command)
+                consistent, expected_actions = evaluate_response_action_consistency(command)
                 case_payload = asdict(case)
-                case_payload.pop("expected_action", None)
                 results.append({
                     **case_payload,
                     "event_id": event_id,
@@ -459,17 +455,16 @@ def run_live(args: argparse.Namespace, cases: tuple[ActionSelectionCase, ...]) -
                         action.get("text") for action in command.get("actions", [])
                         if isinstance(action, dict) and isinstance(action.get("text"), str)
                     ],
-                    "status": "PASS" if passed else "FAIL",
+                    "response_action_consistency": "CONSISTENT" if consistent else "INCONSISTENT",
                 })
             except EvaluationFailure as exc:
                 case_payload = asdict(case)
-                case_payload.pop("expected_action", None)
                 results.append({
                     **case_payload,
                     "event_id": event_id,
                     "expected_actions_from_response": [],
                     "actual_actions": [],
-                    "status": "FAIL",
+                    "response_action_consistency": "NOT_EVALUATED",
                     "error": str(exc),
                 })
             if args.cleanup_memory_after_case:
@@ -482,7 +477,7 @@ def run_live(args: argparse.Namespace, cases: tuple[ActionSelectionCase, ...]) -
                     )
                 except EvaluationFailure as exc:
                     cleanup = {"status": "CLEANUP_REFUSED", "event_id": event_id, "error": str(exc)}
-                    results[-1]["status"] = "FAIL"
+                    results[-1]["run_error"] = "memory cleanup refused"
                 results[-1]["memory_cleanup"] = cleanup
                 if cleanup["status"] == "CLEANUP_REFUSED":
                     stopped_after_cleanup_refusal = True
@@ -491,9 +486,15 @@ def run_live(args: argparse.Namespace, cases: tuple[ActionSelectionCase, ...]) -
                 time.sleep(args.delay)
     finally:
         capture.stop()
+    consistency_passed = (
+        len(results) == len(cases)
+        and all(item["response_action_consistency"] == "CONSISTENT" for item in results)
+    )
+    run_passed = consistency_passed and not stopped_after_cleanup_refusal
     return {
         "mode": "live",
-        "status": "PASS" if all(item["status"] == "PASS" for item in results) else "FAIL",
+        "run_status": "PASS" if run_passed else "FAIL",
+        "response_action_consistency_status": "PASS" if consistency_passed else "FAIL",
         "run_id": run_id,
         "broker": args.broker,
         "port": args.port,
@@ -506,6 +507,7 @@ def run_live(args: argparse.Namespace, cases: tuple[ActionSelectionCase, ...]) -
             "Live model output can be nondeterministic; one pass is evidence, not a stability guarantee.",
             "A connected Android client may execute every published cmd/request.",
             "Heart-rate values may appear in utterances, but persistence is a known contract gap and is not asserted.",
+            "Response/action consistency does not assert scenario-level correctness, medical interpretation, or successful memory persistence.",
         ],
     }
 
@@ -519,7 +521,7 @@ def print_human(summary: dict[str, Any]) -> None:
     for result in summary["results"]:
         actual = ",".join(result["actual_actions"]) or "NONE"
         expected = ",".join(result["expected_actions_from_response"]) or "NONE"
-        print(f"{result['status']}[{result['case_id']}]: expected_from_response={expected} actual={actual}")
+        print(f"{result['response_action_consistency']}[{result['case_id']}]: expected_from_response={expected} actual={actual}")
         for response_text in result.get("response_texts", []):
             print(f"  response={response_text}")
         if result.get("error"):
@@ -531,7 +533,10 @@ def print_human(summary: dict[str, Any]) -> None:
                 print(f"  memory_backup={cleanup['backup_dir']}")
             if cleanup.get("error"):
                 print(f"  cleanup_error={cleanup['error']}")
-    print(f"ACTION_SELECTION_{summary['status']} run_id={summary['run_id']}")
+    print(
+        f"RESPONSE_ACTION_CONSISTENCY_{summary['response_action_consistency_status']} "
+        f"run_status={summary['run_status']} run_id={summary['run_id']}"
+    )
 
 
 def main() -> int:
@@ -558,7 +563,9 @@ def main() -> int:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     else:
         print_human(summary)
-    return 0 if summary["status"] == "PASS" else 1
+    if summary["mode"] == "offline":
+        return 0 if summary["catalogue_status"] == "READY" else 1
+    return 0 if summary["run_status"] == "PASS" else 1
 
 
 if __name__ == "__main__":

@@ -40,7 +40,7 @@ tools or historical references unless the operator guide names them.
 | `demo_case_runner.py` | 跑第一年度 Demo 三個固定照護案例並輸出 artifacts。 |
 | `create_mock_event_images.py` | 產生 ASR event 測試用三張 mock images。 |
 | `publish_mock_asr_event.sh` | 發送 canonical mock ASR event。 |
-| `test_action_selection_cases.py` | 內含 20 組血壓及 3 組不適案例；預設透過 live MQTT/Resident/LM Studio 評估 action type，`--offline` 僅檢查測資。 |
+| `test_action_selection_cases.py` | 內含 20 組血壓及 3 組不適案例；預設透過 live MQTT/Resident/LM Studio 評估 response/action consistency，`--offline` 僅檢查測資。 |
 | `subscribe_cmd_request.sh` | 訂閱 canonical command request，方便觀察 Bridge output。 |
 | `publish_mock_cmd_result.sh` | 發送 mock command result。 |
 | `inject_demo_event.py` / `scripts/inject_demo_event` | 以 owner-only config 建立 synthetic evidence 並發布 canonical Demo abnormal event；不發 command、result 或 Discord webhook。 |
@@ -120,9 +120,12 @@ memory artifact，cleanup 會回報 `CLEANUP_REFUSED`，不猜測刪除，並停
 
 這支單一檔案 runner 內含 20 組血壓及 3 組不適案例，只驗證實際回覆文字
 是否需要使用者回答，並比對其 action type 是否為 `ask_clarification` 或
-`speak`；不測試輸入資料是否完整。心跳可以出現在輸入測資，但不把心跳已寫入 structured memory
-列為通過條件。Heart-rate persistence 仍是待處理的 contract gap。語言模型輸出可能
-具有非確定性，因此單次 PASS 是 live evidence，不是穩定性保證。
+`speak`。每筆結果使用 `CONSISTENT` / `INCONSISTENT`，整體結果使用
+`RESPONSE_ACTION_CONSISTENCY_PASS` / `RESPONSE_ACTION_CONSISTENCY_FAIL`；這些
+名稱不代表 scenario-level correctness。Runner 不測試輸入資料是否完整、醫療判讀是否正確，
+也不以 memory persistence 作為 action consistency 的通過條件。心跳可以出現在輸入測資，
+但 heart-rate persistence 仍是待處理的 contract gap。語言模型輸出可能具有非確定性，
+因此單次 consistency pass 是 live evidence，不是穩定性保證。
 
 Media v1.1 isolated fake Android E2E：
 
@@ -151,8 +154,10 @@ acceptance boundaries.
 Gate 5B Retry #4 is the accepted host-runtime evidence for the tools lifecycle
 and resident boundary. It uses external-only production LM Studio, runtime
 context <code>64000</code> verified from provider metadata, reused MQTT without
-restart, and Hermes base plus patches <code>0001</code>–<code>0011</code> with
-final tree <code>d7d5d68170db2d0180513d089790c502015a5909</code>. The exact
+restart, and Hermes base plus patches <code>0001</code>–<code>0010</code> with
+final tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. The current
+repository baseline additionally applies patch <code>0011</code>; this
+historical Gate 5B run was not repeated against that newer tree. The exact
 request budget is <code>L1=0; L2=0; L3=0; L5=1</code>; L2 validation is
 inference-impossible and L5 returned one validated <code>speak</code> action.
 Rollback preserved external LM/MQTT and removed all Gate-owned processes.

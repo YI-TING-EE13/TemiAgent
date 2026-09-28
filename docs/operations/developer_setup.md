@@ -73,8 +73,10 @@ deployment uses external-only production LM Studio with API identifier
 <code>google/gemma-4-31b</code>, provisioned model
 <code>temi/gemma-4-31b-it-qat</code>, and runtime context
 <code>64000</code> verified from provider metadata. It reuses MQTT without
-restart and reconstructs Hermes base plus patches <code>0001</code>–<code>0011</code>
-to tree <code>d7d5d68170db2d0180513d089790c502015a5909</code>.
+restart and reconstructs Hermes base plus patches <code>0001</code>–<code>0010</code>
+to tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. The current repository
+baseline additionally applies patch <code>0011</code>; this historical Gate 5B
+run was not repeated against that newer tree.
 
 This is <code>HOST_LIVE_VERIFIED</code> for the exact host contract only. The
 accepted request budget is <code>L1=0; L2=0; L3=0; L5=1</code>. The exact
