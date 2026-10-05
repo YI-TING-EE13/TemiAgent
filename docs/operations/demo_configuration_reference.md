@@ -57,7 +57,7 @@ not authorize a start or change any runtime state.
 | Production LM ownership | <code>LMSTUDIO_OWNERSHIP=external</code>; the lifecycle must never start, stop, unload, daemon-down, server-stop or globally mutate production LM Studio. |
 | External LM readiness | The provider is ready before Demo start; API identifier <code>google/gemma-4-31b</code>, provisioned model <code>temi/gemma-4-31b-it-qat</code>, and runtime context <code>64000</code> are checked from runtime metadata. Observed model maximum was <code>262144</code>; it is evidence for this deployment, not a portable pin. |
 | MQTT | Explicit broker host/port/configuration is mandatory. The accepted run reused the independently managed broker without restart; a foreign listener is never adopted by port alone. |
-| Hermes | Pinned base plus patches <code>0001</code>–<code>0010</code> must reconstruct final tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. |
+| Hermes | The accepted Gate 5B run used pinned base plus patches <code>0001</code>–<code>0010</code> and tree <code>47e9f1411e585769c055d0c6ee4417bebcdc6f70</code>. The current baseline is defined separately by the Hermes manifest and was not part of that historical run. |
 | Resident probe | L2 malformed input must fail validation before <code>ResidentHermes.invoke()</code>; it must be inference-impossible and produce HTTP 400. |
 | Request budget | The accepted bounded run records exactly <code>L1=0; L2=0; L3=0; L5=1</code>. |
 | Legacy broker endpoint input | <code>PC_IP</code> has no tracked private-LAN fallback; deployment-specific endpoints belong only in private owner configuration. |

@@ -292,7 +292,8 @@ Instructions:
 - Do not include explanations outside JSON.
 - Do not execute shell commands directly.
 - Do not invent unavailable robot capabilities.
-- If uncertain, ask a clarification question through a speak or ask_clarification action.
+- If user intent, visual referent, destination, or safety is unclear, ask the user for clarification.
+- If a response asks the user for information or requires a subsequent reply, use ask_clarification, not speak.
 - Include cognitive_state.home_esi_level and cognitive_state.risk_reason for every response.
 - Use memory actions when the event should be recorded or summarized; memory actions are handled by the Bridge and are not sent to Temi.
 

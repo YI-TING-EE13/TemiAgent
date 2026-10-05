@@ -1,6 +1,6 @@
 # Hermes external dependency
 
-Status: CURRENT_AUTHORITY. The team fork and the pinned base-plus-ten-patch
+Status: CURRENT_AUTHORITY. The team fork and the pinned base-plus-eleven-patch
 worktree are the active TemiAgent source contract; the original upstream link
 below is provenance only.
 
@@ -23,10 +23,10 @@ The root repository records one formal Git submodule:
 | Submodule URL | `https://github.com/YI-TING-EE13/hermes-agent.git` |
 | Pinned base commit | `a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2` |
 | Pinned base tree | `bda69c575e65725bf9264dd1288a63093cea3cc3` |
-| Expected patched tree | `47e9f1411e585769c055d0c6ee4417bebcdc6f70` |
+| Expected patched tree | `5ea54c86ebedc2b2a8fc8eda7057e170333db463` |
 | Contract semantics | `PINNED_BASE_PLUS_PATCHED_WORKTREE` |
 
-The root gitlink remains pinned to the base commit. The ten ordered patch
+The root gitlink remains pinned to the base commit. The eleven ordered patch
 files under `third_party/hermes/patches/` are TemiAgent-owned overlay inputs.
 The bootstrap applies those patches in manifest order inside the initialized
 submodule and verifies the final tree. Generated local Hermes commit IDs are
@@ -41,6 +41,11 @@ an allowlisted HTTP failure object without returning provider error text or
 conversation content. This is a non-live failure-path remediation; the
 external provider must still be provisioned with a context window compatible
 with the configured Hermes limit before any live acceptance.
+
+Patch `0011` aligns the Temi robot-control and Home-ESI skill guidance so a
+response that requests a subsequent user reply selects `ask_clarification`,
+while a complete response selects `speak`. It does not change Android, MQTT,
+the Bridge action schema, medical thresholds, or memory persistence.
 
 The manifest records the verified license identity: `LICENSE`, MIT, copyright
 `Copyright (c) 2025 Nous Research`, Git blob

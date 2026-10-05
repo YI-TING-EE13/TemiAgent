@@ -23,6 +23,34 @@ CARE_CONTEXT = {
 
 
 class CareContextPromptTests(unittest.TestCase):
+
+    def test_asr_prompt_requires_clarification_for_subsequent_reply(self):
+        prompt = build_asr_prompt(
+            HermesRequest(
+                event_id="evt_blood_pressure",
+                robot_id="temi-01",
+                conversation_id="conv_test",
+                language="zh-TW",
+                asr_text="幫我記錄舒張壓130",
+                frames=[],
+            )
+        )
+
+        self.assertIn(
+            "If user intent, visual referent, destination, or safety is unclear, "
+            "ask the user for clarification.",
+            prompt,
+        )
+        self.assertIn(
+            "If a response asks the user for information or requires a subsequent reply, "
+            "use ask_clarification, not speak.",
+            prompt,
+        )
+        self.assertNotIn(
+            "ask a clarification question through a speak or ask_clarification action",
+            prompt,
+        )
+
     def test_asr_prompt_injects_care_context_with_required_labels(self):
         prompt = build_asr_prompt(
             HermesRequest(

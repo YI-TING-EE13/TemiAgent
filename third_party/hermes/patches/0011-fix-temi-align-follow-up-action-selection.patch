@@ -1,0 +1,40 @@
+From fffbd4b0076e077959f62c3f3de3c08f796c99d0 Mon Sep 17 00:00:00 2001
+From: ashitamo <hsun91chen@gmail.com>
+Date: Tue, 8 Sep 2026 12:10:08 +0000
+Subject: [PATCH] fix(temi): align follow-up action selection
+
+---
+ skills/temi-home-esi/SKILL.md      | 2 +-
+ skills/temi-robot-control/SKILL.md | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/skills/temi-home-esi/SKILL.md b/skills/temi-home-esi/SKILL.md
+index b364c0e..1355750 100644
+--- a/skills/temi-home-esi/SKILL.md
++++ b/skills/temi-home-esi/SKILL.md
+@@ -119,7 +119,7 @@ When schema allows, include Home-ESI cognition in `cognitive_state`:
+   "risk_triggers": ["subjective_discomfort"],
+   "missing_information": ["是否能正常站立", "是否有胸痛", "是否呼吸不順", "是否快昏倒"],
+   "next_step": "ask_clarification",
+-  "recommended_actions": ["speak", "log_event"],
++  "recommended_actions": ["ask_clarification", "log_event"],
+   "confidence": "medium"
+ }
+ ```
+diff --git a/skills/temi-robot-control/SKILL.md b/skills/temi-robot-control/SKILL.md
+index 334721a..68f202f 100644
+--- a/skills/temi-robot-control/SKILL.md
++++ b/skills/temi-robot-control/SKILL.md
+@@ -110,8 +110,8 @@ Example:
+ 5. Do not directly control Temi hardware or the Temi SDK.
+ 6. Do not invent robot capabilities.
+ 7. Do not include private chain-of-thought. Use only a brief `reasoning_summary`.
+-8. Use `ask_clarification` when user intent, visual referent, destination, or safety is unclear.
+-9. Prefer `speak` when the task only requires answering.
++8. If user intent, visual referent, destination, or safety is unclear, ask the user for clarification. Use `ask_clarification` whenever the response asks the user for information or requires a subsequent user reply.
++9. Use `speak` only when the response is complete and does not require a subsequent user reply.
+ 10. Use `noop` when no safe or useful robot action is needed.
+ 
+ Read `references/safety_rules.md` when safety, ambiguity, motion, or unsupported requests matter.
+-- 
+2.43.0

@@ -119,7 +119,7 @@ When schema allows, include Home-ESI cognition in `cognitive_state`:
   "risk_triggers": ["subjective_discomfort"],
   "missing_information": ["是否能正常站立", "是否有胸痛", "是否呼吸不順", "是否快昏倒"],
   "next_step": "ask_clarification",
-  "recommended_actions": ["speak", "log_event"],
+  "recommended_actions": ["ask_clarification", "log_event"],
   "confidence": "medium"
 }
 ```

@@ -197,7 +197,7 @@ describes an ignored generated checkout. `計劃書/` is research/reference
 material, not runtime source.
 
 For Hermes, initialize the root submodule from the team remote, run the
-documented bootstrap to apply patches `0001`–`0010`, then run
+documented bootstrap to apply patches `0001`–`0011`, then run
 `(cd hermes-agent && ./setup-hermes.sh)` to provision the source-owned
 `hermes-agent/venv` environment. See
 [the Hermes dependency contract](../third_party/hermes/README.md) for the
