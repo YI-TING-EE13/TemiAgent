@@ -122,7 +122,7 @@ is <code>a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2</code> and base tree is
 <code>./scripts/bootstrap --hermes</code> or
 <code>./scripts/bootstrap --sources</code>. The root overlay applies patches
 <code>0001</code> through <code>0011</code> and must produce final tree
-<code>d7d5d68170db2d0180513d089790c502015a5909</code>.
+<code>5ea54c86ebedc2b2a8fc8eda7057e170333db463</code>.
 
 The original <code>NousResearch/hermes-agent</code> repository is provenance
 for the upstream project only. It is not the active TemiAgent source and is

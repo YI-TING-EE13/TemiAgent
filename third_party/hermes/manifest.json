@@ -7,7 +7,7 @@
   "base_commit": "a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2",
   "runtime_path": "hermes-agent",
   "integration_branch": "temiagent/integration",
-  "target_tree_sha": "d7d5d68170db2d0180513d089790c502015a5909",
+  "target_tree_sha": "5ea54c86ebedc2b2a8fc8eda7057e170333db463",
   "expected_base_tree": "bda69c575e65725bf9264dd1288a63093cea3cc3",
   "contract_semantics": "PINNED_BASE_PLUS_PATCHED_WORKTREE",
   "license_path": "LICENSE",
@@ -36,6 +36,6 @@
     {"file": "0008-fix-context-scale-compression-threshold-to-active-wi.patch", "sha256": "7030fb3a41bf18fb0d83d3084fe6700aa143cd5c586b57c98648d9f3aa4f20d0", "purpose": "Active-context compression threshold"},
     {"file": "0009-docs-temi-document-managed-Demo-lifecycle.patch", "sha256": "ccc6abccd35428419ac9fa0777e02fe6ac1f901901091487206c50f88088669d", "purpose": "Managed Demo lifecycle documentation"},
     {"file": "0010-fix-temi-compression-failure-contract.patch", "sha256": "6588e4227d82a83f9189c6aada977e5018e79a43134139a8361a857d59967272", "purpose": "Bounded Hermes compression failure and resident error contract"},
-    {"file": "0011-fix-temi-align-follow-up-action-selection.patch", "sha256": "bf37e7c512e0f1484420764b8bbf7bbc5efcd6e7f75820500daf2a0ef82cab3e", "purpose": "Consistent ask_clarification selection for responses requiring a reply"}
+    {"file": "0011-fix-temi-align-follow-up-action-selection.patch", "sha256": "b2028c0d4db1f8170fd4773b5d0b513a38e6fa1af1639c2034dab49692d98b4a", "purpose": "Preserve clarification triggers and consistent action selection for replies"}
   ]
 }

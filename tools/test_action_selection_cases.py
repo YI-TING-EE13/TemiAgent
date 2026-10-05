@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Evaluate live Hermes action selection with canonical mock ASR events.
 
-Live MQTT evaluation is the default. Use --offline to inspect and validate the
+Offline evaluation is the default. Use --live for MQTT evaluation, or --offline to inspect and validate the
 case catalogue without connecting to MQTT or publishing robot commands. This
 is an evaluation runner, not a deterministic unit test: model output can vary.
 """
@@ -371,7 +371,9 @@ def evaluate_response_action_consistency(command: dict[str, Any]) -> tuple[bool,
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evaluate action selection for blood-pressure and discomfort utterances.")
-    parser.add_argument("--offline", action="store_true", help="Validate/list cases without MQTT or model inference.")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--offline", action="store_true", help="Validate/list cases without MQTT or model inference (default).")
+    modes.add_argument("--live", action="store_true", help="Publish ASR events via MQTT; may cause Temi speech and memory writes.")
     parser.add_argument("--list", action="store_true", help="Print the selected case catalogue and exit.")
     parser.add_argument("--case", action="append", default=[], metavar="ID", help="Run one case ID; repeat to select several.")
     parser.add_argument("--broker", default="localhost")
@@ -546,7 +548,7 @@ def main() -> int:
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-    if args.list or args.offline:
+    if args.list or not args.live:
         summary = offline_summary(cases)
     else:
         print(

@@ -365,7 +365,7 @@ invitation to invent one.
 
 | Artifact or state | Tracked? | External/provision method | Expected location | Required? | Hash/version authority | License/provenance status |
 |---|---|---|---|---|---|---|
-| Hermes base plus overlay | Gitlink, manifest, patches and README | Formal team submodule, then root patch bootstrap | <code>hermes-agent/</code> | Production resident/gateway | Pinned base <code>a0fedfbb...</code>; final tree <code>d7d5d681...</code>; eleven patch SHA-256 values | MIT license is verified by the manifest/verifier. |
+| Hermes base plus overlay | Gitlink, manifest, patches and README | Formal team submodule, then root patch bootstrap | <code>hermes-agent/</code> | Production resident/gateway | Pinned base <code>a0fedfbb...</code>; final tree <code>5ea54c86...</code>; eleven patch SHA-256 values | MIT license is verified by the manifest/verifier. |
 | llama.cpp source | Manifest and README only | Public pinned source bootstrap | <code>anomaly_detection/third_party/llama.cpp/</code> | Viewer path only | Commit <code>0b715406...</code>; tree <code>1020a771...</code>; MIT license hash in manifest | Generated checkout is ignored; no model binary is implied. |
 | LM Studio model/cache | No | External LM Studio provisioning | <code>.lmstudio-data/</code> | Production LM route | Model ID <code>temi/gemma-4-31b-it-qat</code>, API identifier <code>google/gemma-4-31b</code>; no weight hash | Provider/cache license and model redistribution are external. |
 | Viewer GGUF and mmproj | No | External approved model/cache provisioning | Path values in private Demo env | Viewer only | No root hash/version authority | Provenance and redistribution terms require maintainer confirmation. |

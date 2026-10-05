@@ -37,6 +37,11 @@ class CareContextPromptTests(unittest.TestCase):
         )
 
         self.assertIn(
+            "If user intent, visual referent, destination, or safety is unclear, "
+            "ask the user for clarification.",
+            prompt,
+        )
+        self.assertIn(
             "If a response asks the user for information or requires a subsequent reply, "
             "use ask_clarification, not speak.",
             prompt,

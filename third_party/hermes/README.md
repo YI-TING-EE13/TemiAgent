@@ -23,7 +23,7 @@ The root repository records one formal Git submodule:
 | Submodule URL | `https://github.com/YI-TING-EE13/hermes-agent.git` |
 | Pinned base commit | `a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2` |
 | Pinned base tree | `bda69c575e65725bf9264dd1288a63093cea3cc3` |
-| Expected patched tree | `d7d5d68170db2d0180513d089790c502015a5909` |
+| Expected patched tree | `5ea54c86ebedc2b2a8fc8eda7057e170333db463` |
 | Contract semantics | `PINNED_BASE_PLUS_PATCHED_WORKTREE` |
 
 The root gitlink remains pinned to the base commit. The eleven ordered patch

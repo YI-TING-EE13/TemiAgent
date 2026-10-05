@@ -58,7 +58,7 @@ The Hermes manifest, formal submodule and patch series describe one
 `https://github.com/YI-TING-EE13/hermes-agent.git` at
 `a0fedfbb1b7eab8db6c8aaa187f8c35cbf12f3e2`; the root-owned patches then produce
 the expected final tree
-`d7d5d68170db2d0180513d089790c502015a5909`. A clean clone must use the team
+`5ea54c86ebedc2b2a8fc8eda7057e170333db463`. A clean clone must use the team
 remote and verify both identities before handover. No original-upstream,
 local-checkout, file-URL or alternate-object fallback is allowed.
 

@@ -40,7 +40,7 @@ tools or historical references unless the operator guide names them.
 | `demo_case_runner.py` | 跑第一年度 Demo 三個固定照護案例並輸出 artifacts。 |
 | `create_mock_event_images.py` | 產生 ASR event 測試用三張 mock images。 |
 | `publish_mock_asr_event.sh` | 發送 canonical mock ASR event。 |
-| `test_action_selection_cases.py` | 內含 20 組血壓及 3 組不適案例；預設透過 live MQTT/Resident/LM Studio 評估 response/action consistency，`--offline` 僅檢查測資。 |
+| `test_action_selection_cases.py` | 內含 20 組血壓及 3 組不適案例；預設 offline 唯讀檢查測資，明確加入 `--live` 才透過 MQTT/Resident/LM Studio 評估 response/action consistency。 |
 | `subscribe_cmd_request.sh` | 訂閱 canonical command request，方便觀察 Bridge output。 |
 | `publish_mock_cmd_result.sh` | 發送 mock command result。 |
 | `inject_demo_event.py` / `scripts/inject_demo_event` | 以 owner-only config 建立 synthetic evidence 並發布 canonical Demo abnormal event；不發 command、result 或 Discord webhook。 |
@@ -89,12 +89,12 @@ cd /TemiAgent
 python3 tools/test_action_selection_cases.py --offline
 ```
 
-預設模式是 live evaluation，會發布 canonical ASR events；在線的 Temi Android App
+明確加入 `--live` 才會發布 canonical ASR events；在線的 Temi Android App
 可能執行每一筆 `cmd/request`，runtime memory 也可能改變。只跑指定案例：
 
 ```bash
 cd /TemiAgent
-python3 tools/test_action_selection_cases.py --case BP-01 --case BP-08
+python3 tools/test_action_selection_cases.py --live --case BP-01 --case BP-08
 ```
 
 沿用目前 Bridge 的 memory root，並在每一個 live case 後精準移除本次
@@ -103,6 +103,7 @@ python3 tools/test_action_selection_cases.py --case BP-01 --case BP-08
 ```bash
 cd /TemiAgent
 python3 tools/test_action_selection_cases.py \
+  --live \
   --broker "$PC_IP" \
   --case BP-08 \
   --cleanup-memory-after-case \

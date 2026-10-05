@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
+
+from tools import test_action_selection_cases as runner
 
 from tools.test_action_selection_cases import (
     CASES,
@@ -13,6 +16,30 @@ from tools.test_action_selection_cases import (
 
 
 class ResponseActionConsistencyTests(unittest.TestCase):
+    def test_default_execution_is_offline_without_live_calls(self) -> None:
+        with (
+            mock.patch("sys.argv", ["runner", "--case", "BP-01"]),
+            mock.patch.object(runner, "run_live") as live,
+            mock.patch.object(runner, "print_human") as output,
+        ):
+            self.assertEqual(runner.main(), 0)
+        live.assert_not_called()
+        self.assertEqual(output.call_args.args[0]["mode"], "offline")
+
+    def test_explicit_live_execution_selects_live_runner(self) -> None:
+        with (
+            mock.patch("sys.argv", ["runner", "--live", "--case", "BP-01"]),
+            mock.patch.object(runner, "run_live", return_value={"mode": "live", "run_status": "PASS"}) as live,
+            mock.patch.object(runner, "print_human"),
+        ):
+            self.assertEqual(runner.main(), 0)
+        live.assert_called_once()
+
+    def test_live_and_offline_flags_are_mutually_exclusive(self) -> None:
+        with self.assertRaises(SystemExit) as error:
+            runner.build_parser().parse_args(["--live", "--offline"])
+        self.assertEqual(error.exception.code, 2)
+
     def test_catalogue_does_not_declare_unenforced_expected_actions(self) -> None:
         self.assertEqual(len(CASES), 23)
         self.assertTrue(all(not hasattr(case, "expected_action") for case in CASES))
