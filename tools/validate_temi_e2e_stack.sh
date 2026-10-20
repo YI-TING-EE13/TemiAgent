@@ -11,6 +11,7 @@ MODEL_IDENTIFIER="${MODEL_IDENTIFIER:-google/gemma-4-31b}"
 MODEL_LOAD_ID="${MODEL_LOAD_ID:-temi/gemma-4-31b-it-qat}"
 CONTEXT_LENGTH="${CONTEXT_LENGTH:-64000}"
 LMSTUDIO_VISIBLE_GPUS="${LMSTUDIO_VISIBLE_GPUS:-0,1}"
+HERMES_REASONING_EFFORT="${HERMES_REASONING_EFFORT:-default}"
 MQTT_PORT="${MQTT_PORT:-1883}"
 VISION_PORT="${VISION_PORT:-8080}"
 FRAME_BROADCAST_PORT="${FRAME_BROADCAST_PORT:-8081}"
@@ -30,6 +31,14 @@ RUN_LIVE_E2E="${RUN_LIVE_E2E:-1}"
 LIVE_E2E_TIMEOUT_SECONDS="${LIVE_E2E_TIMEOUT_SECONDS:-240}"
 LIVE_E2E_TEXT="${LIVE_E2E_TEXT:-請你說系統端到端測試成功}"
 LOG_ROOT="${LOG_ROOT:-$ROOT/logs/e2e_stack_validation_$(date +%Y%m%d_%H%M%S)}"
+
+case "$HERMES_REASONING_EFFORT" in
+  default|none|minimal|low|medium|high|xhigh) ;;
+  *)
+    echo "HERMES_REASONING_EFFORT must be default, none, minimal, low, medium, high, or xhigh" >&2
+    exit 2
+    ;;
+esac
 
 mkdir -p "$LOG_ROOT"
 
@@ -172,7 +181,7 @@ cd "$ROOT" || fail "Cannot cd to $ROOT"
 log "TemiAgent E2E stack validation started"
 log "Project root: $ROOT"
 log "Logs: $LOG_ROOT"
-log "PC_IP=$PC_IP TEMI_IP=$TEMI_IP ROBOT_ID=$ROBOT_ID MODEL=$MODEL_IDENTIFIER LOAD=$MODEL_LOAD_ID CONTEXT=$CONTEXT_LENGTH"
+log "PC_IP=$PC_IP TEMI_IP=$TEMI_IP ROBOT_ID=$ROBOT_ID MODEL=$MODEL_IDENTIFIER LOAD=$MODEL_LOAD_ID CONTEXT=$CONTEXT_LENGTH REASONING=$HERMES_REASONING_EFFORT"
 
 require_cmd curl
 require_cmd ss
@@ -246,6 +255,7 @@ if [ "$RESTART_SERVICES" = "1" ]; then
   (cd "$ROOT" && setsid python3 tools/hermes_resident_server.py \
     --host 127.0.0.1 \
     --port "$HERMES_PORT" \
+    --reasoning-effort "$HERMES_REASONING_EFFORT" \
     --skill-path "$ROOT/hermes-agent/skills/temi-robot-control/SKILL.md" \
     --skill-path "$ROOT/hermes-agent/skills/temi-care-memory/SKILL.md" \
     --skill-path "$ROOT/hermes-agent/skills/temi-home-esi/SKILL.md" \

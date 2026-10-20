@@ -346,10 +346,17 @@ python3 tools/dispatch_hermes_action_output.py --publish --json '{"schema_versio
 python3 tools/hermes_resident_server.py \
   --host 127.0.0.1 \
   --port 8765 \
+  --reasoning-effort default \
   --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
   --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
   --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md
 ```
+
+`--reasoning-effort` accepts `default`, `none`, `minimal`, `low`, `medium`,
+`high`, or `xhigh`. `default` omits the request field and uses the
+provider/model default; every other value is forwarded unchanged through
+`AIAgent.request_overrides`. The canonical lifecycle reads
+`HERMES_REASONING_EFFORT` from its private env and supplies this CLI option.
 
 Health check：
 
