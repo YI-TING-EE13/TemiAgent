@@ -103,6 +103,83 @@ class DemoLifecycleConfigTests(unittest.TestCase):
             handle.write(f"MQTT_CONFIG_PATH={broker}\n")
         return config
 
+    def test_reasoning_defaults_for_legacy_config_without_setting(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = self.make_config(Path(temporary))
+            self.assertNotIn("HERMES_REASONING_EFFORT", path.read_text(encoding="utf-8"))
+            self.assertEqual(demo.load_config(path).hermes_reasoning_effort, "default")
+
+    def test_reasoning_config_normalizes_and_forwards_supported_values(self) -> None:
+        cases = [(effort, effort) for effort in (
+            "default", "none", "minimal", "low", "medium", "high", "xhigh"
+        )] + [("  MeDiUm  ", "medium")]
+        for raw, expected in cases:
+            with self.subTest(value=raw), tempfile.TemporaryDirectory() as temporary:
+                path = self.make_config(Path(temporary))
+                with path.open("a", encoding="utf-8") as handle:
+                    handle.write(f"HERMES_REASONING_EFFORT={raw}\n")
+                config = demo.load_config(path)
+                self.assertEqual(config.hermes_reasoning_effort, expected)
+                argv = demo._service_argv(config, "resident")
+                self.assertIn(str(ROOT / "tools" / "hermes_resident_server.py"), argv)
+                self.assertEqual(argv.count("--reasoning-effort"), 1)
+                self.assertEqual(argv[argv.index("--reasoning-effort") + 1], expected)
+
+    def test_reasoning_config_rejects_invalid_or_empty_value(self) -> None:
+        for invalid in ("invalid", "on", "off", ""):
+            with self.subTest(value=invalid), tempfile.TemporaryDirectory() as temporary:
+                path = self.make_config(Path(temporary))
+                with path.open("a", encoding="utf-8") as handle:
+                    handle.write(f"HERMES_REASONING_EFFORT={invalid}\n")
+                with self.assertRaisesRegex(demo.DemoError, "HERMES_REASONING_EFFORT must be one of"):
+                    demo.load_config(path)
+
+    def test_reasoning_initializer_defaults_and_preserves_existing_selection(self) -> None:
+        for profile in (demo.PROFILE_PRODUCTION, demo.PROFILE_NEWCOMER_MOCK):
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as temporary:
+                runtime = Path(temporary) / ".runtime" / "demo"
+                path = runtime / "demo.env"
+                with (
+                    mock.patch.object(demo, "CANONICAL_RUNTIME_ROOT", runtime),
+                    mock.patch.object(demo, "CANONICAL_CONFIG_PATH", path),
+                    mock.patch.object(demo, "_start_process") as spawn,
+                ):
+                    result = demo.initialize_canonical_config(profile=profile)
+                self.assertEqual(result["state"], "DEMO_CONFIG_INITIALIZED")
+                self.assertIn("HERMES_REASONING_EFFORT=default", path.read_text(encoding="utf-8"))
+                self.assertEqual(demo.load_config(path).hermes_reasoning_effort, "default")
+                spawn.assert_not_called()
+                content = path.read_text(encoding="utf-8").replace(
+                    "HERMES_REASONING_EFFORT=default", "HERMES_REASONING_EFFORT=none"
+                )
+                path.write_text(content, encoding="utf-8")
+                with (
+                    mock.patch.object(demo, "CANONICAL_RUNTIME_ROOT", runtime),
+                    mock.patch.object(demo, "CANONICAL_CONFIG_PATH", path),
+                    mock.patch.object(demo, "_start_process") as spawn,
+                ):
+                    repeated = demo.initialize_canonical_config(profile=profile)
+                self.assertEqual(repeated["state"], "DEMO_CONFIG_READY")
+                self.assertEqual(path.read_text(encoding="utf-8"), content)
+                self.assertEqual(demo.load_config(path).hermes_reasoning_effort, "none")
+                spawn.assert_not_called()
+
+    def test_reasoning_mock_profile_keeps_non_inference_entrypoints(self) -> None:
+        for effort in ("default", "none", "high"):
+            with self.subTest(effort=effort), tempfile.TemporaryDirectory() as temporary:
+                path = self.make_mock_config(Path(temporary))
+                with path.open("a", encoding="utf-8") as handle:
+                    handle.write(f"HERMES_REASONING_EFFORT={effort}\n")
+                config = demo.load_config(path)
+                with mock.patch.object(demo, "_start_process") as spawn:
+                    resident_argv = demo._service_argv(config, "resident")
+                    lm_argv = demo._service_argv(config, "lmstudio")
+                self.assertIn(str(ROOT / "tools" / "mocks" / "mock_resident_server.py"), resident_argv)
+                self.assertIn(str(ROOT / "tools" / "mocks" / "mock_lmstudio_server.py"), lm_argv)
+                self.assertNotIn("--reasoning-effort", resident_argv)
+                self.assertNotIn(str(ROOT / "tools" / "hermes_resident_server.py"), resident_argv)
+                spawn.assert_not_called()
+
     def test_default_discovery_never_selects_a_legacy_temporary_config(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
