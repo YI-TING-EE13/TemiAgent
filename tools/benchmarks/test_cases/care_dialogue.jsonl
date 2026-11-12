@@ -1,0 +1,23 @@
+{"case_id":"BP-01","tags":["blood_pressure_complete_normal"],"purpose":"完整且一般範圍的非整數邊界讀值；確認後不應強制追問","turns":[{"role":"user","text":"幫我記錄血壓，收縮壓117，舒張壓73，心跳76"}]}
+{"case_id":"BP-02","tags":["blood_pressure_compact_complete"],"purpose":"完整簡寫與不規則數值；確認後不應強制追問","turns":[{"role":"user","text":"幫我記錄血壓127/76，心跳84"}]}
+{"case_id":"BP-03","tags":["blood_pressure_missing_systolic_high"],"purpose":"舒張壓偏高且缺少收縮壓，必須追問","turns":[{"role":"user","text":"幫我記錄舒張壓93，心跳87"}]}
+{"case_id":"BP-04","tags":["blood_pressure_high"],"purpose":"完整但明顯偏高的讀值應追問目前症狀","turns":[{"role":"user","text":"幫我記錄收縮壓151，舒張壓96，心跳88"}]}
+{"case_id":"BP-05","tags":["blood_pressure_missing_diastolic"],"purpose":"缺少舒張壓，必須要求補充資訊","turns":[{"role":"user","text":"幫我記錄收縮壓133，心跳82"}]}
+{"case_id":"BP-06","tags":["blood_pressure_missing_systolic"],"purpose":"缺少收縮壓，必須要求補充資訊","turns":[{"role":"user","text":"幫我記錄舒張壓86，脈搏89"}]}
+{"case_id":"BP-07","tags":["blood_pressure_missing_values"],"purpose":"沒有任何量測值，不得假裝已記錄","turns":[{"role":"user","text":"幫我記錄血壓"}]}
+{"case_id":"BP-08","tags":["blood_pressure_asr_typo"],"purpose":"涵蓋血壓被 ASR 誤辨為影壓及缺少收縮壓","turns":[{"role":"user","text":"幫我記錄影壓舒張壓93，心跳91"}]}
+{"case_id":"BP-09","tags":["blood_pressure_chinese_numbers_normal"],"purpose":"完整中文數字的一般範圍讀值","turns":[{"role":"user","text":"幫我記錄血壓，收縮壓一百一十七，舒張壓七十三，心跳七十六"}]}
+{"case_id":"BP-10","tags":["blood_pressure_ambiguous_value"],"purpose":"單一血壓數值無法判斷是收縮壓或舒張壓","turns":[{"role":"user","text":"幫我記錄血壓129，心跳81"}]}
+{"case_id":"BP-11","tags":["blood_pressure_subjective_no_values"],"purpose":"只有主觀描述，不能假裝已記錄數值","turns":[{"role":"user","text":"我血壓很高，心跳也很快"}]}
+{"case_id":"BP-12","tags":["blood_pressure_invalid_systolic"],"purpose":"收縮壓不是有效數值，必須澄清","turns":[{"role":"user","text":"幫我記錄血壓，收縮壓abc，舒張壓77，心跳83"}]}
+{"case_id":"BP-13","tags":["blood_pressure_severely_high"],"purpose":"嚴重偏高讀值應進入安全追問","turns":[{"role":"user","text":"收縮壓183，舒張壓116，心跳104"}]}
+{"case_id":"BP-14","tags":["heart_rate_low"],"purpose":"完整血壓但心跳偏低，應確認身體狀況","turns":[{"role":"user","text":"血壓是108/68，心跳54"}]}
+{"case_id":"BP-15","tags":["heart_rate_high"],"purpose":"完整血壓但心跳偏快，應確認身體狀況","turns":[{"role":"user","text":"血壓是116/74，心跳107"}]}
+{"case_id":"BP-16","tags":["heart_rate_omitted"],"purpose":"現行血壓契約不要求心跳；不驗證心跳是否保存","turns":[{"role":"user","text":"血壓是124/76"}]}
+{"case_id":"BP-17","tags":["heart_rate_only"],"purpose":"只有心跳，不足以完成血壓紀錄","turns":[{"role":"user","text":"心跳是78"}]}
+{"case_id":"BP-18","tags":["diastolic_asr_typo"],"purpose":"涵蓋舒張壓被 ASR 誤辨為書張壓","turns":[{"role":"user","text":"幫我記錄血壓，收縮壓118，書張壓75，心跳79"}]}
+{"case_id":"BP-19","tags":["mixed_invalid_numbers"],"purpose":"數字混合辨識錯誤時不得猜測並寫入","turns":[{"role":"user","text":"血壓是15一/九6，心跳八七"}]}
+{"case_id":"BP-20","tags":["low_blood_pressure_with_symptom"],"purpose":"偏低讀值伴隨頭暈，必須進入安全追問","turns":[{"role":"user","text":"血壓是86/57，心跳96，我有點頭暈"}]}
+{"case_id":"SYM-01","tags":["discomfort_ambiguous"],"purpose":"模糊頭部不適需要釐清症狀與安全狀況","turns":[{"role":"user","text":"我的頭不太舒服"}]}
+{"case_id":"SYM-02","tags":["headache"],"purpose":"頭痛但程度與伴隨症狀未知","turns":[{"role":"user","text":"我頭痛"}]}
+{"case_id":"SYM-03","tags":["repeated_discomfort"],"purpose":"重複且模糊的不適應要求後續回答","turns":[{"role":"user","text":"我又不舒服了"}]}

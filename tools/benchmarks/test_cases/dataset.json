@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "care_dialogue",
+  "version": "1.0.0",
+  "cases_file": "care_dialogue.jsonl",
+  "case_count": 23,
+  "source": "Synthetic utterances extracted without changing text from the existing action-selection catalogue.",
+  "consent": "Synthetic; no participant care records or images.",
+  "purpose": "Response/action consistency and reasoning latency comparison; not medical correctness or heart-rate persistence acceptance.",
+  "retention": "Versioned synthetic source fixtures; runtime outputs are ignored local artifacts.",
+  "access": "Repository contributors; do not replace with identifiable care data."
+}
