@@ -32,6 +32,15 @@ ROOT = Path(__file__).resolve().parents[1]
 HERMES_AGENT_ROOT = ROOT / "hermes-agent"
 DEFAULT_SKILL_PATH = HERMES_AGENT_ROOT / "skills" / "temi-robot-control" / "SKILL.md"
 DEFAULT_SKILL_PATHS = [DEFAULT_SKILL_PATH]
+REASONING_EFFORT_CHOICES = (
+    "default",
+    "none",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+)
 MEDIA_TOOL_MODULE_PATH = ROOT / "tools" / "hermes_resident_media_tools.py"
 IDENTITY_TOOL_MODULE_PATH = ROOT / "tools" / "hermes_resident_identity_tools.py"
 REPEATED_DISCOMFORT_TOOL_MODULE_PATH = ROOT / "tools" / "hermes_resident_repeated_discomfort_tools.py"
@@ -173,6 +182,7 @@ class ResidentHermes:
         *,
         model: str | None,
         provider: str | None,
+        reasoning_effort: str,
         toolsets: list[str],
         skill_paths: list[Path],
         cwd: Path,
@@ -192,6 +202,8 @@ class ResidentHermes:
         Args:
             model: Optional model override. Defaults to Hermes config/env.
             provider: Optional provider override. Defaults to Hermes config/env.
+            reasoning_effort: Request-level reasoning effort. ``default`` omits
+                the provider request field; every other value is forwarded unchanged.
             toolsets: Explicit Hermes toolsets. Empty keeps the path lightweight.
             skill_paths: Paths to Temi skill markdown files loaded into the resident prompt.
             cwd: Working directory used while initializing Hermes.
@@ -337,6 +349,7 @@ class ResidentHermes:
             ),
             clarify_callback=_clarify_callback,
             credential_pool=runtime.get("credential_pool"),
+            request_overrides=_reasoning_request_overrides(reasoning_effort),
             skip_context_files=True,
             skip_memory=not enable_memory,
         )
@@ -621,6 +634,13 @@ def _parse_toolsets(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _reasoning_request_overrides(reasoning_effort: str) -> dict[str, str] | None:
+    """Return an unchanged provider override, or omit it for model defaults."""
+    if reasoning_effort == "default":
+        return None
+    return {"reasoning_effort": reasoning_effort}
+
+
 _RESIDENT_FAILURE_MESSAGES = {
     "hermes_compression_exhausted": (
         "Hermes could not produce a response after bounded context recovery."
@@ -825,6 +845,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", default=None)
     parser.add_argument("--provider", default=None)
     parser.add_argument(
+        "--reasoning-effort",
+        choices=REASONING_EFFORT_CHOICES,
+        default="default",
+        help=(
+            "Reasoning effort forwarded unchanged to the provider. "
+            "'default' omits reasoning_effort and uses the provider/model default."
+        ),
+    )
+    parser.add_argument(
         "--toolsets",
         default=os.getenv("HERMES_RESIDENT_TOOLSETS", ""),
         help="Comma-separated Hermes toolsets. Empty keeps the Temi path lightweight.",
@@ -860,6 +889,7 @@ def main(argv: list[str] | None = None) -> int:
     resident = ResidentHermes(
         model=args.model,
         provider=args.provider,
+        reasoning_effort=args.reasoning_effort,
         toolsets=_parse_toolsets(args.toolsets),
         skill_paths=_resolve_skill_paths(args.skill_path),
         cwd=Path(args.cwd),

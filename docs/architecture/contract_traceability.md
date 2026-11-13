@@ -64,6 +64,11 @@ real notification delivery remain external acceptance boundaries.
 | Demo lifecycle ownership and canonical config | Implemented; hardware-free and mock-fixture verified | `tools/demo_lifecycle.py` config resolver, initializer, state model and atomic writer | `init-config`, lifecycle start/restart/stop | default discovery, doctor, status, exact-PID stop logic | `tools/tests/test_demo_lifecycle.py`, newcomer mock success/failure fixtures | lifecycle source, config templates, ignore rule, state/health/rollback tests, tools README, operations docs, and architecture note |
 | Runtime artifact layout | Implemented but incompletely governed | Owning writers, `.gitignore`, `logs/README.md`, `memory/README.md`, `temi_shared/README.md` | All runtime modules | Maintainers | Git/private-artifact scan | Writer, ignore rules, retention/access documentation and cleanup procedure |
 
+Synthetic benchmark fixtures and local result artifacts are owned by
+[`tools/benchmarks/`](../../tools/benchmarks/README.md). Both benchmark runners
+reuse the canonical ASR/command and Bridge trace contracts above; they do not
+introduce a model, MQTT, memory or hardware-execution contract.
+
 ## Canonical Topics
 
 ```text

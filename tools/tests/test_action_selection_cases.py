@@ -5,9 +5,9 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from tools import test_action_selection_cases as runner
+from tools.benchmarks import test_action_selection as runner
 
-from tools.test_action_selection_cases import (
+from tools.benchmarks.test_action_selection import (
     CASES,
     evaluate_response_action_consistency,
     offline_summary,

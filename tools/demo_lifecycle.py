@@ -34,6 +34,15 @@ import uuid
 
 
 ROOT = Path(__file__).resolve().parents[1]
+REASONING_EFFORT_CHOICES = {
+    "default",
+    "none",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+}
 
 
 class DemoError(RuntimeError):
@@ -483,6 +492,7 @@ class DemoConfig:
     lmstudio_ownership: str
     lmstudio_model_id: str
     lmstudio_api_identifier: str
+    hermes_reasoning_effort: str
     lmstudio_target_dir: Path
     lmstudio_server_port: int
     adapter_vision_port: int
@@ -768,6 +778,10 @@ def load_config(raw_path: str | Path, *, mqtt_only: bool = False) -> DemoConfig:
         raise DemoError(f"LMSTUDIO_MODEL_ID must be {CANONICAL_LMSTUDIO_MODEL}")
     if lmstudio_api_identifier != CANONICAL_LMSTUDIO_IDENTIFIER:
         raise DemoError(f"LMSTUDIO_API_IDENTIFIER must be {CANONICAL_LMSTUDIO_IDENTIFIER}")
+    hermes_reasoning_effort = values.get("HERMES_REASONING_EFFORT", "default").strip().lower()
+    if hermes_reasoning_effort not in REASONING_EFFORT_CHOICES:
+        allowed = ", ".join(sorted(REASONING_EFFORT_CHOICES))
+        raise DemoError(f"HERMES_REASONING_EFFORT must be one of: {allowed}")
     lmstudio_target_dir = Path(
         values.get(
             "LMSTUDIO_TARGET_DIR",
@@ -937,6 +951,7 @@ def load_config(raw_path: str | Path, *, mqtt_only: bool = False) -> DemoConfig:
         lmstudio_ownership=lmstudio_ownership,
         lmstudio_model_id=lmstudio_model_id,
         lmstudio_api_identifier=lmstudio_api_identifier,
+        hermes_reasoning_effort=hermes_reasoning_effort,
         lmstudio_target_dir=lmstudio_target_dir.resolve(),
         lmstudio_server_port=lmstudio_server_port,
         adapter_vision_port=adapter_vision_port,
@@ -2986,6 +3001,7 @@ def _service_argv(config: DemoConfig, name: str, *, run_id: str | None = None) -
             str(ROOT / "hermes-agent" / "venv" / "bin" / "python3"),
             str(ROOT / "tools" / "hermes_resident_server.py"),
             "--host", "127.0.0.1", "--port", str(config.resident_http_port),
+            "--reasoning-effort", config.hermes_reasoning_effort,
         ]
         for skill in ("temi-robot-control", "temi-care-memory", "temi-home-esi", "temi-discord-care-assistant"):
             argv.extend(["--skill-path", str(skills / skill / "SKILL.md")])

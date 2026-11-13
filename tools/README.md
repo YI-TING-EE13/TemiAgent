@@ -40,7 +40,8 @@ tools or historical references unless the operator guide names them.
 | `demo_case_runner.py` | 跑第一年度 Demo 三個固定照護案例並輸出 artifacts。 |
 | `create_mock_event_images.py` | 產生 ASR event 測試用三張 mock images。 |
 | `publish_mock_asr_event.sh` | 發送 canonical mock ASR event。 |
-| `test_action_selection_cases.py` | 內含 20 組血壓及 3 組不適案例；預設 offline 唯讀檢查測資，明確加入 `--live` 才透過 MQTT/Resident/LM Studio 評估 response/action consistency。 |
+| `benchmarks/test_action_selection.py` | 從共用 JSONL 載入 20 組血壓及 3 組不適案例；預設 offline 唯讀檢查測資，明確加入 `--live` 才透過 MQTT/Resident/LM Studio 評估 response/action consistency。 |
+| `benchmarks/test_reasoning.py` | 使用同一組測資，記錄目前已載入模型及 reasoning effort 的耗時與回答；預設 offline，說明見 [benchmark README](benchmarks/README.md)。 |
 | `subscribe_cmd_request.sh` | 訂閱 canonical command request，方便觀察 Bridge output。 |
 | `publish_mock_cmd_result.sh` | 發送 mock command result。 |
 | `inject_demo_event.py` / `scripts/inject_demo_event` | 以 owner-only config 建立 synthetic evidence 並發布 canonical Demo abnormal event；不發 command、result 或 Discord webhook。 |
@@ -86,7 +87,7 @@ Action-selection 測資的離線檢查（不連 MQTT、不呼叫模型、不控�
 
 ```bash
 cd /TemiAgent
-python3 tools/test_action_selection_cases.py --offline
+python3 tools/benchmarks/test_action_selection.py --offline
 ```
 
 明確加入 `--live` 才會發布 canonical ASR events；在線的 Temi Android App
@@ -94,7 +95,7 @@ python3 tools/test_action_selection_cases.py --offline
 
 ```bash
 cd /TemiAgent
-python3 tools/test_action_selection_cases.py --live --case BP-01 --case BP-08
+python3 tools/benchmarks/test_action_selection.py --live --case BP-01 --case BP-08
 ```
 
 沿用目前 Bridge 的 memory root，並在每一個 live case 後精準移除本次
@@ -102,7 +103,7 @@ python3 tools/test_action_selection_cases.py --live --case BP-01 --case BP-08
 
 ```bash
 cd /TemiAgent
-python3 tools/test_action_selection_cases.py \
+python3 tools/benchmarks/test_action_selection.py \
   --live \
   --broker "$PC_IP" \
   --case BP-08 \
@@ -119,7 +120,7 @@ Cleanup 只會移除相同 event ID 的 `event_log.jsonl` 紀錄、
 不屬於本次 run、資料重複、JSON 無效、檔案同時改變，或同 ID 出現在其他
 memory artifact，cleanup 會回報 `CLEANUP_REFUSED`，不猜測刪除，並停止後續案例以免污染。
 
-這支單一檔案 runner 內含 20 組血壓及 3 組不適案例，只驗證實際回覆文字
+測資位於 `tools/benchmarks/test_cases/care_dialogue.jsonl`，由兩支 benchmark runner 共用；只驗證實際回覆文字
 是否需要使用者回答，並比對其 action type 是否為 `ask_clarification` 或
 `speak`。每筆結果使用 `CONSISTENT` / `INCONSISTENT`，整體結果使用
 `RESPONSE_ACTION_CONSISTENCY_PASS` / `RESPONSE_ACTION_CONSISTENCY_FAIL`；這些
@@ -346,10 +347,17 @@ python3 tools/dispatch_hermes_action_output.py --publish --json '{"schema_versio
 python3 tools/hermes_resident_server.py \
   --host 127.0.0.1 \
   --port 8765 \
+  --reasoning-effort default \
   --skill-path /TemiAgent/hermes-agent/skills/temi-robot-control/SKILL.md \
   --skill-path /TemiAgent/hermes-agent/skills/temi-care-memory/SKILL.md \
   --skill-path /TemiAgent/hermes-agent/skills/temi-home-esi/SKILL.md
 ```
+
+`--reasoning-effort` accepts `default`, `none`, `minimal`, `low`, `medium`,
+`high`, or `xhigh`. `default` omits the request field and uses the
+provider/model default; every other value is forwarded unchanged through
+`AIAgent.request_overrides`. The canonical lifecycle reads
+`HERMES_REASONING_EFFORT` from its private env and supplies this CLI option.
 
 Health check：
 

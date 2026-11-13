@@ -132,6 +132,14 @@ feature selectors. They are not a second operator sequence:
 | <code>identity {father|mother|unknown|status}</code> | Controlled Demo identity callback helper; it can change private Demo state and is not visual identity. |
 | <code>seed repeated-discomfort</code>, <code>verify repeated-discomfort</code> | Synthetic private care fixture helper and read-only verification; Demo-only and not a live care claim. |
 
+`init-config` writes `HERMES_REASONING_EFFORT=default`. In the production
+profile, `default` omits the provider request field; the accepted explicit
+values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`, forwarded
+unchanged to the Resident provider request. After changing this private value,
+use the normal managed restart path before evaluating new requests. The
+`newcomer_mock` resident performs no model inference, so this setting has no
+behavioral effect in that profile.
+
 The exact grammar is implemented by <code>tools/demo_lifecycle.py</code>.
 Global <code>--config</code> and <code>--json</code> options appear before the
 selector, for example
